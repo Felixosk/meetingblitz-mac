@@ -2,7 +2,7 @@
 
 [English version](README.md)
 
-![MeetingBlitz: zwei überschneidende Termine, jeder mit eigenem Banner](docs/hero.png)
+![Zwei Termine um 17:00, jeder mit eigenem fliegendem Banner](docs/demo.gif)
 
 Eine Menüleisten-App für den Mac, die dich vor Terminen warnt. Kurz bevor etwas
 aus deinem Apple-Kalender startet, fliegt ein U-Boot über den Bildschirm.
@@ -50,6 +50,8 @@ statt sich gegenseitig zu ersetzen.
 
 Der zweite Unterschied ist die Lautstärke. Eine Mitteilung wischt man weg, ohne
 sie gelesen zu haben. Ein U-Boot, das über alle Monitore fliegt, nicht.
+
+![Einstieg beim ersten Start und Einstellungen](docs/tour.png)
 
 ## Was sie kann
 

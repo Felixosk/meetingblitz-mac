@@ -6,7 +6,7 @@ screens.
 
 [Deutsche Version](README.de.md)
 
-![MeetingBlitz: two overlapping meetings, each with its own banner](docs/hero.png)
+![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)
 
 The difference to the usual menu bar calendars: **overlapping events each get
 their own warning.** If you have parallel or nested meetings, most tools only
@@ -53,6 +53,8 @@ lanes instead of replacing each other.
 
 The second difference is how loud it is. A notification is easy to swipe away
 without reading. A submarine flying across every monitor is not.
+
+![First launch walkthrough and settings](docs/tour.png)
 
 ## Features
 
