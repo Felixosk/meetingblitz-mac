@@ -8,6 +8,11 @@ screens.
 
 ![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)
 
+<img src="docs/widget.png" width="470" alt="The menu bar widget: timeline, birthdays, and per-event actions">
+
+*Click the submarine in the menu bar and this is your day: a timeline, birthdays
+with a call button, and per event copy link, join, export .ics or hide.*
+
 The difference to the usual menu bar calendars: **overlapping events each get
 their own warning.** If you have parallel or nested meetings, most tools only
 surface the longest one, and you keep missing the second.

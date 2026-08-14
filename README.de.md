@@ -4,6 +4,12 @@
 
 ![Zwei Termine um 17:00, jeder mit eigenem fliegendem Banner](docs/demo.gif)
 
+<img src="docs/widget.png" width="470" alt="Das Menüleisten-Widget: Zeitachse, Geburtstage und Aktionen pro Termin">
+
+*Ein Klick aufs U-Boot in der Menüleiste zeigt deinen Tag: Zeitachse,
+Geburtstage mit Anruf-Knopf, und pro Termin Link kopieren, beitreten,
+.ics exportieren oder ausblenden.*
+
 Eine Menüleisten-App für den Mac, die dich vor Terminen warnt. Kurz bevor etwas
 aus deinem Apple-Kalender startet, fliegt ein U-Boot über den Bildschirm.
 
