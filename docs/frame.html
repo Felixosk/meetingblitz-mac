@@ -1,0 +1,82 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 900px; height: 380px; overflow: hidden; position: relative;
+    background: linear-gradient(155deg, #16233d 0%, #223c59 50%, #2c5570 100%);
+    font: 400 14px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color:#fff;
+  }
+  .menubar { height: 24px; background: rgba(8,15,28,.6); display:flex; align-items:center;
+             justify-content:flex-end; gap:14px; padding:0 14px; font-size:11.5px; color:#dfe7f2; }
+  .banner { position:absolute; display:flex; align-items:center; gap:12px;
+            padding:11px 18px 11px 11px; border-radius:20px;
+            background: linear-gradient(135deg,#18A9B4 0%,#0A4E58 100%);
+            border:1px solid rgba(46,199,160,.32); box-shadow:0 14px 40px rgba(0,0,0,.45);
+            white-space: nowrap; }
+  .banner .title { font-size:14.5px; font-weight:600; }
+  .banner .sub { font-size:12px; color:#EAF6F2; margin-top:2px; opacity:.92; }
+  .sea { position:absolute; left:0; bottom:0; width:100%; height:70px;
+         background: linear-gradient(180deg, rgba(24,169,180,0) 0%, rgba(10,78,88,.5) 100%); }
+  .cap { position:absolute; left:26px; bottom:18px; font-size:13px; color:#9fb3c9; }
+</style>
+<div class="menubar"><span id="mb">Design Review · 5m</span><span>16:55</span></div>
+<div class="sea"></div>
+<div class="banner" id="b1"><svg width="66" height="50" viewBox="0 0 80 52" id="s1"></svg>
+  <div><div class="title">Design Review</div><div class="sub">in 5 min · 17:00</div></div></div>
+<div class="banner" id="b2"><svg width="66" height="50" viewBox="0 0 80 52" id="s2"></svg>
+  <div><div class="title">Handover Call</div><div class="sub">in 5 min · 17:00</div></div></div>
+<div class="cap" id="cap"></div>
+
+<script>
+// Ein Frame pro Aufruf: ?t=<0..1>. Die Bahn bildet nach, was BannerPresenter
+// macht: Sprung aus dem Wasser entlang einer Parabel, dann Flug nach rechts,
+// zweites Banner in eigener Bahn und leicht versetzt.
+const t = parseFloat(new URLSearchParams(location.search).get('t') || '0');
+const W = 900;
+
+function subSVG(el, tilt) {
+  el.innerHTML = `<defs><radialGradient id="h${el.id}" cx="42%" cy="32%">
+      <stop offset="0%" stop-color="#8EE6C8"/><stop offset="62%" stop-color="#2EC7A0"/>
+      <stop offset="100%" stop-color="#1D9E79"/></radialGradient></defs>
+    <g transform="rotate(${tilt} 40 32)" style="filter:drop-shadow(0 0 8px rgba(46,199,160,.55))">
+      <ellipse cx="40" cy="34" rx="26" ry="12" fill="url(#h${el.id})"/>
+      <path d="M13 34 Q4 27 1.5 34 Q4 41 13 34Z" fill="#1D9E79"/>
+      <path d="M31 22 Q40 16 50 22 L50 24 L31 24Z" fill="#2EC7A0"/>
+      <rect x="37" y="10.5" width="5.5" height="12" rx="2.6" fill="#2EC7A0"/>
+      <circle cx="31" cy="34" r="5.2" fill="#0E1220"/><circle cx="31" cy="34" r="3.4" fill="#F0A93B"/>
+      <circle cx="45" cy="34" r="4.2" fill="#0E1220"/><circle cx="45" cy="34" r="2.6" fill="#F0A93B"/>
+    </g>`;
+}
+
+// Sprungphase 0..0.22, danach Reiseflug. y misst von oben.
+function pose(p, laneY, depth) {
+  const jump = 0.22;
+  let x, y, tilt;
+  if (p < jump) {
+    const j = p / jump;                       // 0..1 im Sprung
+    const e = 1 - Math.pow(1 - j, 2.2);       // easeOut
+    x = -70 + e * 230;
+    y = laneY + depth * (1 - e) - Math.sin(Math.PI * j) * 34;   // Bogen mit Overshoot
+    tilt = -26 * Math.cos(Math.PI * j * 0.9);
+  } else {
+    const c = (p - jump) / (1 - jump);
+    x = 160 + c * (W + 40 - 160);
+    y = laneY + Math.sin(c * Math.PI * 2.4) * 7;                 // Delfin-Wogen
+    tilt = Math.cos(c * Math.PI * 2.4) * 5;
+  }
+  return { x, y, tilt };
+}
+
+const a = pose(Math.min(1, t * 1.0), 92, 150);
+const b = pose(Math.max(0, Math.min(1, (t - 0.14) * 1.18)), 196, 130);
+
+const b1 = document.getElementById('b1'), b2 = document.getElementById('b2');
+b1.style.left = a.x + 'px'; b1.style.top = a.y + 'px';
+b2.style.left = b.x + 'px'; b2.style.top = b.y + 'px';
+b2.style.opacity = t > 0.14 ? 1 : 0;
+subSVG(document.getElementById('s1'), a.tilt);
+subSVG(document.getElementById('s2'), b.tilt);
+document.getElementById('cap').textContent =
+  t > 0.16 ? 'Two meetings at 17:00 · each gets its own warning' : '5 minutes before your meeting…';
+</script>

@@ -1,0 +1,95 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1280px; height:560px; padding:34px 40px;
+    background: linear-gradient(150deg,#16233d 0%,#223c59 55%,#2c5570 100%);
+    font: 400 14px -apple-system,"SF Pro Text","Helvetica Neue",sans-serif; color:#fff;
+    display:flex; gap:34px; align-items:flex-start; }
+  .col { flex:1; }
+  .col > h3 { font-size:13px; font-weight:600; color:#8EE6C8; margin-bottom:11px;
+              text-transform:uppercase; letter-spacing:.6px; }
+  .win { background:#26292f; border-radius:11px; overflow:hidden;
+         box-shadow:0 18px 46px rgba(0,0,0,.45); border:.5px solid rgba(255,255,255,.09); }
+  .bar { height:30px; background:#33363d; display:flex; align-items:center; padding:0 11px; gap:6px;
+         font-size:11.5px; color:#c8cdd6; }
+  .tl { width:10px; height:10px; border-radius:50%; }
+  .bar span { margin:0 auto; }
+  .body { padding:15px 16px 16px; }
+
+  .dots { display:flex; gap:5px; align-items:center; margin-bottom:13px; }
+  .dots i { width:6px; height:6px; border-radius:3px; background:rgba(255,255,255,.28); }
+  .dots i.on { width:17px; background:#4a9eff; }
+  .lang { margin-left:auto; display:flex; font-size:10.5px; border-radius:5px; overflow:hidden; }
+  .lang b { padding:2.5px 9px; background:rgba(255,255,255,.10); font-weight:500; }
+  .lang b.sel { background:#4a9eff; }
+  h4 { font-size:14.5px; font-weight:600; margin-bottom:7px; }
+  p.t { font-size:11.5px; color:#a8b1bf; line-height:1.5; }
+  .call { display:flex; gap:9px; margin-top:12px; padding:10px; border-radius:8px;
+          background:rgba(74,158,255,.13); font-size:11.5px; line-height:1.45; }
+  .btn { margin-top:auto; padding:5px 14px; border-radius:6px; background:#4a9eff;
+         font-size:11.5px; font-weight:500; }
+  .brow { display:flex; justify-content:flex-end; margin-top:15px; padding-top:12px;
+          border-top:.5px solid rgba(255,255,255,.10); }
+
+  .tabs { display:flex; gap:3px; background:rgba(255,255,255,.07); border-radius:7px; padding:2.5px; font-size:11.5px; }
+  .tabs b { flex:1; text-align:center; padding:4px; border-radius:5px; font-weight:500; color:#c0c7d2; }
+  .tabs b.sel { background:#4a9eff; color:#fff; }
+  .set { display:flex; align-items:center; gap:9px; margin-top:11px; font-size:11.5px; }
+  .seg { margin-left:auto; display:flex; border-radius:5px; overflow:hidden; font-size:10.5px; }
+  .seg b { padding:3px 9px; background:rgba(255,255,255,.09); font-weight:500; }
+  .seg b.sel { background:#4a9eff; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:9px; font-size:11.5px; }
+  .box { width:13px; height:13px; border-radius:3px; background:#4a9eff; position:relative; flex:none; }
+  .box::after { content:"✓"; position:absolute; inset:0; font-size:9px; text-align:center; line-height:13px; }
+  .hint { font-size:10px; color:#8f98a6; margin-top:7px; line-height:1.45; }
+  .kbd { margin-left:auto; font-size:10px; padding:2px 6px; border-radius:4px;
+         background:rgba(255,255,255,.10); font-family:ui-monospace,monospace; }
+</style>
+
+<div class="col">
+  <h3>First launch walks you through it</h3>
+  <div class="win">
+    <div class="bar"><i class="tl" style="background:#ff5f57"></i><i class="tl" style="background:#febc2e"></i>
+      <i class="tl" style="background:#28c840"></i><span>Welcome to MeetingBlitz</span></div>
+    <div class="body" style="height:330px; display:flex; flex-direction:column">
+      <div class="dots"><i class="on"></i><i></i><i></i><i></i>
+        <span class="lang"><b class="sel">EN</b><b>DE</b></span></div>
+      <h4>A submarine warns you before every meeting</h4>
+      <p class="t">Shortly before an event from your Apple Calendar starts, a banner
+        flies across all your screens. Overlapping meetings each get their own warning.</p>
+      <div class="call">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="#4a9eff" style="flex:none">
+          <path d="M4 4h16v12H4zM2 18h20v2H2z"/><path d="M12 6l4 4h-3v4h-2v-4H8z" fill="#26292f"/></svg>
+        <span><b>Important:</b> this app has no window and no dock icon. It lives in the
+          menu bar, top right. Click the submarine there to see your day.</span>
+      </div>
+      <div class="brow"><span class="btn">Next</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="col">
+  <h3>Tuned to how you work</h3>
+  <div class="win">
+    <div class="bar"><i class="tl" style="background:#ff5f57"></i><i class="tl" style="background:#febc2e"></i>
+      <i class="tl" style="background:#28c840"></i><span>Settings</span></div>
+    <div class="body" style="height:330px">
+      <div class="tabs"><b class="sel">General</b><b>Banner</b><b>Calendars</b><b>Google</b></div>
+      <div class="set">Lead time
+        <span class="seg"><b>2m</b><b class="sel">5m</b><b>10m</b><b>15m</b></span></div>
+      <div class="set">Flight duration
+        <span class="seg"><b>6s</b><b class="sel">9s</b><b>14s</b></span></div>
+      <div class="chk"><span class="box"></span>Play a sound</div>
+      <div class="chk"><span class="box"></span>Leap out of the water</div>
+      <div class="chk"><span class="box"></span>Launch at login</div>
+      <div class="chk"><span class="box"></span>Show Apple Reminders</div>
+      <div class="chk"><span class="box"></span>Open with keyboard shortcut
+        <span class="kbd">⌃⌥M</span></div>
+      <p class="hint">Opens the widget on whichever screen your mouse is on,
+        independent of the menu bar icon.</p>
+      <div class="set" style="margin-top:14px; padding-top:11px; border-top:.5px solid rgba(255,255,255,.10)">
+        Language <span class="seg" style="margin-left:auto"><b class="sel">English</b><b>Deutsch</b></span></div>
+    </div>
+  </div>
+</div>
