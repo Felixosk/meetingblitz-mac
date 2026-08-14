@@ -6,6 +6,8 @@ screens.
 
 [Deutsche Version](README.de.md)
 
+![MeetingBlitz: two overlapping meetings, each with its own banner](docs/hero.png)
+
 The difference to the usual menu bar calendars: **overlapping events each get
 their own warning.** If you have parallel or nested meetings, most tools only
 surface the longest one, and you keep missing the second.

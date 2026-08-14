@@ -2,6 +2,8 @@
 
 [English version](README.md)
 
+![MeetingBlitz: zwei überschneidende Termine, jeder mit eigenem Banner](docs/hero.png)
+
 Eine Menüleisten-App für den Mac, die dich vor Terminen warnt. Kurz bevor etwas
 aus deinem Apple-Kalender startet, fliegt ein U-Boot über den Bildschirm.
 
