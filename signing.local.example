@@ -1,0 +1,15 @@
+# Vorlage: nach signing.local kopieren, wenn die App mit einem stabilen
+# selbstsignierten Zertifikat signiert werden soll.
+#
+# WARUM das lohnt: Ohne Zertifikat signiert build.sh ad-hoc, und dann aendert
+# sich die Identitaet der App bei JEDEM Build. macOS haelt sie fuer eine neue
+# App und wirft die erteilten Berechtigungen weg (Kalender, Erinnerungen), man
+# erlaubt sie neu, baut einmal, und es ist wieder kaputt.
+#
+# Zertifikat anlegen: Schluesselbundverwaltung -> Zertifikatsassistent ->
+# "Zertifikat erstellen", Typ "Code-Signatur", selbstsigniert.
+# Fingerabdruck auslesen:
+#     security find-certificate -c "MEIN NAME" -Z | awk '/SHA-1 hash:/ {print $3}'
+
+SIGN_ID="Mein Dev Signing"
+SIGN_SHA1="AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
