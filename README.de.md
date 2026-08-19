@@ -20,13 +20,27 @@ oder [selbst bauen](#möglichkeit-b-selbst-bauen) in zwei Minuten
 Geburtstage mit Anruf-Knopf, und pro Termin Link kopieren, beitreten,
 .ics exportieren oder ausblenden.*
 
-Eine Menüleisten-App für den Mac, die dich vor Terminen warnt. Kurz bevor etwas
-aus deinem Apple-Kalender startet, fliegt ein U-Boot über den Bildschirm.
+## Warum es sie gibt
 
-Der Unterschied zu den üblichen Menüleisten-Kalendern: **Überschneidende Termine
-bekommen jeder ihre eigene Warnung.** Wer parallele und verschachtelte Termine
-hat, verpasst den zweiten sonst regelmäßig, weil die meisten Tools nur den
-längsten anzeigen.
+Zwei Gründe, und die sind der ganze Zweck der App.
+
+**1. Jeder überschneidende Termin bekommt seine eigene Warnung.** Die meisten
+Tools zeigen *den* nächsten Termin: eine Zeile, eine Mitteilung, ein Zeitfenster.
+Ein Call, der in einem Fokusblock steckt, oder zwei übereinander gebuchte
+Termine fallen damit still zu einer einzigen Erinnerung zusammen, und den
+anderen verpasst man. Hier bekommt jeder Termin sein eigenes Banner, und
+überschneidende stapeln sich in eigenen Bahnen, statt sich zu ersetzen. Bei
+MeetingBar ist genau dieser Wunsch
+[seit Mai 2021 offen](https://github.com/leits/MeetingBar/issues/271).
+
+**2. Eine sichtbare Warnung statt einer Mitteilung.** Mitteilungen sind darauf
+gebaut, ignorierbar zu sein: Sie schieben sich an den Rand, warten ein paar
+Sekunden und legen sich in eine Liste, die man später anschaut. Für eine
+Paketankündigung ist das richtig, für etwas, das in fünf Minuten anfängt,
+nutzlos. An einem U-Boot, das über alle Monitore fliegt, scrollt man nicht
+vorbei. Und weil die App es selbst zeichnet, landet es nie in „Nicht stören",
+steht nie hinter den Mitteilungen anderer Apps an und erscheint auf allen
+Bildschirmen gleichzeitig.
 
 ---
 
@@ -72,23 +86,11 @@ nach der Erinnerung eigentlich tun will.
 Dienstabdeckung will, installiert MeetingBar. Die App ist hervorragend, und
 dieses Projekt hat als ihr Fan angefangen.
 
-**Das eine, was sie nicht kann:** eine Warnung *pro Termin* statt pro Zeitfenster.
-MeetingBar zeigt den laufenden oder nächsten Termin, und der Wunsch, gleichzeitig
-laufende Termine anzuzeigen, ist
-[seit Mai 2021 offen](https://github.com/leits/MeetingBar/issues/271): „Wenn zwei
-Termine zur selben Zeit liegen, sehe ich in der Leiste nur, dass einer aktiv
-ist." Dazu ein verwandter Fehler, bei dem die Vollbild-Mitteilung für den ersten
-von zwei knapp aufeinanderfolgenden Terminen
+Im Wortlaut des offenen Wunsches dort: „Wenn zwei Termine zur selben Zeit
+liegen, sehe ich in der Leiste nur, dass einer aktiv ist." Dazu ein verwandter
+Fehler, bei dem die Vollbild-Mitteilung für den ersten von zwei knapp
+aufeinanderfolgenden Terminen
 [gar nicht erst kommt](https://github.com/leits/MeetingBar/issues/769).
-
-Wer parallele oder verschachtelte Termine hat, einen Fokusblock mit einem Call
-darin, zwei übereinander gebuchte Calls, ein Standup das in eine Übergabe
-ragt, verpasst genau diesen zweiten Termin regelmäßig. MeetingBlitz schickt für
-jeden ein eigenes Banner, und überschneidende stapeln sich in eigenen Bahnen,
-statt sich gegenseitig zu ersetzen.
-
-Der zweite Unterschied ist die Lautstärke. Eine Mitteilung wischt man weg, ohne
-sie gelesen zu haben. Ein U-Boot, das über alle Monitore fliegt, nicht.
 
 ![Einstieg beim ersten Start und Einstellungen](docs/tour.png)
 

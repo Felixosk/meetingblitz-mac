@@ -19,9 +19,25 @@ or [build it yourself](#option-b-build-it-yourself) in two minutes
 *Click the submarine in the menu bar and this is your day: a timeline, birthdays
 with a call button, and per event copy link, join, export .ics or hide.*
 
-The difference to the usual menu bar calendars: **overlapping events each get
-their own warning.** If you have parallel or nested meetings, most tools only
-surface the longest one, and you keep missing the second.
+## Why this exists
+
+Two reasons, and they are the whole point of the app.
+
+**1. Every overlapping event gets its own warning.** Most tools show *the* next
+meeting — one line, one notification, one timeslot. So a call nested inside a
+focus block, or two meetings booked over each other, quietly collapses into a
+single reminder and you miss the other one. Here each event fires its own
+banner, and overlapping banners stack into separate lanes instead of replacing
+each other. MeetingBar's request for this has been
+[open since May 2021](https://github.com/leits/MeetingBar/issues/271).
+
+**2. A visual warning, not a notification.** Notifications are built to be
+ignorable: they slide in at the edge, wait a few seconds, and file themselves
+away in a list you look at later. That is fine for a package delivery and
+useless for something starting in five minutes. A submarine flying across every
+monitor is not something you scroll past — and because it is drawn by the app
+itself, it never lands in Do Not Disturb, never queues behind other apps'
+notifications, and shows up on all screens at once.
 
 Native Swift and SwiftUI, no Electron, no server, no account. Builds in about
 two minutes.
@@ -70,23 +86,10 @@ you actually do after the reminder fires.
 the widest service coverage, install MeetingBar. It is excellent, and this
 project started as a fan of it.
 
-**The one thing it does that they don't:** a warning *per event*, not per
-timeslot. MeetingBar shows the current or next meeting, and its request to
-surface simultaneously active events has been
-[open since May 2021](https://github.com/leits/MeetingBar/issues/271): *"If two
-events are at the same time, I can only see that only one is active in the
-status bar."* There is a related bug where the fullscreen notification for the
-first of two back-to-back meetings
+In the words of that open request: *"If two events are at the same time, I can
+only see that only one is active in the status bar."* There is a related bug
+where the fullscreen notification for the first of two back-to-back meetings
 [never fires at all](https://github.com/leits/MeetingBar/issues/769).
-
-If your calendar has parallel or nested events, a focus block with a call
-inside it, two calls booked over each other, a standup that overlaps a
-handover, that is exactly the meeting you keep missing. MeetingBlitz fires an
-independent banner for each one, and overlapping banners stack into their own
-lanes instead of replacing each other.
-
-The second difference is how loud it is. A notification is easy to swipe away
-without reading. A submarine flying across every monitor is not.
 
 ![First launch walkthrough and settings](docs/tour.png)
 
