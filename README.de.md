@@ -64,6 +64,12 @@ und wo diese sich wirklich unterscheidet.
 | Kalenderquellen | Apple Kalender (damit iCloud, Google, Exchange über macOS) | Apple Kalender + Google direkt | Apple Kalender | Apple Kalender |
 | Reife | Hobbyprojekt | 5300 Sterne, jahrelang poliert | 4000 Sterne | 2300 Sterne |
 
+Diese drei sind das Feld: Unterhalb von Calendr findet eine Suche nach
+Menüleisten-Kalendern für macOS nichts mehr über einer Handvoll Sterne. Die
+anderen bekannten Vertreter sind kommerziell und nicht quelloffen — **Dato** und
+**Fantastical** — deshalb stehen sie hier nur als Namen und nicht mit Häkchen in
+einer Tabelle: Ihr Funktionsumfang lässt sich von außen nicht belegen.
+
 ### Das andere Feld: Apps, die dich unterbrechen
 
 Die Tabelle oben vergleicht Kalender. MeetingBlitz will aber gar kein Kalender
