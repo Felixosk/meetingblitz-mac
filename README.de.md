@@ -29,10 +29,15 @@ und wo diese sich wirklich unterscheidet.
 |---|---|---|---|---|
 | Überschneidende Termine warnen **einzeln** | **ja** | nein ([offen seit 2021](https://github.com/leits/MeetingBar/issues/271)) | entfällt | entfällt |
 | Art der Warnung | Banner fliegt über **alle** Bildschirme | Menüleistentext, Mitteilung, optional Vollbild | keine | keine |
-| Erkannte Meeting-Links | Meet, Zoom, Teams, Webex, Whereby | 50+ Dienste | keine | einfach |
-| Kalenderquellen | Apple Kalender (damit iCloud, Google, Exchange über macOS) | Apple Kalender + Google direkt | Apple Kalender | Apple Kalender |
+| **Warnung vor Überschneidung beim Anlegen** | **ja** | nein | nein | nein |
+| Erkannte Meeting-Links | 53 Dienste | 50+ Dienste | keine | einfach |
+| Termin als Fließtext eintippen | ja (`fr 16 uhr bis 17 uhr call mit chris`) | nein | nein | ja |
+| Wochen-/Monatswahl im Widget | ja, ein Klick schaltet durch | nein | ja | ja |
+| Zweite Zeitzone | ja | nein | nein | ja |
+| Auswertung (Woche/Monat/Jahr) | ja | nein | nein | nein |
+| URL-Schema für Automation | `meetingblitz://` | Kurzbefehle + AppleScript | nein | `calendr://` |
 | Apple Erinnerungen in derselben Liste | ja | nein | ja | ja |
-| Monatsansicht | nein | nein | ja | ja |
+| Kalenderquellen | Apple Kalender (damit iCloud, Google, Exchange über macOS) | Apple Kalender + Google direkt | Apple Kalender | Apple Kalender |
 | Reife | Hobbyprojekt | 5000+ Sterne, jahrelang poliert | 3900+ Sterne | 2300+ Sterne |
 
 **Ganz ehrlich:** Wer die reifste, bestgepflegte Lösung mit der breitesten
@@ -62,13 +67,20 @@ sie gelesen zu haben. Ein U-Boot, das über alle Monitore fliegt, nicht.
 ## Was sie kann
 
 - **Banner vor jedem Termin**, gleichzeitig auf allen Monitoren, Vorlaufzeit einstellbar
-- **Tagesübersicht** in der Menüleiste, mit Zeitachse und bis zu einer Woche Vorschau
-- **Beitreten mit einem Klick**: erkennt Meet-, Zoom-, Teams-, Webex- und Whereby-Links
+- **Tagesübersicht** in der Menüleiste, mit Zeitachse, Wochen-/Monatswahl und jedem Tag einen Klick entfernt
+- **Beitreten mit einem Klick** für 53 Dienste: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack-Huddles, GoTo, Tencent und mehr
+- **Termin in einer Zeile tippen**: `fr 16 uhr bis 17 uhr call mit chris`, mit Vorschau bevor etwas entsteht
+- **Warnung vor Überschneidungen** beim Anlegen, *bevor* doppelt gebucht wird
+- **Sofort-Meeting**: ein Klick erzeugt den Meet-Raum, legt den Termin an und öffnet den Call
+- **Auswertung** für Woche, Monat und Jahr als Balkengrafik
 - **Termin als .ics exportieren**, landet direkt als Datei in der Zwischenablage
 - **Apple Erinnerungen**, die heute fällig sind, stehen mit in der Übersicht
 - **Pro Kalender einstellbar**, was angezeigt wird, was ein Banner auslöst und ob Geburtstage mitkommen
-- **Ruhe-Modus**, automatisch auch bei Bildschirmfreigabe
-- **Global per ⌃⌥M** zu öffnen, falls das Menüleisten-Icon mal keinen Platz findet
+- **Abgesagte Termine warnen nie** — sie bleiben durchgestrichen sichtbar
+- **Ruhe-Modus**, befristet (1h / 5h / 1 Tag / 1 Woche) und automatisch bei Bildschirmfreigabe, mit stillem Hinweis statt gar nichts
+- **Zwei globale Tastenkürzel**, beide umbelegbar: Widget öffnen, laufendem oder nächstem Call beitreten
+- **Automation** über `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
+- **Zweite Zeitzone** im Widget, versteckt sich bei gleicher Zeit
 - Komplett auf **Deutsch oder Englisch**, live umschaltbar
 
 Optional, nur mit eigener Google-Cloud-Konfiguration: Termine mit fertigem
@@ -83,10 +95,33 @@ Funktion einfach ausgeblendet, alles andere funktioniert normal.
 
 ## Installation
 
-Der empfohlene Weg ist, die App selbst zu bauen. Das dauert zwei Minuten und
-erspart dir den Gatekeeper-Tanz, den macOS bei jeder App aufführt, die nicht aus
-dem App Store kommt und nicht von einem bezahlten Apple-Entwicklerkonto signiert
-wurde.
+### Möglichkeit A: fertige App laden
+
+`MeetingBlitz.zip` aus dem [neuesten Release](https://github.com/Felixosk/meetingblitz-mac/releases/latest)
+laden, entpacken und **MeetingBlitz.app** nach **Programme** ziehen.
+
+Die App ist mit einem selbstgebauten Zertifikat signiert, nicht mit einem
+bezahlten Apple-Entwicklerkonto. macOS stellt sie deshalb beim Download unter
+Quarantäne. Ein Befehl hebt das auf:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MeetingBlitz.app
+```
+
+Danach startet sie normal. **Was der Befehl tut, sollte klar sein:** Du sagst
+macOS damit, dass du selbst für diese App bürgst, und überspringst die
+Gatekeeper-Prüfung. Führe ihn nur bei Software aus, der du wirklich traust —
+hier kannst du vorher jede Zeile Quelltext lesen, oder gleich Möglichkeit B
+nehmen.
+
+Ohne den Befehl geht es auch umständlich: doppelklicken, im Hinweis auf
+**Fertig**, dann **Systemeinstellungen → Datenschutz & Sicherheit → Trotzdem
+öffnen**, und noch einmal bestätigen.
+
+### Möglichkeit B: selbst bauen
+
+Zwei Minuten, und gar kein Gatekeeper-Tanz: selbst kompilierte Software wird
+nicht unter Quarantäne gestellt.
 
 ```bash
 git clone https://github.com/Felixosk/meetingblitz-mac.git

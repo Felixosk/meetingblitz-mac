@@ -31,10 +31,15 @@ and where this one is genuinely different.
 |---|---|---|---|---|
 | Overlapping events warn **individually** | **yes** | no ([open since 2021](https://github.com/leits/MeetingBar/issues/271)) | n/a | n/a |
 | Warning style | flying banner across **all** screens | menu bar title, notification, optional fullscreen | none | none |
-| Meeting link detection | Meet, Zoom, Teams, Webex, Whereby | 50+ services | none | basic |
-| Calendar sources | Apple Calendar (so iCloud, Google, Exchange via macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
+| **Conflict warning while creating** | **yes** | no | no | no |
+| Meeting link detection | 53 services | 50+ services | none | basic |
+| Natural-language input | yes (`fri 4pm to 5pm call with chris`) | no | no | yes |
+| Week / month picker in the widget | yes, one click steps through | no | yes | yes |
+| Second time zone | yes | no | no | yes |
+| Meeting stats (week / month / year) | yes | no | no | no |
+| URL scheme for automation | `meetingblitz://` | Shortcuts + AppleScript | no | `calendr://` |
 | Apple Reminders in the same list | yes | no | yes | yes |
-| Month grid view | no | no | yes | yes |
+| Calendar sources | Apple Calendar (so iCloud, Google, Exchange via macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
 | Maturity | hobby project | 5k+ stars, years of polish | 3.9k+ stars | 2.3k+ stars |
 
 **Be honest about it:** if you want the most mature, best supported option with
@@ -64,13 +69,20 @@ without reading. A submarine flying across every monitor is not.
 ## Features
 
 - **A banner before every meeting**, on all monitors at once, with configurable lead time
-- **Today at a glance** in the menu bar, with a timeline and up to a week ahead
-- **One-click join**: detects Google Meet, Zoom, Teams, Webex and Whereby links
+- **Today at a glance** in the menu bar, with a timeline, a week/month picker and any day one click away
+- **One-click join** for 53 services: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack huddles, GoTo, Tencent and more
+- **Type an event in one line**: `fri 4pm to 5pm call with chris`, with a live preview before anything is created
+- **Conflict warning** while creating: tells you the slot is taken *before* you double-book
+- **Instant meeting**: one click mints a Meet room, files the event and opens the call
+- **Meeting stats** for the week, month and year, as bar charts
 - **Export an event as .ics**, landing straight on your clipboard as a file
 - **Apple Reminders** due today show up next to your events
 - **Per calendar** you choose what shows, what fires a banner, and whether its birthdays appear
-- **Quiet mode**, automatically also while sharing your screen
-- **Global shortcut ⌃⌥M**, for when the menu bar icon runs out of room
+- **Declined invitations never warn you** — they stay visible, struck through
+- **Quiet mode**, timed (1h / 5h / 1 day / 1 week) and automatically while sharing your screen, with a silent notice so nothing is missed
+- **Two global shortcuts**, both rebindable: open the widget, join the current or next call
+- **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
+- **Second time zone** in the widget, hidden while it matches your Mac
 - **English and German**, switchable live, follows your system language on first run
 
 Optional, only with your own Google Cloud credentials: create an event with a
@@ -85,8 +97,31 @@ feature hides itself, everything else works the same.
 
 ## Install
 
-Building it yourself takes two minutes and saves you the Gatekeeper dance macOS
-performs for any app not signed by a paid Apple developer account.
+### Option A: download the ready-made app
+
+Grab `MeetingBlitz.zip` from the [latest release](https://github.com/Felixosk/meetingblitz-mac/releases/latest),
+unzip it, and move **MeetingBlitz.app** into your **Applications** folder.
+
+The app is signed with a self-made certificate, not with a paid Apple developer
+account, so macOS quarantines it on download. One command clears that flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MeetingBlitz.app
+```
+
+Then open it normally. **Understand what that command does:** it tells macOS you
+vouch for this app yourself, skipping the Gatekeeper check. Only run it on
+software you actually trust — here you can read every line of the source first,
+or take option B and build it yourself.
+
+Without the command you can still launch it the long way: double-click, click
+**Done** on the warning, then **System Settings → Privacy & Security → Open
+Anyway**, and confirm once more.
+
+### Option B: build it yourself
+
+Two minutes, and no Gatekeeper dance at all, because software you compile
+locally is not quarantined.
 
 ```bash
 git clone https://github.com/Felixosk/meetingblitz-mac.git
