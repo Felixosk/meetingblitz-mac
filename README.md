@@ -46,7 +46,25 @@ and where this one is genuinely different.
 | URL scheme for automation | `meetingblitz://` | Shortcuts + AppleScript | no | `calendr://` |
 | Apple Reminders in the same list | yes | no | yes | yes |
 | Calendar sources | Apple Calendar (so iCloud, Google, Exchange via macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
-| Maturity | hobby project | 5k+ stars, years of polish | 3.9k+ stars | 2.3k+ stars |
+| Maturity | hobby project | 5.3k stars, years of polish | 4.0k stars | 2.3k stars |
+
+### The other camp: apps that interrupt you
+
+The table above compares calendars. But MeetingBlitz is not really trying to be
+a calendar — it is trying to *interrupt* you, and that is a much smaller field.
+Everything in it, as of August 2026:
+
+| | Stars | Language | How it interrupts | Also does |
+|---|---|---|---|---|
+| **MeetingBlitz** | this repo | Swift | banner per event, on every screen, overlapping ones stack | join, create, quick-add, conflict warning, stats, reminders |
+| [QuakPit](https://github.com/Ooble-Studio/QuakPit) | 110 | TypeScript | a rubber duck flies across the screen | nothing else; last push May 2026 |
+| [meeting-reminder](https://github.com/nilBora/meeting-reminder) | 7 | Swift | full-screen blocking overlay | one-click join |
+| [alwayshaveaplan](https://github.com/ChrisZou/alwayshaveaplan) | 18 | Swift | shows your schedule when you unlock the Mac | — |
+| [cyclop](https://github.com/akalikbergenov/cyclop) | 225 | Swift | notch panel, calendar is one tab of many | clipboard, snippets, file shelf, translation |
+
+QuakPit proves the idea resonates: 110 stars for a duck that does nothing but
+fly. What is missing everywhere else is the *per-event* part — and everything
+you actually do after the reminder fires.
 
 **Be honest about it:** if you want the most mature, best supported option with
 the widest service coverage, install MeetingBar. It is excellent, and this
