@@ -48,7 +48,25 @@ und wo diese sich wirklich unterscheidet.
 | URL-Schema für Automation | `meetingblitz://` | Kurzbefehle + AppleScript | nein | `calendr://` |
 | Apple Erinnerungen in derselben Liste | ja | nein | ja | ja |
 | Kalenderquellen | Apple Kalender (damit iCloud, Google, Exchange über macOS) | Apple Kalender + Google direkt | Apple Kalender | Apple Kalender |
-| Reife | Hobbyprojekt | 5000+ Sterne, jahrelang poliert | 3900+ Sterne | 2300+ Sterne |
+| Reife | Hobbyprojekt | 5300 Sterne, jahrelang poliert | 4000 Sterne | 2300 Sterne |
+
+### Das andere Feld: Apps, die dich unterbrechen
+
+Die Tabelle oben vergleicht Kalender. MeetingBlitz will aber gar kein Kalender
+sein, sondern dich *unterbrechen* — und dieses Feld ist deutlich kleiner. Alles,
+was es darin gibt, Stand August 2026:
+
+| | Sterne | Sprache | Wie unterbrochen wird | Kann außerdem |
+|---|---|---|---|---|
+| **MeetingBlitz** | dieses Repo | Swift | Banner pro Termin, auf allen Bildschirmen, überschneidende stapeln sich | beitreten, anlegen, Freitext, Kollisionswarnung, Auswertung, Erinnerungen |
+| [QuakPit](https://github.com/Ooble-Studio/QuakPit) | 110 | TypeScript | eine Gummiente fliegt über den Bildschirm | sonst nichts; letzter Push Mai 2026 |
+| [meeting-reminder](https://github.com/nilBora/meeting-reminder) | 7 | Swift | Vollbild-Overlay, das alles blockiert | Beitreten mit einem Klick |
+| [alwayshaveaplan](https://github.com/ChrisZou/alwayshaveaplan) | 18 | Swift | zeigt den Tagesplan beim Entsperren | — |
+| [cyclop](https://github.com/akalikbergenov/cyclop) | 225 | Swift | Notch-Panel, Kalender ist einer von vielen Tabs | Zwischenablage, Snippets, Dateiablage, Übersetzung |
+
+QuakPit zeigt, dass die Idee zieht: 110 Sterne für eine Ente, die nichts weiter
+tut als fliegen. Was überall fehlt, ist das *pro Termin* — und alles, was man
+nach der Erinnerung eigentlich tun will.
 
 **Ganz ehrlich:** Wer die reifste, bestgepflegte Lösung mit der breitesten
 Dienstabdeckung will, installiert MeetingBar. Die App ist hervorragend, und
