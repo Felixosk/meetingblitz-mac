@@ -88,7 +88,9 @@ final class GoogleService: ObservableObject {
     func connect() async {
         guard !busy else { return }
         guard let config else {
-            lastError = L.t("OAuth-Konfiguration nicht gefunden (~/.claude/secrets/meetingblitz-google-oauth.json).", "OAuth config not found (~/.claude/secrets/meetingblitz-google-oauth.json).")
+            // Den Pfad nennen, den ein neuer Nutzer auch anlegen würde.
+            lastError = L.t("OAuth-Konfiguration nicht gefunden. Erwartet in ~/Library/Application Support/MeetingBlitz/google-oauth.json (Anleitung in der README).",
+                            "OAuth config not found. Expected at ~/Library/Application Support/MeetingBlitz/google-oauth.json (see the README).")
             return
         }
         busy = true; lastError = nil
@@ -502,9 +504,15 @@ final class GoogleService: ObservableObject {
     private static func loadConfig() -> ClientConfig? {
         // Prefer a copy bundled with the app (needed if it is ever shipped to a
         // colleague), then fall back to a local secrets file.
+        // Zwei Orte, in dieser Reihenfolge: im App-Bundle mitgeliefert (wer die
+        // App weitergibt, kann seine eigene Config einpacken), sonst der
+        // uebliche Ort fuer Anwendungsdaten auf macOS. Frueher lag der zweite
+        // Pfad in einem werkzeugspezifischen Ordner des Autors -- den haette in
+        // einem oeffentlichen Repo nie jemand gefunden, und die README kann ihn
+        // niemandem erklaeren.
         let candidates = [
             Bundle.main.url(forResource: "google-oauth", withExtension: "json"),
-            URL(fileURLWithPath: ("~/.claude/secrets/meetingblitz-google-oauth.json" as NSString).expandingTildeInPath),
+            URL(fileURLWithPath: ("~/Library/Application Support/MeetingBlitz/google-oauth.json" as NSString).expandingTildeInPath),
         ].compactMap { $0 }
         for url in candidates {
             guard let data = try? Data(contentsOf: url),

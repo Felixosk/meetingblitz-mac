@@ -160,9 +160,12 @@ Without a config file `GoogleService.hasConfig` is false, and the app hides the
 error and nothing to fix. The core feature does not need Google.
 
 If you want it, create your own Google Cloud project (enable the Calendar API,
-OAuth client of type Desktop) and place the downloaded JSON where
-`GoogleService.loadConfig()` looks for it. No credentials are included in this
-repository on purpose.
+OAuth client of type Desktop) and put the downloaded JSON at
+`~/Library/Application Support/MeetingBlitz/google-oauth.json`, or bundle it as
+`google-oauth.json` in `Contents/Resources/`. `GoogleService.loadConfig()` checks
+both. The step-by-step version is in the README under "Optional: create meetings
+with a Google Meet link". No credentials are included in this repository on
+purpose, and none are needed unless you want this one feature.
 
 ## 8. It is done when
 

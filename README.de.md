@@ -122,6 +122,7 @@ aufeinanderfolgenden Terminen
 Optional, nur mit eigener Google-Cloud-Konfiguration: Termine mit fertigem
 Google-Meet-Link direkt aus der App anlegen. Ohne diese Konfiguration ist die
 Funktion einfach ausgeblendet, alles andere funktioniert normal.
+[Anleitung dazu weiter unten.](#optional-termine-mit-google-meet-link-anlegen)
 
 ## Voraussetzungen
 
@@ -213,6 +214,43 @@ xattr -cr "/Applications/MeetingBlitz.app"
 **Diese App hat kein Fenster und kein Dock-Symbol.** Sie lebt oben rechts in der
 Menüleiste. Wenn nach dem Start scheinbar nichts passiert, ist das kein Fehler:
 Such das U-Boot in der Menüleiste und klick es an.
+
+## Optional: Termine mit Google-Meet-Link anlegen
+
+Alles oben funktioniert ohne das hier. Nur diese eine Funktion — der Knopf
+**Sofort-Meeting** und der Meet-Link an selbst angelegten Terminen — spricht in
+deinem Namen mit Google und braucht deshalb Zugangsdaten, die *dir* gehören. Es
+gibt keinen gemeinsamen App-Schlüssel, und im Repository liegt keiner.
+
+Einmalig, etwa zehn Minuten:
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/) ein Projekt
+   anlegen (Name egal).
+2. **APIs und Dienste → Bibliothek**: die **Google Calendar API** aktivieren.
+3. **APIs und Dienste → OAuth-Zustimmungsbildschirm**: **Extern** wählen, App-Name
+   und eigene Mailadresse eintragen. Unter **Zielgruppe** die eigene
+   Google-Adresse als Testnutzer hinzufügen. *(Mit einem Workspace-Konto
+   stattdessen Intern wählen — dann laufen die Tokens nicht alle 7 Tage ab.)*
+4. **APIs und Dienste → Anmeldedaten → Anmeldedaten erstellen → OAuth-Client-ID**,
+   Anwendungstyp **Desktop-App**. Die JSON-Datei herunterladen.
+5. Diese Datei hierhin legen, den Ordner notfalls anlegen:
+
+```bash
+mkdir -p ~/Library/Application\ Support/MeetingBlitz
+cp ~/Downloads/client_secret_*.json ~/Library/Application\ Support/MeetingBlitz/google-oauth.json
+```
+
+6. MeetingBlitz neu starten. Unter **Einstellungen → Meetings erstellen** gibt es
+   jetzt **Mit Google verbinden**. Einmal anmelden; der Refresh-Token landet im
+   Schlüsselbund von macOS, nie in einer Datei.
+
+Ohne diese JSON-Datei bleibt der ganze Bereich ausgeblendet und es läuft kein
+Google-Code.
+
+**Zur 7-Tage-Falle:** Solange der OAuth-Client im Modus *Testing* steht, verwirft
+Google die Refresh-Tokens nach einer Woche und man muss sich neu verbinden. Der
+Knopf **Veröffentlichen** im Zustimmungsbildschirm (oder eine interne
+Workspace-Zielgruppe) beendet das dauerhaft.
 
 ## Berechtigungen und Datenschutz
 
