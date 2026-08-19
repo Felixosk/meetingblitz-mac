@@ -21,10 +21,16 @@ struct MenuPanel: View {
     /// (Runde 30). Resets whenever the widget reopens (fresh view state).
     @State private var lastHidden: Meeting?
     @State private var createHovered = false
+    @State private var instantHovered = false
+    /// F2: month grid folded out under the header (lives in AppState so the
+    /// demo flag can open it and the widget resets it on open).
+    private var monthOpen: Bool { state.monthGridOpen }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            secondZone
+            monthGrid
 
             if state.calendarAuthorized {
                 // Runde 56: Zeitachse IMMER zeigen, auch an Tagen ohne getimte
@@ -34,8 +40,8 @@ struct MenuPanel: View {
                 // der Höhe. Eine leere Achse trägt außerdem eine Information:
                 // an diesem Tag ist nichts eingeplant.
                 TimelineStrip(meetings: state.agenda.filter { !$0.isAllDay },
-                              day: Calendar.current.date(byAdding: .day, value: state.dayOffset, to: Date()) ?? Date(),
-                              showNow: state.dayOffset == 0) { state.openInCalendar($0) }
+                              day: state.selectedDay,
+                              showNow: state.showsToday) { state.openInCalendar($0) }
                 agenda
                 if state.showReminders && !state.reminders.isEmpty { remindersSection }
             } else {
@@ -61,9 +67,26 @@ struct MenuPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // "New Meeting" needs Google config (hidden without a Google config, Runde 36)
-            // AND the settings toggle on (Runde 37).
-            if google.hasConfig && state.showMeetingCreator { createButton }
+            // The create buttons need Google config (hidden without one,
+            // Runde 36) plus their settings toggles (Runde 37 / F11).
+            if google.hasConfig && (state.showInstantMeeting || state.showMeetingCreator) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        // Der Sofort-Knopf ist die schmalere Nebenaktion
+                        // (Rückmeldung 18.08.: „2/3 so groß"), „Neues Meeting"
+                        // nimmt den Rest. Allein sichtbar füllt jeder die Breite.
+                        if state.showInstantMeeting {
+                            instantButton
+                                .frame(width: state.showMeetingCreator ? Self.instantButtonWidth : nil)
+                        }
+                        if state.showMeetingCreator { createButton }
+                    }
+                    if let err = state.instantError {
+                        Text(err).font(.system(size: 10)).foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
 
             Divider()
             footer
@@ -82,28 +105,33 @@ struct MenuPanel: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            // Day switcher (Runde 3): browse up to a week ahead.
-            Button { state.dayOffset = max(0, state.dayOffset - 1) } label: {
+            // Day switcher (Runde 3). Seit F2 ohne Wochendeckel und in beide
+            // Richtungen: den Sprung auf einen fernen Tag macht das Grid.
+            Button { state.stepDay(-1) } label: {
                 Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
             }
-            .disabled(state.dayOffset == 0)
-            .opacity(state.dayOffset == 0 ? 0.3 : 1)
             // Runde 56: EINZEILIG erzwingen. „Morgen · Samstag, 15. August" ist
             // deutlich länger als „Freitag, 14. August"; ohne Zeilenlimit bricht
             // der Titel um, der Kopf wird höher und alles darunter rutscht mit.
             // Genau das war die Meldung „der Titel bleibt nicht auf derselben Höhe".
             // Lieber minimal skalieren als umbrechen.
-            Text(dayTitle)
-                .font(.system(size: 14, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
-            Button { state.dayOffset = min(7, state.dayOffset + 1) } label: {
+            if state.calendarViewMode.isEnabled { dayTitleButton } else { dayTitleText }
+            Button { state.stepDay(1) } label: {
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
             }
-            .disabled(state.dayOffset == 7)
-            .opacity(state.dayOffset == 7 ? 0.3 : 1)
             Spacer()
+            // Zurück zu heute, sobald ein anderer Tag gezeigt wird (F2, da man
+            // sich mit dem Grid beliebig weit entfernen kann).
+            if !state.showsToday {
+                Button { state.showToday() } label: {
+                    Text(L.t("Heute", "Today"))
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.accentColor.opacity(0.15)))
+                }
+            }
             // Countdown only while the next meeting is still TODAY, "in 16 Std"
             // for tomorrow's first call is noise (Runde 28).
             if let m = state.nextMeeting, m.start < Self.endOfToday {
@@ -115,45 +143,200 @@ struct MenuPanel: View {
         .buttonStyle(.borderless)
     }
 
-    /// Full-width "Neues Meeting" button (Runde 31/32). Glassy tinted look,
-    /// translucent accent + hairline + top sheen, accent label, instead of a
-    /// solid slab ("glasy, apple-like"). Hand-painted: system styles AND real
-    /// materials both render lifeless in this never-key panel (Runde-6/14
-    /// Gotchas), explicit SwiftUI fills keep their colour.
-    private var createButton: some View {
-        Button { state.toggleCreatePanel() } label: {
-            Label(L.t("Neues Meeting", "New Meeting"), systemImage: "video.badge.plus")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(
-                    // OPAQUE saturated accent so the translucent panel material
-                    // (behindWindow) can't wash it out over a white window
-                    // behind it (Runde 39). Glass sheen keeps it from
-                    // looking like a flat slab.
+    /// Datum als Text, wenn der Auswähler ausgeschaltet ist: keine Klickfläche,
+    /// kein Pfeil, nichts, was etwas verspricht (Rückmeldung 18.08.: „ich
+    /// brauche es nicht").
+    private var dayTitleText: some View {
+        Text(dayTitle)
+            .font(.system(size: 14, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Dasselbe als Knopf: öffnet und schließt den Auswähler.
+    private var dayTitleButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: WidgetPanelController.foldDuration)) { state.advanceGrid() }
+        } label: {
+            HStack(spacing: 3) {
+                dayTitleText
+                // IMMER dasselbe Symbol, nur gedreht. Zwischen chevron.down
+                // und chevron.up zu wechseln tauscht zwei verschieden breite
+                // Glyphen aus, und die Zeile rückt bei jedem Klick ein Stück
+                // („verschiebt sich leicht"). Die Drehung ist obendrein die
+                // ruhigere Bewegung.
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .rotationEffect(.degrees(monthOpen ? 180 : 0))
+                    .frame(width: 9)
+            }
+            // Aufgeklappt bekommt die Zeile Akzentfarbe und einen leichten
+            // Hintergrund: sie ist dann der Rückweg, und man muss sofort
+            // sehen, dass genau hier der Kalender wieder zugeht.
+            //
+            // Der Abstand ist dabei KONSTANT und nur die Füllung wechselt.
+            // Vorher schaltete er von 0 auf 5 Punkte um, wodurch das Datum bei
+            // jedem Klick ein Stück zur Seite sprang („verschiebt sich leicht,
+            // schaut komisch aus"). Farbe und Hintergrund dürfen sich ändern,
+            // die Geometrie nicht.
+            .foregroundStyle(monthOpen ? Color.accentColor : Color.primary)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 5)
+                .fill(monthOpen ? Color.accentColor.opacity(0.13) : .clear))
+            .contentShape(Rectangle())
+        }
+        .rowHint(monthOpen
+                 ? L.t("Nochmal klicken schließt den Kalender", "Click again to close the calendar")
+                 : L.t("Klicken öffnet den Kalender zum Tag-Springen", "Click to open the calendar and jump to a day"))
+        .hint(monthOpen
+              ? L.t("Nochmal klicken schließt den Kalender wieder",
+                    "Click again to close the calendar")
+              : L.t("Öffnet \(state.calendarViewMode == .week ? "die Woche" : "den Monat") zum Springen auf einen anderen Tag",
+                    "Opens the \(state.calendarViewMode == .week ? "week" : "month") to jump to another day"),
+              id: "monthgrid")
+    }
+
+    /// F2: Monatsraster zum Anspringen eines beliebigen Tages. Bindet auf
+    /// `selectedDay`, also wandert nur die ANZEIGE — Banner und Menüleiste
+    /// bleiben auf dem echten Heute.
+    @ViewBuilder private var monthGrid: some View {
+        if let shown = state.gridDisplay {
+            MonthGrid(selection: $state.selectedDay,
+                      firstWeekday: state.firstWeekday, compact: true,
+                      mode: shown,
+                      onPick: { withAnimation(.easeInOut(duration: WidgetPanelController.foldDuration)) { state.gridDisplay = nil } },
+                      // Umschalter im Titel nur, wenn beide Stufen erlaubt
+                      // sind — bei „nur Woche" wäre er ein Versprechen, das
+                      // die Einstellung gleich wieder zurücknimmt.
+                      onToggleMode: state.calendarViewMode == .stepped ? {
+                          withAnimation(.easeInOut(duration: WidgetPanelController.foldDuration)) {
+                              state.gridDisplay = shown == .week ? .month : .week
+                          }
+                      } : nil)
+                .padding(8)
+                // Eigene Fläche: ohne sie schwimmt das Raster zwischen Kopf und
+                // Zeitachse und liest sich wie ein Teil von beidem.
+                .background(RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.primary.opacity(0.06)))
+                // NUR einblenden. Das „Aufklappen" macht das Fenster selbst,
+                // das in derselben Zeit nach unten aufgeht — das genügt völlig.
+                // Ein `move(edge: .top)` sah dagegen so aus, als schöbe sich
+                // der Kalender in die Datumszeile hinein: die Transition
+                // verschiebt die Ansicht über ihren Platz hinaus nach oben,
+                // und dort sitzt nun mal die Kopfzeile.
+                .transition(.opacity)
+        }
+    }
+
+    /// Shared action-pill look (Runde 31/32/39). Hand-painted: system styles
+    /// AND real materials both render lifeless in this never-key panel
+    /// (Runde-6/14 Gotchas), explicit SwiftUI fills keep their colour. Since
+    /// F11 there are two of these side by side, hence the shared builder.
+    private func actionPill(_ title: String, icon: String, hovered: Bool, busy: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            // Beim Erstellen ersetzt der Spinner das Symbol, sonst wird es in
+            // der schmalen Sofort-Pille zu eng.
+            if busy {
+                ProgressView().controlSize(.mini)
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            } else {
+                Label(title, systemImage: icon)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(
+            // OPAQUE saturated accent so the translucent panel material
+            // (behindWindow) can't wash it out over a white window
+            // behind it (Runde 39). Glass sheen keeps it from
+            // looking like a flat slab.
+            RoundedRectangle(cornerRadius: 8)
+                .fill(LinearGradient(
+                    colors: [Color.accentColor.opacity(hovered ? 1.0 : 0.95),
+                             Color.accentColor.opacity(hovered ? 0.92 : 0.82)],
+                    startPoint: .top, endPoint: .bottom))
+                .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(LinearGradient(
-                            colors: [Color.accentColor.opacity(createHovered ? 1.0 : 0.95),
-                                     Color.accentColor.opacity(createHovered ? 0.92 : 0.82)],
-                            startPoint: .top, endPoint: .bottom))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(LinearGradient(
-                                    colors: [Color.white.opacity(0.28), .clear],
-                                    startPoint: .top, endPoint: .center))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
-                        )
-                        .shadow(color: Color.accentColor.opacity(0.25), radius: 3, y: 1)
+                            colors: [Color.white.opacity(0.28), .clear],
+                            startPoint: .top, endPoint: .center))
                 )
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+                )
+                .shadow(color: Color.accentColor.opacity(0.25), radius: 3, y: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// F11: one click mints a Meet, drops the event starting now and opens the
+    /// room itself (via MeetingLauncher, so account routing applies).
+    /// Zwei Drittel der halben Zeile: Panel 360 minus 2×14 Rand minus 8 Abstand
+    /// ergibt 324, halbe Zeile also 162, davon 2/3.
+    private static let instantButtonWidth: CGFloat = 108
+
+    private var instantButton: some View {
+        Button { state.startInstantMeeting() } label: {
+            // Kurzes Label, damit es in der schmaleren Pille nicht skaliert
+            // werden muss. Was es tut, steht im Hinweis beim Überfahren.
+            actionPill(google.busy ? L.t("Erstelle…", "Creating…")
+                                   : L.t("Sofort", "Instant"),
+                       icon: "bolt.fill", hovered: instantHovered, busy: google.busy)
+        }
+        .buttonStyle(.plain)
+        .disabled(google.busy)
+        .onHover { instantHovered = $0 }
+        .hint(L.t("Erstellt sofort ein Meeting ab jetzt (30 Min) mit Meet-Link und öffnet den Raum",
+                  "Instantly creates a meeting starting now (30 min) with a Meet link and opens the room"), id: "instant")
+    }
+
+    private var createButton: some View {
+        Button { state.toggleCreatePanel() } label: {
+            actionPill(L.t("Neues Meeting", "New Meeting"), icon: "video.badge.plus",
+                       hovered: createHovered)
         }
         .buttonStyle(.plain)
         .onHover { createHovered = $0 }
         .hint(L.t("Legt einen Termin mit fertigem Google-Meet-Link an, Einladungstext landet in der Zwischenablage", "Creates an event with a ready Google Meet link, the invite text goes to your clipboard"), id: "create")
+    }
+
+    /// F1: second time zone under the header, only while it actually differs
+    /// from the Mac's zone (sitting in that zone, the line hides itself).
+    @ViewBuilder private var secondZone: some View {
+        if state.secondZoneEnabled,
+           let tz = TimeZone(identifier: state.secondZoneID),
+           tz.secondsFromGMT(for: Date()) != TimeZone.current.secondsFromGMT(for: Date()) {
+            TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                HStack(spacing: 4) {
+                    Image(systemName: "globe").font(.system(size: 9, weight: .semibold))
+                    Text("\(Self.zoneCity(state.secondZoneID)) \(Self.timeString(ctx.date, in: tz))")
+                }
+                .font(.system(size: 10.5)).foregroundStyle(.secondary)
+            }
+            .padding(.top, -6)   // snuggle under the header line
+        }
+    }
+
+    /// "Europe/Berlin" → "Berlin" (zone line + the settings rows).
+    static func zoneCity(_ id: String) -> String {
+        id.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? id
+    }
+
+    private static func timeString(_ date: Date, in tz: TimeZone) -> String {
+        let f = DateFormatter()
+        f.locale = L.locale
+        f.timeZone = tz
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f.string(from: date)
     }
 
     private static var endOfToday: Date {
@@ -251,12 +434,17 @@ struct MenuPanel: View {
     }
 
     private var dayTitle: String {
-        let date = Calendar.current.date(byAdding: .day, value: state.dayOffset, to: Date()) ?? Date()
         let f = DateFormatter()
         f.locale = L.locale
         f.dateFormat = L.t("EEEE, d. MMMM", "EEEE, MMMM d")
-        let s = f.string(from: date)
-        return state.dayOffset == 1 ? L.t("Morgen · \(s)", "Tomorrow · \(s)") : s
+        let s = f.string(from: state.selectedDay)
+        // Seit F2 sind auch vergangene Tage erreichbar, deshalb beide Nachbarn
+        // benennen. Weiter entfernte Tage stehen ohnehin mit vollem Datum da.
+        switch state.dayOffset {
+        case 1:  return L.t("Morgen · \(s)", "Tomorrow · \(s)")
+        case -1: return L.t("Gestern · \(s)", "Yesterday · \(s)")
+        default: return s
+        }
     }
 
 }
@@ -300,6 +488,17 @@ private struct AgendaRow: View {
             Text(meeting.title)
                 .font(.system(size: 12, weight: isNext ? .semibold : .regular))
                 .lineLimit(1)
+                // F3: abgesagt = durchgestrichen. Der Termin bleibt sichtbar
+                // (sonst sucht man ihn), warnt aber nicht mehr.
+                .strikethrough(meeting.myStatus == .declined, color: .secondary)
+                .foregroundStyle(meeting.myStatus == .declined ? Color.secondary : Color.primary)
+            // F3: „vielleicht" ist keine Absage, aber sichtbar unsicher.
+            if meeting.myStatus == .tentative {
+                Text("?")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .help(L.t("Du hast mit „Vielleicht\" geantwortet", "You replied “Maybe”"))
+            }
             Spacer(minLength: 4)
             if meeting.isBirthday {
                 // M2: jump straight to the person in Contacts to place the call.

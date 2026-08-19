@@ -17,6 +17,12 @@ import AppKit
 final class WidgetPanelController {
     static let shared = WidgetPanelController()
     private var panel: NSPanel?
+    /// Die Inhaltsansicht, um sie nachmessen zu können. Nötig, weil sie per
+    /// `autoresizingMask` an die Panelgröße geheftet ist: der GeometryReader
+    /// darin meldet dadurch IMMER die alte Höhe, kann also nie sagen „ich
+    /// brauche mehr Platz". Beim Aufklappen des Kalenders wurde der Inhalt so
+    /// oben abgeschnitten (die Kopfzeile mit dem Datum verschwand).
+    private var hostingView: NSView?
     private var anchorX: CGFloat = 0    // menu-bar icon centre (screen coords)
     private var topY: CGFloat = 0       // fixed top edge, just below the menu bar
     private var dismissMonitors: [Any] = []
@@ -48,12 +54,14 @@ final class WidgetPanelController {
     func toggle(state: AppState, statusButton: NSStatusBarButton?, anchorToMouseScreen: Bool = false) {
         if isOpen { close(); return }
 
-        state.dayOffset = 0   // always open on today
+        state.showToday()        // always open on today
+        state.gridDisplay = nil       // ...and with the calendar folded away
         let host = FirstMouseHostingView(rootView: MenuPanel(state: state, onSize: { size in
             Task { @MainActor in WidgetPanelController.shared.resize(to: size) }
         }))
         host.layoutSubtreeIfNeeded()
         let size = host.fittingSize
+        hostingView = host
 
         let effect = NSVisualEffectView()
         effect.material = .popover
@@ -162,18 +170,92 @@ final class WidgetPanelController {
         place(size: size)
     }
 
-    private func place(size: CGSize) {
+    /// Inhalt neu vermessen und das Panel darauf setzen. Für Umschalter, die
+    /// die Höhe ändern (Kalender auf/zu): der GeometryReader im Inneren kann
+    /// das nicht melden, weil die Inhaltsansicht an der Panelgröße klebt.
+    /// IMMER einen Runloop später aufrufen, vorher hat SwiftUI den neuen
+    /// Inhalt noch nicht gelayoutet und `fittingSize` liefert den alten Wert.
+    /// Dauer des Auf- und Zuklappens. Fenster UND SwiftUI-Inhalt müssen
+    /// denselben Wert benutzen, sonst springt das Fenster und der Inhalt
+    /// zieht hinterher — genau das wirkte „nervig".
+    ///
+    /// 🚨 Drei Anläufe brauchte es, bis die Kopfzeile beim Klappen wirklich
+    /// stillstand. Alle drei Ursachen sind derselbe Denkfehler in Varianten —
+    /// **beim Umschalten eines Zustands darf sich die GEOMETRIE nie ändern:**
+    /// 1. Padding schaltete 0 → 5pt um (Runde 63c)
+    /// 2. Zwei verschieden breite Pfeil-Glyphen getauscht (Runde 63d)
+    /// 3. Der Inhalt wurde vom noch kleineren Fenster gestaucht (Runde 63e)
+    /// Nur Farbe, Füllung, Deckkraft und Drehung sind gefahrlos.
+    static let foldDuration = 0.20
+
+    func refreshSize(animated: Bool = false) {
+        guard let p = panel, p.isVisible, let host = hostingView,
+              let content = p.contentView else { return }
+        let w = p.frame.width
+        // Nur zum MESSEN die Höhe freigeben, sonst misst sie sich selbst auf die
+        // aktuelle Panelhöhe (die Ansicht klebt per autoresizingMask daran).
+        host.autoresizingMask = []
+        host.setFrameSize(NSSize(width: w, height: 0))
+        host.layoutSubtreeIfNeeded()
+        let h = host.fittingSize.height
+        // SOFORT zurück auf den aktuellen Stand und die Maske wieder scharf
+        // stellen. Den Rahmen hier auf die ZIEL-Höhe zu setzen war der Fehler:
+        // das Fenster animiert 0,2 s lang, die Ansicht stand aber schon auf der
+        // Endgröße — dadurch ragte sie oben aus dem Fenster (Kopfzeile weg) und
+        // unten blieb ein leerer Streifen. Mit aktiver Maske wächst sie
+        // stattdessen Bild für Bild mit dem Fenster mit.
+        host.frame = content.bounds
+        host.autoresizingMask = [.width, .height]
+        guard h > 0, abs(h - p.frame.height) > 0.5 else { return }
+
+        if animated {
+            // Der Inhalt steht FEST auf seiner Zielhöhe und ist OBEN verankert
+            // (`minYMargin` = der untere Abstand ist der flexible), das Fenster
+            // gibt ihn wie ein Vorhang frei. Ohne das ist der Inhalt für das
+            // noch kleinere Fenster zu groß und wird gestaucht — dabei rutscht
+            // die Kopfzeile für die Dauer der Animation um ein paar Pixel
+            // („verschiebt sich immer noch"). Unten darf er währenddessen ruhig
+            // abgeschnitten sein, dort wächst das Fenster ja gerade hin.
+            host.autoresizingMask = [.width, .minYMargin]
+            host.frame = NSRect(x: 0, y: p.frame.height - h, width: w, height: h)
+            place(size: CGSize(width: w, height: h), animated: true) { [weak self] in
+                guard let p = self?.panel, let host = self?.hostingView else { return }
+                host.frame = p.contentView?.bounds ?? host.frame
+                host.autoresizingMask = [.width, .height]
+            }
+        } else {
+            place(size: CGSize(width: w, height: h))
+        }
+    }
+
+    private func place(size: CGSize, animated: Bool = false,
+                       completion: (() -> Void)? = nil) {
         guard let p = panel else { return }
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: anchorX, y: topY - 1)) } ?? NSScreen.main
         let vf = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         var x = anchorX - size.width / 2
         x = min(max(x, vf.minX + 4), vf.maxX - size.width - 4)
+        // Die OBERKANTE bleibt fest, gewachsen wird nach unten: das Datum im
+        // Kopf darf beim Aufklappen nicht wandern.
         let y = topY - size.height
-        p.setFrame(CGRect(x: x.rounded(), y: y.rounded(),
-                          width: size.width.rounded(.up), height: size.height.rounded(.up)),
-                   display: true)
-        p.invalidateShadow()
-        HintWindow.log("widget place day=\(AppState.shared.dayOffset) size=\(size) frame=\(p.frame) topY=\(topY)")
+        let rect = CGRect(x: x.rounded(), y: y.rounded(),
+                          width: size.width.rounded(.up), height: size.height.rounded(.up))
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = Self.foldDuration
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                ctx.allowsImplicitAnimation = true
+                p.animator().setFrame(rect, display: true)
+            } completionHandler: { [weak p] in
+                p?.invalidateShadow()   // sonst bleibt der Schatten in der alten Form
+                completion?()
+            }
+        } else {
+            p.setFrame(rect, display: true)
+            p.invalidateShadow()
+            completion?()
+        }
+        HintWindow.log("widget place day=\(AppState.shared.dayOffset) grid=\(AppState.shared.showsToday ? "today" : "other") size=\(size) frame=\(rect) topY=\(topY) anim=\(animated)")
     }
 
     func close() {
@@ -187,5 +269,6 @@ final class WidgetPanelController {
         panel?.orderOut(nil)
         panel?.contentView = nil
         panel = nil
+        hostingView = nil
     }
 }

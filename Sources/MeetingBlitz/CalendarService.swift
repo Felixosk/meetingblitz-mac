@@ -99,10 +99,19 @@ final class CalendarService {
         let now = Date()
         let end = Calendar.current.date(byAdding: .hour, value: horizonHours, to: now) ?? now
         let pred = store.predicateForEvents(withStart: now, end: end, calendars: cals)
-        return store.events(matching: pred)
+        let mapped = store.events(matching: pred)
             .filter { $0.status != .canceled && !$0.isAllDay && $0.startDate != nil && $0.startDate > now }
             .map(Self.map)
             .sorted { $0.start < $1.start }
+        // Same collapse as the agenda: an event living in two calendars must
+        // warn ONCE. Critical since the create target can be "both" (F11), and
+        // it also covers an invite that landed in a shared calendar as well.
+        // Overlapping DIFFERENT meetings keep their own warning (the app's core
+        // differentiator) — the key includes the title and the exact start.
+        var seen = Set<String>()
+        return mapped.filter { m in
+            seen.insert("\(m.title.lowercased())|\(Int(m.start.timeIntervalSince1970))").inserted
+        }
     }
 
     /// Everything happening on one day (today + `offset` days) from the selected
@@ -110,12 +119,18 @@ final class CalendarService {
     /// kept. Exact duplicates (e.g. a birthday that appears in two calendars)
     /// are collapsed.
     func dayAgenda(offset: Int = 0, selected ids: Set<String>) -> [Meeting] {
+        let day = Calendar.current.date(byAdding: .day, value: offset,
+                                        to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return dayAgenda(for: day, selected: ids)
+    }
+
+    /// Same, for an arbitrary date (F2: the month grid can pick any day).
+    func dayAgenda(for date: Date, selected ids: Set<String>) -> [Meeting] {
         guard isAuthorized else { return [] }
         let cals = selectedCalendars(ids)
         guard !cals.isEmpty else { return [] }
         let cal = Calendar.current
-        let startOfDay = cal.date(byAdding: .day, value: offset,
-                                  to: cal.startOfDay(for: Date())) ?? cal.startOfDay(for: Date())
+        let startOfDay = cal.startOfDay(for: date)
         let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
         // "Tonight" window: timed events starting after midnight, up to 04:00,
         // still belong to this day's view (the timeline extends that far).
@@ -146,6 +161,115 @@ final class CalendarService {
         }
     }
 
+
+
+    /// Zeitraum-Auswertung über die ANGEZEIGTEN Kalender.
+    ///
+    /// Ganztägige und Geburtstage bleiben draußen: „Julia in Paphos" über drei
+    /// Tage würde die Stundenzahl sprengen und nichts über Calls aussagen.
+    /// Termine werden auf den Zeitraum GEKAPPT, sonst zählt ein Termin, der in
+    /// den Sonntag hineinreicht, mit voller Länge in die Woche.
+    /// `groupBy` steuert die Balken: `.day` für die Woche, `.weekOfYear` für den
+    /// Monat. Die Balken decken den GANZEN Zeitraum ab, auch die Tage, die noch
+    /// kommen — eine Woche mit drei leeren Balken am Ende sagt etwas aus.
+    func stats(from: Date, to: Date, selected ids: Set<String>,
+               groupBy: Calendar.Component = .day) -> MeetingStats {
+        let empty = MeetingStats(count: 0, callCount: 0, minutes: 0, callMinutes: 0, busiestDay: nil)
+        guard isAuthorized else { return empty }
+        let cals = selectedCalendars(ids)
+        guard !cals.isEmpty else { return empty }
+
+        let pred = store.predicateForEvents(withStart: from, end: to, calendars: cals)
+        let events = store.events(matching: pred)
+            .filter { $0.status != .canceled && !$0.isAllDay }
+            .map(Self.map)
+            .filter { !$0.isBirthday }
+
+        var count = 0, callCount = 0, minutes = 0, callMinutes = 0
+        var perDay: [Date: Int] = [:]
+        var perBucket: [Date: (Int, Int)] = [:]
+        let cal = Calendar.current
+        func bucket(_ d: Date) -> Date {
+            switch groupBy {
+            case .day:   return cal.startOfDay(for: d)
+            case .month: return cal.dateInterval(of: .month, for: d)?.start ?? cal.startOfDay(for: d)
+            default:     return cal.dateInterval(of: .weekOfYear, for: d)?.start ?? cal.startOfDay(for: d)
+            }
+        }
+        for m in events {
+            let s = max(m.start, from), e = min(m.end, to)
+            guard e > s else { continue }
+            let mins = Int(e.timeIntervalSince(s) / 60)
+            count += 1; minutes += mins
+            if m.joinURL != nil { callCount += 1; callMinutes += mins }
+            perDay[cal.startOfDay(for: s), default: 0] += mins
+            var b = perBucket[bucket(s)] ?? (0, 0)
+            b.0 += mins
+            if m.joinURL != nil { b.1 += mins }
+            perBucket[bucket(s)] = b
+        }
+        var busiest: (String, Int)?
+        if let top = perDay.max(by: { $0.value < $1.value }), top.value > 0 {
+            let f = DateFormatter(); f.locale = L.locale; f.dateFormat = L.t("EEEE, d. MMM", "EEEE, MMM d")
+            busiest = (f.string(from: top.key), top.value)
+        }
+
+        // Balken über den ganzen Zeitraum aufspannen, damit die Achse stabil
+        // bleibt und leere Tage sichtbar sind.
+        let f = DateFormatter(); f.locale = L.locale
+        // „Mo/Di/Mi" statt „M/D/M": ein Buchstabe ist mehrdeutig (Montag und
+        // Mittwoch, Dienstag und Donnerstag). Beim Jahr passen bei 12 Balken
+        // nur Einzelbuchstaben, dort trägt die Reihenfolge die Verständlichkeit.
+        f.dateFormat = groupBy == .day ? "EEEEEE" : (groupBy == .month ? "LLLLL" : "d.")
+        var bars: [StatBar] = []
+        var cursor = bucket(from)
+        let now = Date()
+        var i = 0
+        // Tages- und Monatsraster spannen IMMER den vollen Zeitraum auf, auch
+        // über `to` hinaus: die noch leeren Tage bis Sonntag bzw. die Monate bis
+        // Dezember sind selbst eine Aussage. Vorher endete die Reihe bei „jetzt"
+        // und zeigte mittwochs nur 3 Balken.
+        let end: Date
+        switch groupBy {
+        case .day:   end = cal.date(byAdding: .day, value: 7, to: bucket(from)) ?? to
+        case .month: end = cal.date(byAdding: .year, value: 1, to: bucket(from)) ?? to
+        default:     end = to
+        }
+        while cursor < end, i < 40 {
+            let v = perBucket[cursor] ?? (0, 0)
+            let step: Calendar.Component = groupBy == .day ? .day : (groupBy == .month ? .month : .weekOfYear)
+            let next = cal.date(byAdding: step, value: 1, to: cursor) ?? cursor
+            bars.append(StatBar(id: i, label: f.string(from: cursor),
+                                minutes: v.0, callMinutes: v.1,
+                                isNow: cursor <= now && now < next))
+            cursor = next; i += 1
+        }
+        return MeetingStats(count: count, callCount: callCount,
+                            minutes: minutes, callMinutes: callMinutes,
+                            busiestDay: busiest, bars: bars)
+    }
+
+    /// Termine, die sich mit dem geplanten Zeitraum überschneiden (Kollisions-
+    /// Warnung beim Erstellen). Ganztägige und Geburtstage zählen NICHT — die
+    /// überschneiden sich per Definition mit allem und wären nur Rauschen.
+    /// Läuft der Termin über Mitternacht, wird auch der Folgetag geprüft.
+    func conflicts(start: Date, minutes: Int, selected ids: Set<String>) -> [Meeting] {
+        guard isAuthorized, minutes > 0 else { return [] }
+        let end = start.addingTimeInterval(Double(minutes) * 60)
+        let cal = Calendar.current
+        var pool = dayAgenda(for: start, selected: ids)
+        if !cal.isDate(start, inSameDayAs: end) {
+            pool += dayAgenda(for: end, selected: ids)
+        }
+        var seen = Set<String>()
+        return pool.filter { m in
+            guard !m.isAllDay, !m.isBirthday else { return false }
+            guard m.start < end, m.end > start else { return false }   // echte Überlappung
+            return seen.insert("\(m.id)|\(m.start.timeIntervalSince1970)").inserted
+        }
+        .sorted { $0.start < $1.start }
+    }
+
     /// Write a new event into an Apple calendar (Runde 27: created meetings
     /// live in the Apple calendar; Google only mints the Meet link, which rides
     /// along as the event URL + note). `calendarID` picks the target (Runde 28);
@@ -172,6 +296,14 @@ final class CalendarService {
                                                           "No writable calendar found.")])
         }
         event.calendar = cal
+        // F11: Google's CalDAV tends to drop the URL property on the way up, so
+        // for a CalDAV target the link additionally rides in the notes. iCloud
+        // is CalDAV too but keeps URLs, and doubling it there would bring back
+        // the Runde-29 duplicate.
+        if let u = url, cal.source?.sourceType == .calDAV,
+           cal.source?.title.localizedCaseInsensitiveContains("icloud") != true {
+            event.notes = u.absoluteString
+        }
         try store.save(event, span: .thisEvent)
     }
 
@@ -216,7 +348,9 @@ final class CalendarService {
         return store.calendars(for: .event)
             .filter { $0.allowsContentModifications }
             .map { CalendarInfo(id: $0.calendarIdentifier, title: $0.title,
-                                color: Color(cgColor: $0.cgColor ?? .init(gray: 0.5, alpha: 1))) }
+                                color: Color(cgColor: $0.cgColor ?? .init(gray: 0.5, alpha: 1)),
+                                sourceTitle: $0.source?.title ?? "",
+                                isAppleAccount: Self.isAppleAccount($0)) }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
@@ -225,6 +359,33 @@ final class CalendarService {
         guard isAuthorized else { return nil }
         return (store.defaultCalendarForNewEvents
                 ?? store.calendars(for: .event).first(where: { $0.allowsContentModifications }))?.calendarIdentifier
+    }
+
+    /// F11: does this calendar live on the Mac / in iCloud (Apple side), or in a
+    /// synced account like Google? iCloud speaks CalDAV too, hence the name check.
+    static func isAppleAccount(_ c: EKCalendar) -> Bool {
+        switch c.source?.sourceType {
+        case .local, .subscribed, .birthdays, .mobileMe: return true
+        case .calDAV: return c.source?.title.localizedCaseInsensitiveContains("icloud") == true
+        default: return false     // .exchange and anything new: treat as an account
+        }
+    }
+
+    /// F11: best guess for "the Google calendar". A synced Google account names
+    /// its MAIN calendar after the address, so an "@" in the title is the
+    /// strongest hint; secondary and shared calendars of the same account only
+    /// serve as a fallback. Nothing is hardcoded, the user confirms in settings
+    /// (the picker shows each calendar's account).
+    func guessGoogleCalendarID() -> String? {
+        guard isAuthorized else { return nil }
+        let candidates = store.calendars(for: .event).filter {
+            $0.allowsContentModifications
+                && $0.source?.sourceType == .calDAV
+                && $0.source?.title.localizedCaseInsensitiveContains("icloud") != true
+        }
+        return (candidates.first { $0.title.contains("@") }
+                ?? candidates.first { ($0.source?.title ?? "").contains("@") }
+                ?? candidates.first)?.calendarIdentifier
     }
 
     private static func map(_ e: EKEvent) -> Meeting {
@@ -244,24 +405,28 @@ final class CalendarService {
             color: Color(cgColor: e.calendar?.cgColor ?? .init(gray: 0.5, alpha: 1)),
             joinURL: findJoinURL(e),
             contactID: e.birthdayContactIdentifier,
-            calendarItemID: e.calendarItemIdentifier
+            calendarItemID: e.calendarItemIdentifier,
+            myStatus: myStatus(e)
         )
     }
 
-    /// Look for a video-call link in the usual fields, preferring known providers.
-    private static func findJoinURL(_ e: EKEvent) -> URL? {
-        if let u = e.url, isMeetingLink(u) { return u }
-        let text = [e.location, e.notes, e.url?.absoluteString].compactMap { $0 }.joined(separator: "\n")
-        guard !text.isEmpty else { return e.url }
-        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        let range = NSRange(text.startIndex..., in: text)
-        let urls = detector?.matches(in: text, options: [], range: range).compactMap { $0.url } ?? []
-        return urls.first(where: isMeetingLink) ?? urls.first ?? e.url
+    /// F3: my own answer to the invitation. `isCurrentUser` is unreliable on
+    /// some CalDAV accounts, so anything we cannot identify stays `.none` and
+    /// keeps warning — one banner too many beats a missed meeting.
+    private static func myStatus(_ e: EKEvent) -> MyStatus {
+        guard let me = e.attendees?.first(where: { $0.isCurrentUser }) else { return .none }
+        switch me.participantStatus {
+        case .declined:  return .declined
+        case .accepted:  return .accepted
+        case .tentative: return .tentative
+        default:         return .none
+        }
     }
 
-    private static func isMeetingLink(_ u: URL) -> Bool {
-        let h = (u.host ?? "").lowercased()
-        return h.contains("meet.google") || h.contains("zoom") || h.contains("teams.microsoft")
-            || h.contains("webex") || h.contains("whereby")
+    /// Look for a video-call link in the usual fields, preferring known
+    /// providers. Since F7 the provider table lives in `JoinLink` (50+ services
+    /// instead of five) and is covered by `--selftest`.
+    private static func findJoinURL(_ e: EKEvent) -> URL? {
+        JoinLink.best(explicit: e.url, texts: [e.location, e.notes, e.url?.absoluteString])
     }
 }

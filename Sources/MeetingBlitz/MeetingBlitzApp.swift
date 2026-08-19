@@ -19,14 +19,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var cancellable: AnyCancellable?
     private var splashDemoPanel: NSPanel?
+    /// F9: URL, die vor dem fertigen Aufbau eintraf (Start PER URL).
+    private var pendingURL: URL?
+
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor,
+                                      reply: NSAppleEventDescriptor) {
+        guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: s) else { return }
+        guard statusItem != nil else { pendingURL = url; return }
+        URLScheme.handle(url, statusButton: statusItem?.button)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // F7: Selbsttest der Link-Erkennung. MUSS vor dem Einzelinstanz-Schutz
+        // stehen — sonst beendet sich der Testlauf neben der laufenden App
+        // sofort und meldet Erfolg, ohne einen einzigen Fall geprüft zu haben.
+        // Genau das ist beim ersten Anlauf passiert. Braucht keine App-Umgebung,
+        // nur reine Rechnerei, deshalb ganz nach vorn.
+        if CommandLine.arguments.contains("--selftest") {
+            let fails = JoinLinkTests.failures() + CalendarStageTests.failures()
+                + QuickAddTests.failures()
+            if fails.isEmpty {
+                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext")
+                exit(0)
+            }
+            print("SELFTEST FEHLGESCHLAGEN (\(fails.count)):")
+            fails.forEach { print(" - \($0)") }
+            exit(1)
+        }
+        // F8-Diagnose: `--parse "fr 16 uhr call mit chris"` zeigt, was die
+        // Freitext-Erkennung daraus macht. Ebenfalls VOR dem Einzelinstanz-
+        // Schutz, sonst beendet sich der Aufruf neben der laufenden App.
+        if let i = CommandLine.arguments.firstIndex(of: "--parse"),
+           i + 1 < CommandLine.arguments.count {
+            let input = CommandLine.arguments[i + 1]
+            if let p = QuickAdd.parse(input, now: Date()) {
+                let f = DateFormatter()
+                f.locale = Locale(identifier: "de_DE")
+                f.dateFormat = "EEEE, d. MMMM yyyy, HH:mm"
+                print("Eingabe : \(input)")
+                print("Titel   : \(p.title.isEmpty ? "(leer → „Meeting\")" : p.title)")
+                print("Start   : \(f.string(from: p.start))")
+                print("Dauer   : \(p.minutes) min")
+                print("Sicher  : \(p.confident ? "ja" : "NEIN (nackte Zahl geraten)")")
+            } else {
+                print("Eingabe : \(input)")
+                print("Ergebnis: NICHT ERKANNT (keine Zeit gefunden)")
+            }
+            exit(0)
+        }
         // Single instance (Runde 46). Eine zweite Kopie der App (gemeldet wurde:te eine
         // Alt-Kopie in ~/Downloads, die zusätzlich in den Login Items stand) läuft
         // unter DERSELBEN Bundle-ID, macOS wirft dann das kollidierende
         // NSStatusItem raus und das Menüleisten-Icon verschwindet kommentarlos.
         // Die ältere Instanz gewinnt, die neue beendet sich sofort.
-        if !CommandLine.arguments.contains("--diagnose"),
+        // Diese Prüf-Aufrufe brauchen den Kalender, aber keine Menüleiste, und
+        // laufen deshalb absichtlich neben der App.
+        let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice"]
+        if !CommandLine.arguments.contains(where: readOnlyChecks.contains),
            let bid = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bid)
                .contains(where: { $0.processIdentifier != NSRunningApplication.current.processIdentifier }) {
@@ -37,6 +87,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)   // menu-bar only, no dock icon
         AppState.shared.start()
 
+        // F9: meetingblitz://… entgegennehmen. Wird die App PER URL gestartet,
+        // trifft das Ereignis ein, bevor das Statusitem steht — deshalb wird
+        // die URL gepuffert und erst nach dem Aufbau ausgeführt.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleURLEvent(_:reply:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL))
+
+        // Kollisions-Prüfung von außen: `--conflicts "fr 16 uhr call"` zeigt,
+        // was die Warnung im Erstellen-Formular anzeigen würde. Panels sind bei
+        // laufender Arbeit kaum zuverlässig zu fotografieren, das hier ist
+        // belastbar.
+        if let i = CommandLine.arguments.firstIndex(of: "--conflicts"),
+           i + 1 < CommandLine.arguments.count {
+            let input = CommandLine.arguments[i + 1]
+            Task { @MainActor in
+                for _ in 0..<20 where !AppState.shared.calendarAuthorized {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                }
+                let s = AppState.shared
+                guard let p = QuickAdd.parse(input, now: Date()) else {
+                    print("„\(input)" + "\" ergibt keine Zeit"); exit(1)
+                }
+                let f = DateFormatter(); f.locale = Locale(identifier: "de_DE")
+                f.dateFormat = "EEEE, d. MMMM, HH:mm"
+                let hits = s.calendar.conflicts(start: p.start, minutes: p.minutes,
+                                                selected: s.selectedCalendarIDs)
+                var out = ["Geplant : \(p.title) · \(f.string(from: p.start)) · \(p.minutes) min"]
+                print(out[0])
+                if hits.isEmpty { out.append("Konflikt: keiner") }
+                else {
+                    out.append("Konflikt: \(hits.count)")
+                    for h in hits { out.append("  - \(h.rangeLabel)  \(h.title)") }
+                }
+                out.dropFirst().forEach { print($0) }
+                try? out.joined(separator: "\n").write(toFile: "/tmp/mb_check.txt", atomically: true, encoding: .utf8)
+                exit(0)
+            }
+            return
+        }
+        // P1-Prüfung: `--test-notice` schickt eine Beispielmeldung und schreibt
+        // das Ergebnis nach /tmp/mb_check.txt. Ohne das ist von außen nicht zu
+        // sehen, ob die Meldung wirklich rausgeht — sie greift sonst nur, wenn
+        // Ruhe aktiv IST und gleichzeitig ein Termin ansteht.
+        if CommandLine.arguments.contains("--test-notice") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                QuietNotice.test()
+                try? "Hinweis gezeigt (eigenes Fenster oben rechts)"
+                    .write(toFile: "/tmp/mb_check.txt", atomically: true, encoding: .utf8)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 9) { exit(0) }
+            return
+        }
+        // Auswertung von außen: `--stats` gibt Woche und Monat aus.
+        if CommandLine.arguments.contains("--stats") {
+            Task { @MainActor in
+                for _ in 0..<20 where !AppState.shared.calendarAuthorized {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                }
+                let s = AppState.shared, cal = Calendar.current, now = Date()
+                var out: [String] = []
+                for (label, from) in [("Diese Woche", cal.dateInterval(of: .weekOfYear, for: now)?.start),
+                                      ("Dieser Monat", cal.dateInterval(of: .month, for: now)?.start)] {
+                    guard let from else { continue }
+                    let st = s.calendar.stats(from: from, to: now, selected: s.selectedCalendarIDs)
+                    out.append("\(label): \(st.count) Termine · \(st.hoursLabel) gesamt · "
+                          + "\(st.callCount) Calls · \(st.callHoursLabel) in Calls"
+                          + (st.busiestDay.map { " · vollster Tag \($0.label) (\(MeetingStats.hm($0.minutes)))" } ?? ""))
+                }
+                out.forEach { print($0) }
+                try? out.joined(separator: "\n").write(toFile: "/tmp/mb_check.txt", atomically: true, encoding: .utf8)
+                exit(0)
+            }
+            return
+        }
         // Runde 48: Diagnose auch ohne Klick, damit sie sich prüfen und aus
         // Skripten holen lässt. Läuft kurz mit, wartet auf den ersten
         // Kalender-Tick und beendet sich dann wieder.
@@ -80,20 +205,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Global hotkey (Runde 44): opens the widget on whichever display the
         // mouse is on, the menu-bar icon isn't reliable across screens / the
         // notch. AppState flips this hook when the settings toggle changes.
+        // F5: zwei Kürzel, beide umbelegbar. `register` meldet zurück, ob die
+        // Kombination frei war — ein still totes Kürzel wäre das Schlimmste.
         AppState.shared.onHotkeyToggle = { [weak self] on in
             guard let self else { return }
-            if on {
-                HotKeyManager.shared.register(keyCode: HotKeyManager.defaultKeyCode,
-                                              modifiers: HotKeyManager.defaultModifiers) {
+            let s = AppState.shared
+            HotKeyManager.shared.unregister(.showWidget)
+            HotKeyManager.shared.unregister(.joinNext)
+            guard on else { s.hotkeyConflict = nil; return }
+
+            let okWidget = HotKeyManager.shared.register(
+                .showWidget, keyCode: UInt32(s.hotkeyWidgetKey),
+                modifiers: UInt32(s.hotkeyWidgetMods)) {
                     WidgetPanelController.shared.toggle(state: .shared,
                                                         statusButton: self.statusItem?.button,
                                                         anchorToMouseScreen: true)
                 }
-            } else {
-                HotKeyManager.shared.unregister()
-            }
+            let okJoin = HotKeyManager.shared.register(
+                .joinNext, keyCode: UInt32(s.hotkeyJoinKey),
+                modifiers: UInt32(s.hotkeyJoinMods)) {
+                    AppState.shared.joinCurrentOrNext()
+                }
+            // Sichtbar machen, was nicht griff, statt es zu verschlucken.
+            var dead: [String] = []
+            if !okWidget { dead.append(s.hotkeyWidgetLabel) }
+            if !okJoin { dead.append(s.hotkeyJoinLabel) }
+            s.hotkeyConflict = dead.isEmpty ? nil : dead.joined(separator: ", ")
         }
         AppState.shared.onHotkeyToggle?(AppState.shared.hotkeyEnabled)
+
+        // F9: nachholen, was vor dem Aufbau eintraf.
+        if let u = pendingURL {
+            pendingURL = nil
+            DispatchQueue.main.async { [weak self] in
+                URLScheme.handle(u, statusButton: self?.statusItem?.button)
+            }
+        }
 
         // Einstieg beim ersten Start (Runde 56). Ohne ihn passiert für einen
         // neuen Nutzer sichtbar NICHTS: keine Fenster, kein Dock-Symbol, und
@@ -167,7 +314,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 WidgetPanelController.shared.toggle(state: .shared, statusButton: self.statusItem?.button)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    AppState.shared.dayOffset = max(0, min(7, day))
+                    AppState.shared.stepDay(day)
+                    AppState.shared.advanceGrid()
                 }
             }
         }
@@ -352,8 +500,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = ""
             button.image = MenuBarIcon.submarine
             // Sonst klebt hier der Titel des letzten Termins als Tooltip fest.
-            button.toolTip = L.t("MeetingBlitz, Tagesübersicht öffnen",
-                                 "MeetingBlitz, open today's agenda")
+            // F6: im Stil „Nur Symbol" ist der Tooltip die EINZIGE Stelle, an
+            // der der Termin noch steht, deshalb hat er dort Vorrang.
+            button.toolTip = s.menuBarTooltip
+                ?? L.t("MeetingBlitz, Tagesübersicht öffnen",
+                       "MeetingBlitz, open today's agenda")
         }
     }
 }

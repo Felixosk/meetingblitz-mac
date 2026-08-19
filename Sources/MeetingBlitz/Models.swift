@@ -14,6 +14,23 @@ struct CalendarInfo: Identifiable, Hashable {
     let id: String        // EKCalendar.calendarIdentifier
     let title: String
     let color: Color
+    /// Account the calendar comes from ("iCloud", a Google address, …). Shown
+    /// when picking a target so "Agency" in Google and "Agency" in iCloud are
+    /// distinguishable (F11).
+    var sourceTitle: String = ""
+    /// True for calendars that live on this Mac / in iCloud, false for synced
+    /// accounts like Google. Splits the target picker (F11).
+    var isAppleAccount: Bool = true
+}
+
+/// Where a newly created meeting is written (F11). `.both` writes TWO events
+/// sharing one Meet link; the banner path de-duplicates them so only one
+/// submarine flies (see `CalendarService.upcomingMeetings`).
+enum CreateTarget: String, CaseIterable, Identifiable {
+    case google, apple, both
+    var id: String { rawValue }
+    var usesGoogle: Bool { self != .apple }
+    var usesApple: Bool { self != .google }
 }
 
 /// How a newly created meeting repeats (Runde 43). Maps to an EKRecurrenceRule;
@@ -110,6 +127,66 @@ struct ReminderItem: Identifiable, Equatable {
 }
 
 /// One event, reduced to what the UI and the monitor need.
+/// What the widget's day picker unfolds into. A whole month is a lot of panel
+/// for "which day next week?", so the week is the lighter default option.
+enum CalendarViewMode: String, CaseIterable, Identifiable {
+    /// Gestuft: erster Klick aufs Datum zeigt die Woche, zweiter den Monat,
+    /// dritter schließt wieder. Ein Bedienelement, drei Zustände.
+    case stepped, week, month, off
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .stepped: return L.t("Beide", "Both")
+        case .week:    return L.t("Woche", "Week")
+        case .month:   return L.t("Monat", "Month")
+        case .off:     return L.t("Aus", "Off")
+        }
+    }
+    /// `.off` blendet den Auswähler ganz aus: Das Datum im Kopf ist dann
+    /// schlichter Text, kein Knopf, kein Pfeil, nichts klappt auf.
+    var isEnabled: Bool { self != .off }
+
+    /// Was der erste Klick aufs Datum zeigt.
+    var firstStage: CalendarViewMode? {
+        switch self {
+        case .stepped, .week: return .week
+        case .month:          return .month
+        case .off:            return nil
+        }
+    }
+
+    /// Nächste Stufe nach `current`, nil bedeutet zu. Nur `.stepped` hat einen
+    /// Zwischenschritt, die anderen schalten direkt wieder zu.
+    func nextStage(after current: CalendarViewMode?) -> CalendarViewMode? {
+        guard isEnabled else { return nil }
+        guard let current else { return firstStage }
+        if self == .stepped && current == .week { return .month }
+        return nil
+    }
+}
+
+/// F6: how much the menu-bar item shows. Every option is NARROWER than the
+/// full title, never wider — the width budget is what makes macOS throw status
+/// items out (Runde 46b).
+enum MenuBarStyle: String, CaseIterable, Identifiable {
+    case titleAndCountdown, countdownOnly, iconOnly
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .titleAndCountdown: return L.t("Titel", "Title")
+        case .countdownOnly:     return L.t("Nur Zeit", "Time only")
+        case .iconOnly:          return L.t("Nur Symbol", "Icon only")
+        }
+    }
+}
+
+/// My own answer to an invitation (F3). `.none` covers events with no
+/// attendees at all — your own entries — and, deliberately, anything where the
+/// current user cannot be identified: never suppress a warning on a guess.
+enum MyStatus {
+    case none, accepted, declined, tentative
+}
+
 struct Meeting: Identifiable, Equatable {
     let id: String
     let title: String
@@ -123,6 +200,7 @@ struct Meeting: Identifiable, Equatable {
     let joinURL: URL?
     let contactID: String?      // birthday contact, used from M2 on
     let calendarItemID: String? // to reveal the event in Apple Calendar
+    var myStatus: MyStatus = .none   // F3
 
     static func == (l: Meeting, r: Meeting) -> Bool { l.id == r.id && l.start == r.start }
 

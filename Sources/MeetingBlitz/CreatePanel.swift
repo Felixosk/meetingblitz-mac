@@ -152,6 +152,8 @@ struct CreatePane: View {
     @State private var newTitle = ""
     @State private var newStart = Self.nextQuarterHour()
     @State private var newMinutes = 30
+    /// F8: Freitextzeile über dem Formular („fr 10-12 call mit chris").
+    @State private var quickText = ""
     /// Repeat rule (Runde 43): `.none` writes a single event, otherwise a series.
     @State private var newRepeat: RepeatRule = .none
     @State private var repeatOpen = false
@@ -165,6 +167,9 @@ struct CreatePane: View {
     /// this nonactivating panel (Runde-13-Gotcha).
     @AppStorage("createCalendarID") private var chosenCalendarID = ""
     @State private var calendarListOpen = false
+    /// F11: true sobald in DIESEM Panel ein Kalender angeklickt wurde, dann
+    /// gewinnt die Handwahl über die Google-Ziel-Vorauswahl.
+    @State private var calendarPickedHere = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -239,6 +244,17 @@ struct CreatePane: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 14))
 
+                quickAddField
+                    // F9: aus meetingblitz://create?text=… vorbelegen.
+                    .onAppear {
+                        if let t = state.pendingQuickAdd {
+                            quickText = t; state.pendingQuickAdd = nil
+                        }
+                    }
+                    .onChange(of: state.pendingQuickAdd) { _, new in
+                        if let t = new { quickText = t; state.pendingQuickAdd = nil }
+                    }
+
                 // Runde 47f: KEIN Scrollbereich mehr. Der Versuch (47c–47e) hat
                 // dreimal hintereinander Layout-Ärger produziert, zu kleine
                 // gemessene Höhe, unten verankerter Inhalt, überstehende Breite.
@@ -251,6 +267,8 @@ struct CreatePane: View {
                 // gemeldet), stehen die drei Gotchas des Scroll-Versuchs in
                 // PROGRESS.md Runde 47c–47e.
                 formFields
+
+                conflictWarning
 
                 Divider()
                 createButton
@@ -277,6 +295,119 @@ struct CreatePane: View {
         }
     }
 
+    /// Freitext, sofern die Zeile eingeschaltet ist. Abgeschaltet darf ein
+    /// stehengebliebener Text weder die Kollisions-Warnung noch das Erstellen
+    /// beeinflussen — sonst wirkt unsichtbar etwas mit.
+    private var activeQuickText: String {
+        state.quickAddEnabled ? quickText.trimmingCharacters(in: .whitespaces) : ""
+    }
+
+    // MARK: - Kollisions-Warnung
+
+    /// Zeigt VOR dem Erstellen, ob der geplante Zeitraum schon belegt ist.
+    /// Andere Werkzeuge lassen einen doppelt buchen und zeigen den Konflikt
+    /// erst hinterher im Kalender. Bewusst nur eine WARNUNG, kein Verbot:
+    /// Doppelbelegung ist manchmal Absicht (Reise + Call, optionaler Termin).
+    ///
+    /// Ein noch nicht übernommener Freitext zählt schon mit, sonst prüft die
+    /// Warnung den alten Formularstand, während oben längst etwas anderes steht.
+    @ViewBuilder private var conflictWarning: some View {
+        if state.warnOnConflicts { conflictWarningBody }
+    }
+
+    @ViewBuilder private var conflictWarningBody: some View {
+        let p = activeQuickText.isEmpty ? nil : QuickAdd.parse(activeQuickText, now: Date())
+        let start = p?.start ?? newStart
+        let mins = p?.minutes ?? newMinutes
+        let hits = state.calendar.conflicts(start: start, minutes: mins,
+                                            selected: state.selectedCalendarIDs)
+        if !hits.isEmpty {
+            HStack(alignment: .top, spacing: 5) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10)).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(hits.count == 1
+                         ? L.t("Überschneidet sich mit:", "Overlaps with:")
+                         : L.t("Überschneidet sich mit \(hits.count) Terminen:",
+                               "Overlaps with \(hits.count) events:"))
+                        .font(.system(size: 10, weight: .semibold))
+                    ForEach(hits.prefix(3)) { m in
+                        Text("\(m.rangeLabel) · \(m.title)")
+                            .font(.system(size: 10)).lineLimit(1)
+                    }
+                }
+                .foregroundStyle(.orange)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 3).padding(.horizontal, 6)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color.orange.opacity(0.12)))
+        }
+    }
+
+    // MARK: - Freitext (F8)
+
+    /// Eine Zeile tippen statt vier Felder ausfüllen: „fr 10-12 call mit chris".
+    /// Die Vorschau darunter ist der wichtigste Teil — sie zeigt VOR dem
+    /// Übernehmen, was verstanden wurde, damit kein falscher Termin entsteht.
+    /// Übernommen wird in die normalen Felder, nicht direkt angelegt: so bleibt
+    /// alles vor dem Erstellen noch korrigierbar.
+    @ViewBuilder private var quickAddField: some View {
+        if state.quickAddEnabled { quickAddFieldBody }
+    }
+
+    @ViewBuilder private var quickAddFieldBody: some View {
+        let parsed = quickText.trimmingCharacters(in: .whitespaces).isEmpty
+            ? nil : QuickAdd.parse(quickText, now: Date())
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                TextField(L.t("oder tippen: fr 10-12 call mit chris",
+                              "or type: fri 10-12 call with chris"), text: $quickText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11))
+                    .onSubmit { applyQuickAdd(parsed) }
+            }
+            if let p = parsed {
+                HStack(spacing: 5) {
+                    Text("→ \(p.title.isEmpty ? L.t("Meeting", "Meeting") : p.title) · \(Self.previewLabel(p))")
+                        .font(.system(size: 10))
+                        // Unsichere Erkennung (nackte Zahl) sichtbar machen,
+                        // statt sie wie eine gesicherte Angabe aussehen zu lassen.
+                        .foregroundStyle(p.confident ? Color.secondary : Color.orange)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    Button(L.t("Übernehmen", "Apply")) { applyQuickAdd(p) }
+                        .font(.system(size: 10)).buttonStyle(.borderless)
+                }
+            } else if !quickText.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text(L.t("Keine Zeit erkannt, z. B. „morgen 14 uhr“ oder „fr 10-12“ ergänzen.",
+                         "No time found, add something like “tomorrow 2pm” or “fri 10-12”."))
+                    .font(.system(size: 10)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Erkanntes in die Formularfelder schreiben. Danach ist das Freitextfeld
+    /// leer und der normale Weg (Kalender, Wiederholung, Erstellen) gilt.
+    private func applyQuickAdd(_ p: ParsedEvent?) {
+        guard let p else { return }
+        if !p.title.isEmpty { newTitle = p.title }
+        newStart = p.start
+        newMinutes = p.minutes
+        quickText = ""
+    }
+
+    private static func previewLabel(_ p: ParsedEvent) -> String {
+        let f = DateFormatter()
+        f.locale = L.locale
+        f.dateFormat = L.t("EEE d. MMM, HH:mm", "EEE MMM d, HH:mm")
+        let end = p.start.addingTimeInterval(Double(p.minutes) * 60)
+        let t = DateFormatter(); t.locale = L.locale; t.dateFormat = "HH:mm"
+        return "\(f.string(from: p.start))–\(t.string(from: end))"
+    }
+
     // MARK: - Formular (scrollender Teil)
 
     /// Alles zwischen Titelfeld und Erstellen-Button.
@@ -285,7 +416,7 @@ struct CreatePane: View {
                 // Custom month grid (Runde 29): the AppKit .graphical picker
                 // rendered as a squashed grey box ("katastrophal"), this one
                 // fills the panel width in the Apple Calendar look.
-                MonthGrid(selection: $newStart)
+                MonthGrid(selection: $newStart, firstWeekday: state.firstWeekday)
 
                 HStack(spacing: 6) {
                     Text(L.t("Uhrzeit", "Time")).font(.system(size: 12))
@@ -400,6 +531,7 @@ struct CreatePane: View {
                             ForEach(writable) { c in
                                 Button {
                                     chosenCalendarID = c.id
+                                    calendarPickedHere = true
                                     withAnimation(.easeInOut(duration: 0.16)) { calendarListOpen = false }
                                 } label: {
                                     HStack(spacing: 6) {
@@ -455,14 +587,27 @@ struct CreatePane: View {
 
     private var createButton: some View {
         Button {
+            // F8: Ein Freitext, der noch nicht übernommen wurde, gilt trotzdem.
+            // Sonst tippt man „fr 16 uhr call mit chris", klickt Erstellen —
+            // und bekommt einen Termin „Meeting" heute zur nächsten Viertel-
+            // stunde, weil die Formularfelder noch auf ihren Vorgaben stehen.
+            // Genau so ist es passiert. Die Werte werden hier LOKAL berechnet:
+            // `applyQuickAdd` setzt @State, und der wäre in diesem Durchlauf
+            // noch nicht sichtbar.
+            let p = activeQuickText.isEmpty ? nil : QuickAdd.parse(activeQuickText, now: Date())
+            let title = (p?.title).flatMap { $0.isEmpty ? nil : $0 } ?? newTitle
+            let start = p?.start ?? newStart
+            let minutes = p?.minutes ?? newMinutes
+            if p != nil { quickText = "" }
+
             // Remember the account choice by the title the event gets, so
             // the join button + a weekly series open the right account.
-            let t = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
             state.setMeetChoice(newAccount, forTitle: t.isEmpty ? "Meeting" : t)
             Task {
-                if await google.createAppleMeeting(title: newTitle, start: newStart,
-                                                   minutes: newMinutes,
-                                                   calendarID: currentCalendarID,
+                if await google.createAppleMeeting(title: title, start: start,
+                                                   minutes: minutes,
+                                                   calendarIDs: targetCalendarIDs,
                                                    recurrence: newRepeat,
                                                    custom: newRepeat == .custom ? customRec : nil,
                                                    autoTranscribe: state.autoTranscribe,
@@ -484,10 +629,22 @@ struct CreatePane: View {
         .disabled(google.busy)
     }
 
-    /// Zielkalender: die eigene Wahl, sonst der Systemstandard. Wird vom
-    /// Formular UND vom Erstellen-Button gebraucht, deshalb hier zentral.
+    /// Zielkalender für die ANZEIGE in der Formularzeile. Bei „Beide" ohne
+    /// Handwahl steht hier der Google-Kalender, die zweite Ablage verrät der
+    /// Zusatz in der Zeile.
     private var currentCalendarID: String? {
-        chosenCalendarID.isEmpty ? state.calendar.defaultCalendarID : chosenCalendarID
+        if !calendarPickedHere, let first = state.effectiveCreateCalendarIDs.first ?? nil {
+            return first
+        }
+        return chosenCalendarID.isEmpty ? state.calendar.defaultCalendarID : chosenCalendarID
+    }
+
+    /// Wohin tatsächlich geschrieben wird: eine Handwahl im Formular schlägt
+    /// die Einstellung und schreibt dann in GENAU diesen einen Kalender.
+    private var targetCalendarIDs: [String?] {
+        calendarPickedHere
+            ? [chosenCalendarID.isEmpty ? state.calendar.defaultCalendarID : chosenCalendarID]
+            : state.effectiveCreateCalendarIDs
     }
 
     /// Custom recurrence editor (Runde 43b): "every N days/weeks/months", plus
@@ -537,124 +694,6 @@ struct CreatePane: View {
     private static func nextQuarterHour() -> Date {
         Date(timeIntervalSinceReferenceDate:
                 ceil(Date().timeIntervalSinceReferenceDate / 900) * 900)
-    }
-}
-
-/// Hand-drawn month calendar in the Apple Calendar look (Runde 29): full panel
-/// width, Monday-first, round accent selection, today tinted, chevrons + "•"
-/// (jump back to today) in the header. Keeps the time-of-day of `selection`.
-private struct MonthGrid: View {
-    @Binding var selection: Date
-    @State private var shownMonth: Date
-
-    init(selection: Binding<Date>) {
-        _selection = selection
-        let cal = Calendar.current
-        _shownMonth = State(initialValue:
-            cal.dateInterval(of: .month, for: selection.wrappedValue)?.start
-            ?? cal.startOfDay(for: selection.wrappedValue))
-    }
-
-    private var cal: Calendar {
-        var c = Calendar.current
-        c.firstWeekday = 2   // Monday, like Apple Calendar in DE
-        return c
-    }
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 10) {
-                Text(monthTitle)
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                Button { step(-1) } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
-                }
-                Button { jumpToToday() } label: {
-                    Circle().fill(Color.accentColor).frame(width: 6, height: 6)
-                }
-                .help(L.t("Zu heute springen", "Jump to today"))
-                Button { step(1) } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                }
-            }
-            .buttonStyle(.borderless)
-
-            HStack(spacing: 0) {
-                ForEach(L.isDE ? ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-                               : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"], id: \.self) { d in
-                    Text(d)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-
-            let today = cal.startOfDay(for: Date())
-            let selectedDay = cal.startOfDay(for: selection)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7),
-                      spacing: 2) {
-                ForEach(gridDays(), id: \.timeIntervalSinceReferenceDate) { day in
-                    let inMonth = cal.isDate(day, equalTo: shownMonth, toGranularity: .month)
-                    let isSelected = day == selectedDay
-                    let isToday = day == today
-                    Button { pick(day) } label: {
-                        Text("\(cal.component(.day, from: day))")
-                            .font(.system(size: 11.5, weight: isSelected || isToday ? .semibold : .regular))
-                            .monospacedDigit()
-                            .frame(maxWidth: .infinity, minHeight: 20)
-                            .background(
-                                Circle()
-                                    .fill(isSelected ? Color.accentColor
-                                          : isToday ? Color.accentColor.opacity(0.18) : .clear)
-                                    .frame(width: 20, height: 20)
-                            )
-                            .foregroundStyle(isSelected ? Color.white
-                                             : isToday ? Color.accentColor
-                                             : inMonth ? Color.primary : Color.secondary.opacity(0.45))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    /// 6 fixed weeks starting at the Monday on/before the 1st, a stable-height
-    /// grid that always shows the neighbour-month fringe like Apple Calendar.
-    private func gridDays() -> [Date] {
-        guard let first = cal.dateInterval(of: .month, for: shownMonth)?.start,
-              let gridStart = cal.dateInterval(of: .weekOfYear, for: first)?.start
-        else { return [] }
-        return (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
-    }
-
-    private func pick(_ day: Date) {
-        // Keep the chosen clock time, swap the calendar day.
-        let t = cal.dateComponents([.hour, .minute], from: selection)
-        selection = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0,
-                             second: 0, of: day) ?? day
-        if !cal.isDate(day, equalTo: shownMonth, toGranularity: .month) {
-            shownMonth = cal.dateInterval(of: .month, for: day)?.start ?? shownMonth
-        }
-    }
-
-    private func step(_ by: Int) {
-        shownMonth = cal.date(byAdding: .month, value: by, to: shownMonth) ?? shownMonth
-    }
-
-    private func jumpToToday() {
-        let today = cal.startOfDay(for: Date())
-        shownMonth = cal.dateInterval(of: .month, for: today)?.start ?? shownMonth
-        pick(today)
-    }
-
-    private var monthTitle: String {
-        let f = DateFormatter()
-        f.locale = L.locale
-        f.dateFormat = "LLLL yyyy"
-        return f.string(from: shownMonth)
     }
 }
 

@@ -116,7 +116,8 @@ private struct CapsuleView: View {
             }
             if vm.docked {
                 Divider().frame(height: 26).overlay(Color.white.opacity(0.18))
-                actionButton("moon.zzz.fill", "2 min") { vm.onSnooze() }
+                // F4: zeigt die eingestellte Dauer statt fester „2 min".
+                actionButton("moon.zzz.fill", "\(AppState.shared.snoozeMinutes) min") { vm.onSnooze() }
                 if vm.hasLink {
                     actionButton("doc.on.doc", "Copy") { vm.onCopy() }
                     actionButton("video.fill", L.t("Beitreten", "Join"), filled: true) { vm.onJoin() }

@@ -154,7 +154,7 @@ final class GoogleService: ObservableObject {
     /// reads EventKit, so the new meeting immediately gets banner/timeline/join.
     /// Returns true on success (the link is also copied to the clipboard).
     @discardableResult
-    func createAppleMeeting(title: String, start: Date, minutes: Int, calendarID: String?,
+    func createAppleMeeting(title: String, start: Date, minutes: Int, calendarIDs: [String?],
                             recurrence: RepeatRule = .none, custom: CustomRecurrence? = nil,
                             autoTranscribe: Bool = false, makeICS: Bool = false,
                             calendarService: CalendarService) async -> Bool {
@@ -166,10 +166,15 @@ final class GoogleService: ObservableObject {
             let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let finalTitle = cleanTitle.isEmpty ? "Meeting" : cleanTitle
             let end = start.addingTimeInterval(Double(minutes) * 60)
-            try calendarService.createEvent(title: finalTitle, start: start, end: end,
-                                            url: URL(string: link),
-                                            calendarID: calendarID,
-                                            recurrence: recurrence, custom: custom)
+            // One Meet link, one event per chosen calendar ("beide" writes two).
+            // The first failure aborts: a half-written state is worse than a
+            // clear error, and the link is already minted either way.
+            for cid in (calendarIDs.isEmpty ? [nil] : calendarIDs) {
+                try calendarService.createEvent(title: finalTitle, start: start, end: end,
+                                                url: URL(string: link),
+                                                calendarID: cid,
+                                                recurrence: recurrence, custom: custom)
+            }
             // Best effort, never blocks creation: switch the Meet space to
             // auto-transcribe (Runde 43). Fails softly (licence/scope) into a note.
             if autoTranscribe { await enableAutoTranscription(meetLink: link) }

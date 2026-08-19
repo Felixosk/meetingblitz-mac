@@ -52,6 +52,10 @@ final class SettingsPanelController {
         p.setFrameOrigin(PanelDock.savedOrigin(panelSize: panelSize, id: "settings")
                          ?? PanelDock.origin(panelSize: panelSize, anchor: anchor))
         p.makeKeyAndOrderFront(nil)   // key immediately → blue accents from the start
+        // Position protokollieren wie beim Widget: sonst ist das Panel für eine
+        // Sichtprüfung praktisch nicht auffindbar, es dockt je nach gemerkter
+        // Position irgendwo an.
+        HintWindow.log("settings place frame=\(p.frame)")
         // Position merken, sobald das Panel gezogen wird (Runde 47h). Startet
         // SUSPENDIERT: bis die Erstplatzierung durch ist, ist jede Bewegung
         // programmatisch und darf nicht als „gezogen" gespeichert werden.
@@ -85,6 +89,7 @@ final class SettingsPanelController {
             moveRecorder?.suspended = false
             return
         }
+        HintWindow.log("settings resize h=\(Int(frameSize.height)) w=\(Int(frameSize.width))")
         if abs(frameSize.height - old.height) < 1, abs(frameSize.width - old.width) < 1 { return }
         moveRecorder?.suspended = true
         do {
@@ -149,22 +154,48 @@ struct SettingsPane: View {
     private let flightOptions: [Double] = [6, 9, 14]
     /// Which settings tab is showing (Runde 41): splits the long page so only
     /// one short section is visible at a time.
-    @State private var tab = 0
+    /// Gemerkt statt @State: beim erneuten Öffnen landet man dort, wo man
+    /// zuletzt war, und für eine Sichtprüfung lässt sich der Reiter von außen
+    /// vorwählen.
+    @AppStorage("settingsTab") private var tab = 0
+    /// F11: inline lists open, one per target side (both can show at once).
+    @State private var gcalListOpen = false
+    @State private var acalListOpen = false
+    /// F5: which hotkey row is currently recording, plus its key monitor.
+    /// Reiter unter der Maus, für die Hover-Rückmeldung der eigenen Leiste.
+    @State private var hoveredTab: Int?
+    /// Rückmeldung des Melde-Tests (P1).
+    @State private var noticeTest: String?
+    /// Auswertung einmal berechnet (Woche/Monat/Jahr), nicht bei jedem Bildaufbau.
+    @State private var statsCache: (week: MeetingStats, month: MeetingStats, year: MeetingStats)?
+    @State private var recording: HotKeyManager.Action?
+    @State private var keyMonitor: Any?
+    /// F1: inline list open + custom IANA field state for the second zone.
+    @State private var zoneListOpen = false
+    @State private var zoneCustom = ""
+    @State private var zoneCustomBad = false
+
+    /// F1: short list covering the household cases; anything else goes through
+    /// the free-text field below it.
+    private static let zoneChoices = ["Europe/Berlin", "Europe/Nicosia", "Europe/London",
+                                      "America/New_York", "America/Los_Angeles",
+                                      "Asia/Dubai", "Asia/Manila", "Australia/Sydney"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $tab) {
-                Text(L.t("Allgemein", "General")).tag(0)
-                Text(L.t("Banner", "Alerts")).tag(1)
-                Text(L.t("Kalender", "Calendars")).tag(2)
-                if google.hasConfig { Text("Google").tag(3) }
-            }
-            .labelsHidden().pickerStyle(.segmented)
+            // Fünf Reiter passen bei 300pt nur mit kurzen Namen, deshalb
+            // „Kalender" → „Kal." und die Auswertung als Symbol.
+            tabBar
+            Text(tabTitle)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
 
             switch tab {
             case 1: alertsTab
             case 2: calendarsTab
             case 3 where google.hasConfig: googleTab
+            case 4: statsTab
+            case 5: widgetTab
             default: generalTab
             }
 
@@ -183,12 +214,148 @@ struct SettingsPane: View {
             if size != .zero { onSize?(size) }
         }
         .onAppear { state.refreshLaunchAtLogin() }
+        // F5: Ein laufender Tastatur-Monitor, der das Schließen des Panels
+        // überlebt, würde jeden weiteren Tastendruck der App schlucken.
+        .onDisappear { stopRecording() }
     }
 
     // MARK: - Tab: Allgemein
 
+    /// App-Grundlagen. Bewusst KURZ: Der Reiter war über die Runden auf über
+    /// 200 Zeilen gewachsen und füllte den halben Bildschirm („die
+    /// Einstellungen sind zu groß"). Alles Widget-Nahe steckt jetzt in
+    /// `widgetTab`, alles zum Erstellen im Google-Reiter.
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Toggle(L.t("Beim Login starten", "Launch at login"), isOn: Binding(
+                get: { state.launchAtLogin },
+                set: { state.setLaunchAtLogin($0) }
+            )).font(.system(size: 12))
+
+            Toggle(L.t("Tastenkürzel verwenden", "Use hotkeys"),
+                   isOn: $state.hotkeyEnabled).font(.system(size: 12))
+            if state.hotkeyEnabled {
+                hotkeyRow(L.t("Widget öffnen", "Open widget"), action: .showWidget)
+                hotkeyRow(L.t("Meeting beitreten", "Join meeting"), action: .joinNext)
+                if let dead = state.hotkeyConflict {
+                    Text(L.t("Schon vom System belegt: \(dead).", "Already taken by the system: \(dead)."))
+                        .font(.system(size: 10)).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(L.t("Beitreten nimmt den laufenden Call, sonst den nächsten.",
+                         "Join takes the running call, otherwise the next one."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            HStack {
+                Text(L.t("Sprache", "Language")).font(.system(size: 12))
+                Spacer()
+                Picker("", selection: $state.appLanguage) {
+                    Text("English").tag("en")
+                    Text("Deutsch").tag("de")
+                }
+                .labelsHidden().pickerStyle(.segmented).fixedSize()
+            }
+
+            HStack(spacing: 6) {
+                Text(L.t("Panel-Position", "Panel position")).font(.system(size: 12))
+                Spacer()
+                Button(L.t("Zurücksetzen", "Reset")) { PanelDock.forgetPositions() }
+                    .font(.system(size: 12)).buttonStyle(.borderless)
+            }
+            HStack(spacing: 6) {
+                Text(L.t("Einführung", "Walkthrough")).font(.system(size: 12))
+                Spacer()
+                Button(L.t("Nochmal zeigen", "Show again")) {
+                    OnboardingPanelController.shared.show(state: state)
+                }
+                .font(.system(size: 12)).buttonStyle(.borderless)
+            }
+        }
+    }
+
+    // MARK: - Tab: Widget (was das Fenster und die Menüleiste zeigen)
+
+    private var widgetTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Beschriftung ÜBER den Picker: mit drei Wörtern („Titel / Nur Zeit
+            // / Nur Symbol") ist er breiter als die halbe Zeile, in einem HStack
+            // quetscht er die Beschriftung auf Breite 0 und reißt dabei
+            // riesige Lücken ins Layout.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Menüleiste zeigt", "Menu bar shows")).font(.system(size: 12))
+                Picker("", selection: $state.menuBarStyle) {
+                    ForEach(MenuBarStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            Toggle(L.t("Im Meeting schmal halten", "Keep it narrow during meetings"),
+                   isOn: $state.compactMenuBarInMeeting).font(.system(size: 12))
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Datumswahl zeigt", "Date picker shows")).font(.system(size: 12))
+                Picker("", selection: $state.calendarViewMode) {
+                    ForEach(CalendarViewMode.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            Text(calendarModeHint)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text(L.t("Woche beginnt am", "Week starts on")).font(.system(size: 12))
+                Spacer()
+                Picker("", selection: $state.firstWeekday) {
+                    Text(L.t("Mo", "Mon")).tag(2)
+                    Text(L.t("So", "Sun")).tag(1)
+                }
+                .labelsHidden().pickerStyle(.segmented).fixedSize()
+            }
+
+            Divider()
+
+            Toggle(L.t("Apple Erinnerungen zeigen", "Show Apple Reminders"), isOn: Binding(
+                get: { state.showReminders },
+                set: { on in
+                    state.showReminders = on
+                    if on { Task { await state.requestRemindersAccess() } }
+                    else { state.reminders = [] }
+                }
+            )).font(.system(size: 12))
+            Toggle(L.t("Nur Termine mit Link zeigen", "Only show events with a link"),
+                   isOn: $state.onlyWithLink).font(.system(size: 12))
+            Toggle(L.t("Vergangene Termine ausblenden", "Hide past events"),
+                   isOn: $state.hidePastEvents).font(.system(size: 12))
+            Toggle(L.t("Abgesagte Termine ausblenden", "Hide declined events"),
+                   isOn: $state.hideDeclined).font(.system(size: 12))
+
+            Divider()
+
+            Toggle(L.t("Zweite Zeitzone", "Second time zone"),
+                   isOn: $state.secondZoneEnabled).font(.system(size: 12))
+            if state.secondZoneEnabled {
+                zoneRow
+                if zoneCustomBad {
+                    Text(L.t("Unbekannte Zone. IANA-Name wie „Europe/Berlin“ verwenden.",
+                             "Unknown zone. Use an IANA name like “Europe/Berlin”."))
+                        .font(.system(size: 10)).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    // MARK: - Tab: Banner (alert behaviour)
+
+    private var alertsTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Vorlauf, Flugdauer, Ton und Sprung standen im Allgemein-Reiter,
+            // gehören aber zum Banner — mit dem Umzug wird dort Platz frei.
             HStack {
                 Text(L.t("Vorlaufzeit", "Lead time")).font(.system(size: 12))
                 Spacer()
@@ -207,102 +374,89 @@ struct SettingsPane: View {
             }
             Toggle(L.t("Ton abspielen", "Play sound"), isOn: $state.soundEnabled).font(.system(size: 12))
             Toggle(L.t("Sprung aus dem Wasser", "Jump out of the water"), isOn: $state.waterEffect).font(.system(size: 12))
-            Toggle(L.t("Beim Login starten", "Launch at login"), isOn: Binding(
-                get: { state.launchAtLogin },
-                set: { state.setLaunchAtLogin($0) }
-            )).font(.system(size: 12))
-            Toggle(L.t("Apple Erinnerungen zeigen", "Show Apple Reminders"), isOn: Binding(
-                get: { state.showReminders },
-                set: { on in
-                    state.showReminders = on
-                    if on { Task { await state.requestRemindersAccess() } }
-                    else { state.reminders = [] }
-                }
-            )).font(.system(size: 12))
-            if state.showReminders && !state.remindersAuthorized {
-                Text(L.t("Erinnerungen-Zugriff nötig, beim ersten Mal erlauben.",
-                         "Reminders access needed, allow it once."))
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            // Runde 47: gegen das Flackern im laufenden Meeting (Aufnahme- und
-            // Mikrofon-Pille sprengen sonst das Breitenbudget der Menüleiste).
-            Toggle(L.t("Menüleiste im Meeting schmal halten", "Keep the menu bar narrow during meetings"),
-                   isOn: $state.compactMenuBarInMeeting).font(.system(size: 12))
-            if state.compactMenuBarInMeeting {
-                Text(L.t("Name + Restzeit bleiben stehen, nur „- Confirmed\" und Ähnliches fällt weg. Sonst verdrängen Aufnahme- und Mikrofon-Symbol das Item und es flackert.",
-                         "Name + time left stay; only booking noise like “- Confirmed” is dropped. Otherwise the recording and microphone indicators push the item out and it flickers."))
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 6) {
-                Toggle(L.t("Öffnen per Tastenkürzel", "Open with a hotkey"),
-                       isOn: $state.hotkeyEnabled).font(.system(size: 12))
-                Spacer()
-                Text(HotKeyManager.defaultLabel)
-                    .font(.system(size: 11, weight: .semibold).monospaced())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08)))
-                    .opacity(state.hotkeyEnabled ? 1 : 0.4)
-            }
-            Text(L.t("Öffnet das Widget auf dem Bildschirm, wo die Maus ist, unabhängig vom Menüleisten-Icon.",
-                     "Opens the widget on the screen your mouse is on, independent of the menu-bar icon."))
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
-            // Runde 47h: Panels merken sich, wohin man sie zieht. Das hier holt
-            // sie zurück, falls eine gemerkte Position mal unpraktisch liegt.
-            HStack(spacing: 6) {
-                Text(L.t("Panel-Position", "Panel position")).font(.system(size: 12))
-                Spacer()
-                Button(L.t("Zurücksetzen", "Reset")) { PanelDock.forgetPositions() }
-                    .font(.system(size: 12)).buttonStyle(.borderless)
+            // F4: war fest auf 2 Minuten verdrahtet. Beschriftung ÜBER dem
+            // Picker, in einer Zeile wurde sie zu „Später erin…" gequetscht.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Später erinnern um", "Snooze by")).font(.system(size: 12))
+                Picker("", selection: $state.snoozeMinutes) {
+                    ForEach([1, 2, 5, 10], id: \.self) { Text("\($0)m").tag($0) }
+                }
+                .labelsHidden().pickerStyle(.segmented)
             }
-            Text(L.t("Einstellungen und „Neues Meeting“ öffnen dort, wo du sie zuletzt hingezogen hast, sonst neben dem Widget.",
-                     "Settings and “New Meeting” open where you last dragged them, otherwise next to the widget."))
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
-            // Runde 56: Der Einstieg läuft normalerweise genau einmal. Dieser
-            // Knopf holt ihn zurück, zum Nachschlagen, oder wenn die App auf
-            // einem neuen Rechner landet und man sie jemandem zeigen will.
-            HStack(spacing: 6) {
-                Text(L.t("Einführung", "Walkthrough")).font(.system(size: 12))
-                Spacer()
-                Button(L.t("Nochmal zeigen", "Show again")) {
-                    OnboardingPanelController.shared.show(state: state)
-                }
-                .font(.system(size: 12)).buttonStyle(.borderless)
-            }
-            Text(L.t("Erklärt Menüleiste, Kalenderfreigabe und Autostart, so wie beim ersten Start.",
-                     "Explains the menu bar, calendar access and launch at login, like on first run."))
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-
-            HStack {
-                Text(L.t("Sprache", "Language")).font(.system(size: 12))
-                Spacer()
-                Picker("", selection: $state.appLanguage) {
-                    Text("English").tag("en")
-                    Text("Deutsch").tag("de")
-                }
-                .labelsHidden().pickerStyle(.segmented).fixedSize()
-            }
-        }
-    }
-
-    // MARK: - Tab: Banner (alert behaviour)
-
-    private var alertsTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
             Toggle(L.t("Ruhe-Modus (keine Banner)", "Quiet mode (no banners)"), isOn: $state.quietMode).font(.system(size: 12))
+            // Befristet einschalten: Ruhe „für heute Nachmittag" schaltet man
+            // sonst ein und vergisst sie, und wundert sich tagelang über
+            // ausbleibende Banner.
+            // Als sichtbare Knöpfe, nicht als borderless-Text: so sahen sie aus
+            // wie Fließtext und wurden schlicht übersehen („sehe das nicht").
+            HStack(spacing: 5) {
+                Text(L.t("für", "for")).font(.system(size: 11)).foregroundStyle(.secondary)
+                ForEach([(1.0, "1h"), (5.0, "5h"), (24.0, L.t("1 Tag", "1 day")),
+                         (168.0, L.t("1 Woche", "1 week"))], id: \.1) { h, label in
+                    Button { state.startQuiet(hours: h) } label: {
+                        Text(label)
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(0.11)))
+                            .overlay(RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+                            .contentShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L.t("Ruhe für \(label) einschalten", "Turn on quiet for \(label)"))
+                }
+                Spacer(minLength: 0)
+            }
+            if let rest = state.quietRemainingLabel {
+                HStack(spacing: 6) {
+                    Text(L.t("Ruhe endet in \(rest)", "Quiet ends in \(rest)"))
+                        .font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                    Spacer(minLength: 0)
+                    Button(L.t("Jetzt beenden", "End now")) { state.quietMode = false }
+                        .font(.system(size: 10)).buttonStyle(.borderless)
+                }
+            }
+            // P1: ohne das verpasst man Termine genau dann, wenn man nicht
+            // gestört werden will.
+            Toggle(L.t("Bei Ruhe still benachrichtigen", "Notify silently while quiet"),
+                   isOn: $state.quietNotifications).font(.system(size: 12))
+            if state.quietNotifications {
+                HStack(spacing: 6) {
+                    Text(L.t("Statt Banner eine lautlose Mitteilung, damit ein Termin bei Ruhe oder Bildschirmfreigabe nicht untergeht.",
+                             "A silent notification instead of the banner, so a meeting isn't missed during quiet mode or screen sharing."))
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    // Sonst sieht man das Feature nie: es greift nur, wenn Ruhe
+                    // aktiv IST und gleichzeitig ein Termin ansteht.
+                    Button {
+                        QuietNotice.test()
+                        noticeTest = L.t("Hinweis erscheint oben rechts.",
+                                         "The notice appears in the top right.")
+                    } label: {
+                        Text(L.t("Testen", "Test"))
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(0.11)))
+                            .contentShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let t = noticeTest {
+                    Text(t).font(.system(size: 10))
+                        .foregroundStyle(t.hasPrefix("Gesendet") || t.hasPrefix("Sent")
+                                         ? Color.secondary : Color.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Toggle(L.t("Ruhe bei Bildschirmfreigabe", "Quiet while screen sharing"), isOn: $state.quietDuringScreenShare).font(.system(size: 12))
             Toggle(L.t("Auto-Beitreten (10s vorher)", "Auto-join (10s before)"), isOn: $state.autoJoin).font(.system(size: 12))
             Toggle(L.t("Warnung vor Meeting-Ende", "End-of-meeting warning"), isOn: $state.endWarning).font(.system(size: 12))
@@ -363,8 +517,13 @@ struct SettingsPane: View {
                              "Show · 🔔 banner · 🎂 birthdays"))
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 5) {
+                // Bis ~20 Kalender OHNE ScrollView: der bräuchte eine feste
+                // Höhe (er hat keine intrinsische, Runde 14), und die war
+                // geschätzt — bei 15 Kalendern blieben ~100pt Leere darunter
+                // stehen. Ein reiner VStack wächst exakt mit dem Inhalt. Erst
+                // darüber wird gescrollt, sonst sprengt die Liste den Schirm.
+                Group {
+                    let list = VStack(alignment: .leading, spacing: 5) {
                         ForEach(state.availableCalendars) { c in
                             HStack(spacing: 6) {
                                 Circle().fill(c.color).frame(width: 8, height: 8)
@@ -395,10 +554,13 @@ struct SettingsPane: View {
                     // checkboxes (Runde 41).
                     .padding(.trailing, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if state.availableCalendars.count <= 20 {
+                        list
+                    } else {
+                        ScrollView { list }.frame(height: 560)
+                    }
                 }
-                // FIXED height (a scroll view has no intrinsic height and would
-                // collapse to zero in the panel's fitting size).
-                .frame(height: min(CGFloat(state.availableCalendars.count) * 27 + 4, 260))
             }
             if state.calendarAuthorized {
                 Button(L.t("Aktualisieren", "Refresh")) { state.monitor.tickNow() }
@@ -495,6 +657,45 @@ struct SettingsPane: View {
 
             Toggle(L.t("„Neues Meeting\"-Button anzeigen", "Show “New Meeting” button"),
                    isOn: $state.showMeetingCreator).font(.system(size: 12))
+            Toggle(L.t("„Sofort-Meeting\"-Knopf anzeigen", "Show “Instant meeting” button"),
+                   isOn: $state.showInstantMeeting).font(.system(size: 12))
+
+
+            Divider()
+
+            // F11, Rückmeldung 18.08. („Setting, wo das Meeting landen soll"):
+            // Ziel als Entweder-Oder statt Toggle. Google = per EventKit DIREKT
+            // in den eingebundenen CalDAV-Kalender (sofort lokal, synct von
+            // allein hoch). Apple = wie früher (Formular-Wahl bzw. Standard).
+            // BEWUSST kein „Beide": zwei Events hießen doppelte Banner und
+            // Dubletten in der Kalender-App.
+            // Getrennt je Erstellweg (Rückmeldung 18.08.): ein Ad-hoc-Call
+            // gehört nicht in denselben Kalender wie ein geplanter Termin.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("„Neues Meeting\" landet in", "“New Meeting” goes to")).font(.system(size: 12))
+                Picker("", selection: $state.createTarget) {
+                    Text("Google").tag(CreateTarget.google)
+                    Text("Apple").tag(CreateTarget.apple)
+                    Text(L.t("Beide", "Both")).tag(CreateTarget.both)
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("„Sofort-Meeting\" landet in", "“Instant meeting” goes to")).font(.system(size: 12))
+                Picker("", selection: $state.instantTarget) {
+                    Text("Google").tag(CreateTarget.google)
+                    Text("Apple").tag(CreateTarget.apple)
+                    Text(L.t("Beide", "Both")).tag(CreateTarget.both)
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            // Die Kalender selbst sind für beide Wege dieselben, also eine
+            // Auswahl je Seite, sichtbar sobald IRGENDEIN Weg sie braucht.
+            if usesGoogleAnywhere { targetCalendarRow(google: true) }
+            if usesAppleAnywhere { targetCalendarRow(google: false) }
+            Text(targetHint)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Divider()
             if google.isConnected {
                 HStack(spacing: 6) {
@@ -525,6 +726,433 @@ struct SettingsPane: View {
                 Text(err).font(.system(size: 10)).foregroundStyle(.red).lineLimit(3)
             }
         }
+    }
+
+    /// F11: target calendar for the SELECTED side. Both options are pickable
+    /// (Rückmeldung 18.08.), the list simply shows the matching accounts:
+    /// Google → the synced accounts, Apple → this Mac and iCloud.
+    /// F5: eine Kürzel-Zeile mit Aufnahme-Knopf. Der Monitor läuft nur, solange
+    /// genau diese Zeile aufnimmt (`recording`), und ausschließlich im
+    /// Einstellungs-Panel — das darf key werden (Runde 14d), im Widget-Panel
+    /// wäre ein Tastatur-Monitor unzuverlässig.
+    private func hotkeyRow(_ title: String, action: HotKeyManager.Action) -> some View {
+        let isRecording = recording == action
+        let label = action == .showWidget ? state.hotkeyWidgetLabel : state.hotkeyJoinLabel
+        return HStack(spacing: 6) {
+            Text(title).font(.system(size: 12))
+            Spacer()
+            Text(isRecording ? L.t("Taste drücken…", "Press keys…") : label)
+                .font(.system(size: 11, weight: .semibold).monospaced())
+                .foregroundStyle(isRecording ? Color.accentColor : .secondary)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(RoundedRectangle(cornerRadius: 5)
+                    .fill(isRecording ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.08)))
+            Button(isRecording ? L.t("Abbrechen", "Cancel") : L.t("Ändern", "Change")) {
+                if isRecording { stopRecording() } else { startRecording(action) }
+            }
+            .font(.system(size: 11)).buttonStyle(.borderless)
+        }
+    }
+
+    private func startRecording(_ action: HotKeyManager.Action) {
+        stopRecording()
+        recording = action
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { ev in
+            // Escape bricht ab, ohne etwas zu ändern.
+            if ev.keyCode == 53 { stopRecording(); return nil }
+            let mods = ev.modifierFlags.intersection([.command, .control, .option, .shift])
+            // Ohne Zusatztaste wäre es kein globales Kürzel, sondern würde
+            // jedem Tippen im System dazwischenfunken.
+            guard !mods.isEmpty else { return nil }
+            let key = ev.charactersIgnoringModifiers ?? ""
+            guard !key.isEmpty else { return nil }
+            let carbon = Int(HotKeyManager.carbonModifiers(mods))
+            let text = HotKeyManager.label(modifiers: mods, key: key)
+            if action == .showWidget {
+                state.hotkeyWidgetKey = Int(ev.keyCode)
+                state.hotkeyWidgetMods = carbon
+                state.hotkeyWidgetLabel = text
+            } else {
+                state.hotkeyJoinKey = Int(ev.keyCode)
+                state.hotkeyJoinMods = carbon
+                state.hotkeyJoinLabel = text
+            }
+            // Beide neu registrieren, damit die Änderung sofort greift.
+            state.onHotkeyToggle?(state.hotkeyEnabled)
+            stopRecording()
+            return nil   // Taste nicht ans Panel durchreichen
+        }
+    }
+
+    private func stopRecording() {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        recording = nil
+    }
+
+    /// Eigene Reiterleiste statt `Picker(.segmented)`. Sechs System-Symbole in
+    /// einem Segmented rendern winzig und gedrängt („schaut nicht zu design
+    /// schön aus"), und an ihrer Größe lässt sich dort nichts drehen. Hier:
+    /// größere Zeichen, echte Klickflächen, Hover-Rückmeldung und ein Tooltip
+    /// je Seite. Das Panel ist key (Runde 14d), also greifen die Farben.
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(Self.tabs, id: \.id) { t in
+                if t.id != 3 || google.hasConfig {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.12)) { tab = t.id }
+                    } label: {
+                        Image(systemName: t.icon)
+                            .font(.system(size: 14, weight: .medium))
+                            .frame(maxWidth: .infinity, minHeight: 28)
+                            .foregroundStyle(tab == t.id ? Color.white
+                                             : hoveredTab == t.id ? Color.primary : Color.secondary)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(tab == t.id ? Color.accentColor
+                                          : hoveredTab == t.id ? Color.primary.opacity(0.10) : .clear)
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hoveredTab = $0 ? t.id : (hoveredTab == t.id ? nil : hoveredTab) }
+                    .help(title(for: t.id))
+                }
+            }
+        }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.07)))
+    }
+
+    /// Reihenfolge der Reiter: erst die App, dann was sie zeigt, dann Daten.
+    private static let tabs: [(id: Int, icon: String)] = [
+        (0, "gearshape"), (1, "bell"), (5, "macwindow"),
+        (2, "calendar"), (3, "video"), (4, "chart.bar"),
+    ]
+
+    private func title(for id: Int) -> String {
+        switch id {
+        case 1:  return L.t("Banner & Erinnern", "Alerts & reminders")
+        case 2:  return L.t("Kalender", "Calendars")
+        case 3:  return L.t("Meetings erstellen", "Creating meetings")
+        case 4:  return L.t("Auswertung", "Stats")
+        case 5:  return L.t("Widget & Menüleiste", "Widget & menu bar")
+        default: return L.t("Allgemein", "General")
+        }
+    }
+
+    private var tabTitle: String {
+        switch tab {
+        case 1:  return L.t("Banner & Erinnern", "Alerts & reminders")
+        case 2:  return L.t("Kalender", "Calendars")
+        case 3:  return L.t("Meetings erstellen", "Creating meetings")
+        case 4:  return L.t("Auswertung", "Stats")
+        case 5:  return L.t("Widget & Menüleiste", "Widget & menu bar")
+        default: return L.t("Allgemein", "General")
+        }
+    }
+
+    /// Erklärt die gewählte Stufung am Datum im Widget.
+    private var calendarModeHint: String {
+        switch state.calendarViewMode {
+        case .stepped:
+            return L.t("Ein Klick aufs Datum zeigt die Woche, ein zweiter den Monat, ein dritter schließt wieder.",
+                       "One click on the date shows the week, a second the month, a third closes it again.")
+        case .week:
+            return L.t("Ein Klick aufs Datum zeigt die Woche, ein zweiter schließt wieder.",
+                       "One click on the date shows the week, a second closes it again.")
+        case .month:
+            return L.t("Ein Klick aufs Datum zeigt den Monat, ein zweiter schließt wieder.",
+                       "One click on the date shows the month, a second closes it again.")
+        case .off:
+            return L.t("Das Datum im Widget ist dann nur Text. Zum Blättern bleiben die Pfeile daneben.",
+                       "The date in the widget is plain text then. The arrows next to it still page through days.")
+        }
+    }
+
+    private var usesGoogleAnywhere: Bool {
+        state.createTarget.usesGoogle || state.instantTarget.usesGoogle
+    }
+    private var usesAppleAnywhere: Bool {
+        state.createTarget.usesApple || state.instantTarget.usesApple
+    }
+
+    /// Erklärtext unter der Zielwahl. „Beide" braucht die Warnung, alles andere
+    /// nur eine Zeile dazu, wo der Termin liegt.
+    private var targetHint: String {
+        if state.createTarget == .both || state.instantTarget == .both {
+            return L.t("„Beide\" legt den Termin ZWEIMAL an, einmal je Kalender, mit demselben Meet-Link. Gewarnt wird trotzdem nur einmal. In der Kalender-App stehen sie beide, und Verschieben musst du dann auch zweimal.",
+                       "“Both” creates the event TWICE, once per calendar, sharing one Meet link. You are still warned only once. Both show in Calendar, and moving one means moving the other too.")
+        }
+        if usesGoogleAnywhere && !usesAppleAnywhere {
+            return L.t("Der Termin liegt im Google-Kalender, ist sofort in der App und über den Sync auf allen Geräten.",
+                       "The event lives in the Google calendar, shows in the app immediately and syncs everywhere.")
+        }
+        if usesAppleAnywhere && !usesGoogleAnywhere {
+            return L.t("Der Termin bleibt auf diesem Mac bzw. in iCloud.",
+                       "The event stays on this Mac or in iCloud.")
+        }
+        return L.t("Jeder Weg legt den Termin in seinen eigenen Kalender.",
+                   "Each route files its event in its own calendar.")
+    }
+
+    /// F11: Ziel-Kalender einer Seite. Beide Seiten sind wählbar, die Liste
+    /// zeigt jeweils die passenden Konten: Google → synchronisierte Konten,
+    /// Apple → dieser Mac und iCloud.
+    private func targetCalendarRow(google isGoogle: Bool) -> some View {
+        let writable = state.calendar.writableCalendars()
+            .filter { $0.isAppleAccount != isGoogle }
+        let currentID = isGoogle ? state.googleTargetCalendarID : state.appleTargetCalendarID
+        let current = writable.first { $0.id == currentID }
+        let open = isGoogle ? gcalListOpen : acalListOpen
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    if isGoogle { gcalListOpen.toggle() } else { acalListOpen.toggle() }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    // Stehen beide Zeilen untereinander, muss die Beschriftung
+                    // sagen, welche welche ist.
+                    Text(usesGoogleAnywhere && usesAppleAnywhere
+                         ? (isGoogle ? "Google" : "Apple")
+                         : L.t("Kalender", "Calendar"))
+                        .font(.system(size: 12)).foregroundStyle(.primary)
+                    Spacer()
+                    Circle().fill(current?.color ?? .gray).frame(width: 8, height: 8)
+                    // Auf der Apple-Seite ist "nichts gewählt" gültig (dann
+                    // greift der Systemstandard), auf der Google-Seite nicht.
+                    Text(current?.title
+                         ?? (isGoogle ? L.t("Bitte wählen", "Pick one")
+                                      : L.t("Standard", "Default")))
+                        .font(.system(size: 12)).lineLimit(1)
+                    Image(systemName: open ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            if open {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(writable) { c in
+                            Button {
+                                if isGoogle { state.googleTargetCalendarID = c.id }
+                                else { state.appleTargetCalendarID = c.id }
+                                withAnimation(.easeInOut(duration: 0.16)) {
+                                    if isGoogle { gcalListOpen = false } else { acalListOpen = false }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle().fill(c.color).frame(width: 8, height: 8)
+                                    // Konto dazu: „Agency" kann es in iCloud UND
+                                    // in Google geben, ohne Quelle wählt man blind.
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(c.title).font(.system(size: 12)).lineLimit(1)
+                                        if !c.sourceTitle.isEmpty {
+                                            Text(c.sourceTitle)
+                                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer()
+                                    if c.id == currentID {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                                .padding(.vertical, 3).padding(.horizontal, 6)
+                                .background(RoundedRectangle(cornerRadius: 5)
+                                    .fill(c.id == currentID
+                                          ? Color.accentColor.opacity(0.14) : .clear))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(height: 96)   // fixed: ScrollView has no intrinsic height (Runde 14)
+            }
+        }
+    }
+
+    /// F1: zone picker, short list plus validated free text. No .menu picker,
+    /// that hangs in nonactivating panels (Runde 13).
+    private var zoneRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) { zoneListOpen.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(L.t("Zone", "Zone")).font(.system(size: 12)).foregroundStyle(.primary)
+                    Spacer()
+                    Text(MenuPanel.zoneCity(state.secondZoneID)).font(.system(size: 12)).lineLimit(1)
+                    Image(systemName: zoneListOpen ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            if zoneListOpen {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Self.zoneChoices, id: \.self) { id in
+                        Button {
+                            state.secondZoneID = id
+                            zoneCustomBad = false
+                            withAnimation(.easeInOut(duration: 0.16)) { zoneListOpen = false }
+                        } label: {
+                            HStack {
+                                Text(MenuPanel.zoneCity(id)).font(.system(size: 12))
+                                Spacer()
+                                if id == state.secondZoneID {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 3).padding(.horizontal, 6)
+                            .background(RoundedRectangle(cornerRadius: 5)
+                                .fill(id == state.secondZoneID
+                                      ? Color.accentColor.opacity(0.14) : .clear))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    TextField(L.t("Eigene, z. B. Europe/Paris", "Custom, e.g. Europe/Paris"),
+                              text: $zoneCustom)
+                        .textFieldStyle(.roundedBorder).font(.system(size: 11))
+                        .onSubmit {
+                            let t = zoneCustom.trimmingCharacters(in: .whitespaces)
+                            if TimeZone(identifier: t) != nil {
+                                state.secondZoneID = t
+                                zoneCustomBad = false
+                                withAnimation(.easeInOut(duration: 0.16)) { zoneListOpen = false }
+                            } else {
+                                zoneCustomBad = true
+                            }
+                        }
+                        .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    // MARK: - Tab: Auswertung
+
+    /// Wie viel Zeit ging in Termine? Eigener Reiter, damit die anderen Seiten
+    /// nicht weiter zuwachsen. Bewusst schlicht — die App ist eine Erinnerung,
+    /// keine Auswertungs-Suite.
+    private var statsTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let s = statsCache {
+                statsBlock(L.t("Diese Woche", "This week"), s.week)
+                Divider()
+                statsBlock(L.t("Dieser Monat", "This month"), s.month)
+                Divider()
+                statsBlock(L.t("Dieses Jahr", "This year"), s.year)
+                Divider()
+            } else {
+                Text(L.t("Wird berechnet…", "Calculating…"))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            }
+            HStack(spacing: 8) {
+                legendDot(Color.accentColor, L.t("Calls", "calls"))
+                legendDot(Color.accentColor.opacity(0.28), L.t("andere Termine", "other events"))
+                Spacer()
+            }
+            Text(L.t("Getimte Termine der angezeigten Kalender. Ganztägige und Geburtstage bleiben außen vor.",
+                     "Timed events from the shown calendars. All-day events and birthdays are excluded."))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        // EINMAL rechnen, nicht bei jedem Bildaufbau: das Jahr sind bei ihm
+        // ~600 Termine, und SwiftUI ruft den Body oft auf.
+        .onAppear { if statsCache == nil { statsCache = computeStats() } }
+    }
+
+    private func computeStats() -> (week: MeetingStats, month: MeetingStats, year: MeetingStats) {
+        let cal = Calendar.current, now = Date()
+        let ids = state.selectedCalendarIDs
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let monthStart = cal.dateInterval(of: .month, for: now)?.start ?? now
+        let yearStart = cal.dateInterval(of: .year, for: now)?.start ?? now
+        return (state.calendar.stats(from: weekStart, to: now, selected: ids, groupBy: .day),
+                state.calendar.stats(from: monthStart, to: now, selected: ids, groupBy: .weekOfYear),
+                state.calendar.stats(from: yearStart, to: now, selected: ids, groupBy: .month))
+    }
+
+    private func legendDot(_ c: Color, _ label: String) -> some View {
+        HStack(spacing: 3) {
+            RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 8, height: 8)
+            Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func statsBlock(_ title: String, _ s: MeetingStats) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Text("\(s.count) · \(s.hoursLabel)")
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Color.accentColor)
+            }
+            barChart(s.bars)
+            HStack(spacing: 0) {
+                statCell("\(s.callCount)", L.t("Calls", "calls"))
+                statCell(s.callHoursLabel, L.t("in Calls", "in calls"))
+                statCell(s.count > 0 ? MeetingStats.hm(s.minutes / max(1, s.count)) : "–",
+                         L.t("pro Termin", "per event"))
+            }
+            if let b = s.busiestDay {
+                Text(L.t("Vollster Tag: \(b.label) · \(MeetingStats.hm(b.minutes))",
+                         "Busiest day: \(b.label) · \(MeetingStats.hm(b.minutes))"))
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+    }
+
+    /// Selbst gezeichnete Balken statt Swift Charts: dessen System-Styling
+    /// rendert im nie aktiven Panel genauso blass wie andere System-Controls
+    /// (Runde 6/31), und hier zählt jeder Punkt Breite.
+    /// Heller Anteil = alle Termine, satter Anteil = davon Videocalls.
+    private func barChart(_ bars: [StatBar]) -> some View {
+        let peak = max(bars.map(\.minutes).max() ?? 0, 60)   // mind. 1 h, sonst wirken Kleinigkeiten riesig
+        return HStack(alignment: .bottom, spacing: 3) {
+            ForEach(bars) { b in
+                VStack(spacing: 3) {
+                    ZStack(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.primary.opacity(0.07))          // Grundfläche = Maßstab
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.accentColor.opacity(0.28))
+                            .frame(height: barHeight(b.minutes, peak))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.accentColor)
+                            .frame(height: barHeight(b.callMinutes, peak))
+                    }
+                    .frame(height: 46, alignment: .bottom)
+                    Text(b.label)
+                        .font(.system(size: 9, weight: b.isNow ? .bold : .regular))
+                        .foregroundStyle(b.isNow ? Color.accentColor : Color.secondary)
+                }
+            }
+        }
+    }
+
+    private func barHeight(_ minutes: Int, _ peak: Int) -> CGFloat {
+        guard minutes > 0 else { return 0 }
+        // Mindesthöhe, damit ein 15-Minuten-Termin nicht unsichtbar wird.
+        return max(3, CGFloat(minutes) / CGFloat(peak) * 46)
+    }
+
+    private func statCell(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 1) {
+            Text(value).font(.system(size: 14, weight: .semibold)).monospacedDigit()
+            Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// App version from the bundle (e.g. "1.1"), for the settings footer.

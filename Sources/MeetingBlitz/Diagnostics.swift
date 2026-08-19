@@ -74,6 +74,27 @@ enum Diagnostics {
                              s.isBirthdayCalendar(c.id) ? "an" : "AUS"].joined(separator: "/")
                 out.append("   \(flags.padding(toLength: 12, withPad: " ", startingAt: 0)) \(c.id)  \(c.title)")
             }
+            // F11: Zielwahl für neue Meetings ist nur prüfbar, wenn man sieht,
+            // welcher Kalender zu WELCHEM Konto gehört (derselbe Name kann in
+            // iCloud und in Google liegen).
+            out.append("   Beschreibbar (Ziel für neue Meetings), je Konto:")
+            let formIDs = s.calendarIDs(for: s.createTarget)
+            let instIDs = s.calendarIDs(for: s.instantTarget)
+            for c in s.calendar.writableCalendars() {
+                var marks: [String] = []
+                if formIDs.contains(c.id) { marks.append("Neues Meeting") }
+                if instIDs.contains(c.id) { marks.append("Sofort") }
+                let mark = marks.isEmpty ? "" : "  ← \(marks.joined(separator: " + "))"
+                out.append("     \(c.title)  [\(c.sourceTitle.isEmpty ? "?" : c.sourceTitle)]\(mark)")
+            }
+            func label(_ t: CreateTarget) -> String {
+                switch t {
+                case .google: "Google" case .apple: "Apple"
+                case .both:   "BEIDE (zwei Termine, ein Meet-Link)"
+                }
+            }
+            out.append("   „Neues Meeting\" → \(label(s.createTarget)) · Ziele: \(formIDs.count)")
+            out.append("   „Sofort-Meeting\" → \(label(s.instantTarget)) · Ziele: \(instIDs.count)")
         }
         if !s.calendar.isAuthorized, ProcessInfo.processInfo.environment["TERM"] != nil {
             out.append("   ↑ Aus dem Terminal gestartet: die Kalenderfreigabe hängt dann am")

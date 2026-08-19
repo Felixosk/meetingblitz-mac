@@ -407,7 +407,7 @@ final class BannerPresenter {
             vm.onJoin = { MeetingLauncher.open(url, title: meeting.title) }
         }
         // Snooze: close this banner and re-announce the same meeting in 2 min.
-        vm.onSnooze = { AppState.shared.snooze(meeting, minutes: 2) }
+        vm.onSnooze = { AppState.shared.snooze(meeting, minutes: AppState.shared.snoozeMinutes) }
         let flight = Flight(vm: vm, seconds: seconds, laneIndex: active.count, pinnedDocked: pinnedDocked)
         flight.onClose = { [weak self, weak flight] in self?.active.removeAll { $0 === flight } }
         active.append(flight)

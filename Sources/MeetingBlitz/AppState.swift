@@ -13,7 +13,43 @@ final class AppState: ObservableObject {
     /// Breakthrough splash at the entry edge when the banner flies in (Runde 6, toggleable).
     @Published var waterEffect: Bool { didSet { d.set(waterEffect, forKey: "waterEffect") } }
     // Runde 5 feature toggles.
-    @Published var quietMode: Bool { didSet { d.set(quietMode, forKey: "quietMode") } }
+    @Published var quietMode: Bool {
+        didSet {
+            d.set(quietMode, forKey: "quietMode")
+            // Von Hand ausgeschaltet hebt jede laufende Frist auf.
+            if !quietMode { quietUntil = nil }
+        }
+    }
+    /// Ruhe bis zu diesem Zeitpunkt (nil = unbefristet, solange `quietMode` an
+    /// ist). Damit lässt sich Ruhe „für 5 Stunden" schalten, ohne dass man sie
+    /// später von Hand zurücknehmen muss — genau das vergisst man sonst und
+    /// wundert sich tagelang über ausbleibende Banner.
+    @Published var quietUntil: Date? {
+        didSet {
+            d.set(quietUntil?.timeIntervalSince1970 ?? 0, forKey: "quietUntil")
+        }
+    }
+
+    /// Ruhe für eine Dauer einschalten. `nil` = unbefristet.
+    func startQuiet(hours: Double?) {
+        quietUntil = hours.map { Date().addingTimeInterval($0 * 3600) }
+        quietMode = true
+    }
+
+    /// Läuft die Frist ab, schaltet sich die Ruhe selbst wieder aus. Wird vom
+    /// Monitor-Takt aufgerufen, nicht per Timer: ein Timer über eine Woche
+    /// überlebt weder Ruhezustand noch Neustart.
+    func expireQuietIfNeeded() {
+        guard quietMode, let until = quietUntil, until <= Date() else { return }
+        quietUntil = nil
+        quietMode = false
+    }
+
+    /// Restlaufzeit als Text für die Einstellungen („noch 4 Std 12 Min").
+    var quietRemainingLabel: String? {
+        guard quietMode, let until = quietUntil, until > Date() else { return nil }
+        return hmLabel(max(1, Int(until.timeIntervalSinceNow / 60)))
+    }
     @Published var quietDuringScreenShare: Bool { didSet { d.set(quietDuringScreenShare, forKey: "quietDuringScreenShare") } }
     @Published var autoJoin: Bool { didSet { d.set(autoJoin, forKey: "autoJoin") } }
     @Published var endWarning: Bool { didSet { d.set(endWarning, forKey: "endWarning") } }
@@ -28,6 +64,42 @@ final class AppState: ObservableObject {
     /// Whether the widget shows the "New Meeting" (Google Meet) button (Runde 37,
     /// settings toggle). Only meaningful where Google is configured.
     @Published var showMeetingCreator: Bool { didSet { d.set(showMeetingCreator, forKey: "showMeetingCreator") } }
+    /// F11: the one-click "Sofort-Meeting" button in the widget (mint a Meet,
+    /// event starts now, room opens). Gated by Google config like the creator.
+    @Published var showInstantMeeting: Bool { didSet { d.set(showInstantMeeting, forKey: "showInstantMeeting") } }
+    /// F11: where meetings from the FORM are written — Google, Apple, or both.
+    @Published var createTarget: CreateTarget {
+        didSet {
+            d.set(createTarget.rawValue, forKey: "createTarget")
+            // Picking a Google side without a target yet: guess it, so the
+            // choice works without a second decision. Never hardcoded.
+            if createTarget.usesGoogle && googleTargetCalendarID.isEmpty {
+                googleTargetCalendarID = calendar.guessGoogleCalendarID() ?? ""
+            }
+        }
+    }
+    /// F11: the same choice for the INSTANT button, kept separate on purpose
+    /// (Rückmeldung 18.08.): an ad-hoc call has no business in the private
+    /// calendar, while a planned meeting usually belongs in both.
+    @Published var instantTarget: CreateTarget {
+        didSet {
+            d.set(instantTarget.rawValue, forKey: "instantTarget")
+            if instantTarget.usesGoogle && googleTargetCalendarID.isEmpty {
+                googleTargetCalendarID = calendar.guessGoogleCalendarID() ?? ""
+            }
+        }
+    }
+    /// F11: which calendar is "the Google calendar" (picked in settings).
+    @Published var googleTargetCalendarID: String {
+        didSet { d.set(googleTargetCalendarID, forKey: "googleTargetCalendarID") }
+    }
+    /// F11: the counterpart for the Apple side, so a target is pickable for
+    /// BOTH options. Empty = the create form's choice / the system default.
+    @Published var appleTargetCalendarID: String {
+        didSet { d.set(appleTargetCalendarID, forKey: "appleTargetCalendarID") }
+    }
+    /// F11: transient error line under the instant button (not persisted).
+    @Published var instantError: String?
 
     // MARK: - Meet account routing (Runde 43)
 
@@ -70,6 +142,11 @@ final class AppState: ObservableObject {
     /// Englisch, das ist der häufigere Fall bei ihm.
     @Published var inviteLanguage: String { didSet { d.set(inviteLanguage, forKey: "inviteLanguage") } }
 
+    /// F1: second time zone under the widget header (e.g. the team back in
+    /// Germany). Hides itself while it matches the Mac's own zone.
+    @Published var secondZoneEnabled: Bool { didSet { d.set(secondZoneEnabled, forKey: "secondZoneEnabled") } }
+    @Published var secondZoneID: String { didSet { d.set(secondZoneID, forKey: "secondZoneID") } }
+
     /// Beim Erstellen eines Meetings zusätzlich eine .ics-Datei nach ~/Downloads
     /// schreiben (Runde 47). Der Textblock geht wie gehabt in die Zwischenablage.
     @Published var createICSFile: Bool { didSet { d.set(createICSFile, forKey: "createICSFile") } }
@@ -88,6 +165,16 @@ final class AppState: ObservableObject {
         didSet { d.set(hotkeyEnabled, forKey: "hotkeyEnabled"); onHotkeyToggle?(hotkeyEnabled) }
     }
     var onHotkeyToggle: ((Bool) -> Void)?
+    /// F5: die beiden Kürzel, frei belegbar. Das LABEL wird beim Aufnehmen
+    /// mitgespeichert, damit keine Rückübersetzung von Tastencodes nötig ist.
+    @Published var hotkeyWidgetKey: Int { didSet { d.set(hotkeyWidgetKey, forKey: "hotkeyWidgetKey") } }
+    @Published var hotkeyWidgetMods: Int { didSet { d.set(hotkeyWidgetMods, forKey: "hotkeyWidgetMods") } }
+    @Published var hotkeyWidgetLabel: String { didSet { d.set(hotkeyWidgetLabel, forKey: "hotkeyWidgetLabel") } }
+    @Published var hotkeyJoinKey: Int { didSet { d.set(hotkeyJoinKey, forKey: "hotkeyJoinKey") } }
+    @Published var hotkeyJoinMods: Int { didSet { d.set(hotkeyJoinMods, forKey: "hotkeyJoinMods") } }
+    @Published var hotkeyJoinLabel: String { didSet { d.set(hotkeyJoinLabel, forKey: "hotkeyJoinLabel") } }
+    /// Kürzel, die das System schon belegt hat (nicht persistiert).
+    @Published var hotkeyConflict: String?
     /// Mirrors the real SMAppService state so the checkbox reflects reality
     /// (Runde 4 bug: the toggle never turned blue because nothing re-rendered).
     @Published var launchAtLogin: Bool = false
@@ -144,11 +231,83 @@ final class AppState: ObservableObject {
     @Published var currentMeeting: Meeting?
     @Published var agenda: [Meeting] = []
     @Published var availableCalendars: [CalendarInfo] = []
-    /// Which day the panel shows: 0 = today, 1 = tomorrow, … (max 7).
-    /// Banners and the start blink always run on the REAL today regardless.
-    @Published var dayOffset = 0 {
-        didSet { if dayOffset != oldValue { monitor?.tickNow() } }
+    /// Which day the panel shows (F2, Runde 58). Was an Int offset capped at a
+    /// week; now any date, so the month grid can jump anywhere. Banners, the
+    /// start blink and the menu bar always run on the REAL today regardless —
+    /// that separation lives in `MeetingMonitor.tick` and must stay intact.
+    @Published var selectedDay: Date = Calendar.current.startOfDay(for: Date()) {
+        didSet {
+            if !Calendar.current.isDate(selectedDay, inSameDayAs: oldValue) { monitor?.tickNow() }
+        }
     }
+    /// Days between today and the shown day (negative = past). Only for labels
+    /// like "Morgen", never for fetching.
+    var dayOffset: Int {
+        Calendar.current.dateComponents([.day],
+            from: Calendar.current.startOfDay(for: Date()), to: selectedDay).day ?? 0
+    }
+    var showsToday: Bool { Calendar.current.isDateInToday(selectedDay) }
+    /// F2: ob das Monatsraster im Widget aufgeklappt ist. Liegt hier statt als
+    /// View-State, damit `--demo-month` es für Screenshots öffnen kann und das
+    /// Widget es beim Öffnen sicher zurücksetzt.
+    /// Was der Auswähler gerade zeigt: nil = zu, sonst Woche oder Monat.
+    /// Dreistufig statt auf/zu, damit ein Klick aufs Datum durchschalten kann
+    /// (Wunsch 19.08.: „1 mal klicken Woche, 2 mal klicken Monat").
+    @Published var gridDisplay: CalendarViewMode? {
+        didSet {
+            // Einen Runloop später: SwiftUI hat den neuen Inhalt hier noch
+            // nicht gelayoutet, sofortiges Messen liefert die alte Höhe.
+            DispatchQueue.main.async { WidgetPanelController.shared.refreshSize(animated: true) }
+        }
+    }
+    var monthGridOpen: Bool { gridDisplay != nil }
+
+    /// Ein Klick aufs Datum: zu → Woche → (Monat) → zu, je nach Einstellung.
+    func advanceGrid() {
+        gridDisplay = calendarViewMode.nextStage(after: gridDisplay)
+    }
+    /// Ob der Auswähler eine Woche oder einen ganzen Monat zeigt.
+    @Published var calendarViewMode: CalendarViewMode {
+        didSet {
+            d.set(calendarViewMode.rawValue, forKey: "calendarViewMode")
+            // Ausgeschaltet, während er offen stand: sonst bliebe ein Raster
+            // stehen, das sich nicht mehr schließen lässt. Bei „nur Monat"
+            // eine offene Wochenansicht mitziehen, damit die Einstellung
+            // sofort sichtbar greift.
+            if !calendarViewMode.isEnabled { gridDisplay = nil }
+            else if gridDisplay != nil, calendarViewMode != .stepped {
+                gridDisplay = calendarViewMode.firstStage
+            }
+        }
+    }
+    func showToday() { selectedDay = Calendar.current.startOfDay(for: Date()) }
+    func stepDay(_ by: Int) {
+        selectedDay = Calendar.current.date(byAdding: .day, value: by, to: selectedDay) ?? selectedDay
+    }
+
+    /// P7: first day of the week for every month grid (1 = Sunday … 7 =
+    /// Saturday). Defaults to the system setting, so a US machine starts on
+    /// Sunday without anyone touching it.
+    @Published var firstWeekday: Int { didSet { d.set(firstWeekday, forKey: "firstWeekday") } }
+
+    /// F3: hide declined meetings entirely instead of showing them struck
+    /// through. They never warn either way.
+    @Published var hideDeclined: Bool { didSet { d.set(hideDeclined, forKey: "hideDeclined") } }
+    /// F4: how long the banner's snooze button postpones (was a fixed 2).
+    @Published var snoozeMinutes: Int { didSet { d.set(snoozeMinutes, forKey: "snoozeMinutes") } }
+    /// F6: how much the menu bar shows.
+    @Published var menuBarStyle: MenuBarStyle { didSet { d.set(menuBarStyle.rawValue, forKey: "menuBarStyle") } }
+    /// P3: only list events that have a join link.
+    @Published var onlyWithLink: Bool { didSet { d.set(onlyWithLink, forKey: "onlyWithLink") } }
+    /// P3: drop events that already ended from the day's list.
+    @Published var hidePastEvents: Bool { didSet { d.set(hidePastEvents, forKey: "hidePastEvents") } }
+    /// P1: stille Systemmeldung, wenn das Banner durch Ruhe-Modus oder
+    /// Bildschirmfreigabe unterdrückt wird. Sonst verpasst man den Termin ganz.
+    @Published var quietNotifications: Bool { didSet { d.set(quietNotifications, forKey: "quietNotifications") } }
+    /// Warnung im Erstellen-Formular, wenn der Zeitraum schon belegt ist.
+    @Published var warnOnConflicts: Bool { didSet { d.set(warnOnConflicts, forKey: "warnOnConflicts") } }
+    /// Freitextzeile („fr 16 uhr call mit chris") im Erstellen-Formular.
+    @Published var quickAddEnabled: Bool { didSet { d.set(quickAddEnabled, forKey: "quickAddEnabled") } }
 
     // Menu-bar "meeting is starting now" blink (point 7).
     @Published var blinkActive = false
@@ -172,6 +331,8 @@ final class AppState: ObservableObject {
         soundEnabled = d.object(forKey: "soundEnabled") as? Bool ?? true
         waterEffect = d.object(forKey: "waterEffect") as? Bool ?? true
         quietMode = d.object(forKey: "quietMode") as? Bool ?? false
+        let qu = d.double(forKey: "quietUntil")
+        quietUntil = qu > 0 ? Date(timeIntervalSince1970: qu) : nil
         quietDuringScreenShare = d.object(forKey: "quietDuringScreenShare") as? Bool ?? true
         autoJoin = d.object(forKey: "autoJoin") as? Bool ?? false
         endWarning = d.object(forKey: "endWarning") as? Bool ?? true
@@ -186,6 +347,18 @@ final class AppState: ObservableObject {
             ?? d.string(forKey: "shareLanguage")
             ?? (systemIsGerman ? "de" : "en")
         showMeetingCreator = d.object(forKey: "showMeetingCreator") as? Bool ?? true
+        showInstantMeeting = d.object(forKey: "showInstantMeeting") as? Bool ?? true
+        // Neu ab F11-Erweiterung: drei Ziele statt eines Schalters. Der alte
+        // Bool wird einmalig übernommen, damit eine bestehende Wahl nicht kippt.
+        let formTarget = d.string(forKey: "createTarget").flatMap(CreateTarget.init(rawValue:))
+            ?? (d.bool(forKey: "preferGoogleCalendar") ? .google : .apple)
+        createTarget = formTarget
+        // Ohne eigene Wahl folgt der Sofort-Knopf dem Formular, dann ändert
+        // sich für bestehende Installationen nichts.
+        instantTarget = d.string(forKey: "instantTarget").flatMap(CreateTarget.init(rawValue:))
+            ?? formTarget
+        googleTargetCalendarID = d.string(forKey: "googleTargetCalendarID") ?? ""
+        appleTargetCalendarID = d.string(forKey: "appleTargetCalendarID") ?? ""
         meetRoutingEnabled = d.object(forKey: "meetRoutingEnabled") as? Bool ?? true
         // Default the routing account to the connected Google account, so it
         // works out of the box the first time after the update.
@@ -198,7 +371,26 @@ final class AppState: ObservableObject {
         compactMenuBarInMeeting = d.object(forKey: "compactMenuBarInMeeting") as? Bool ?? true
         createICSFile = d.object(forKey: "createICSFile") as? Bool ?? true
         inviteLanguage = d.string(forKey: "inviteLanguage") ?? "en"
+        secondZoneEnabled = d.object(forKey: "secondZoneEnabled") as? Bool ?? true
+        secondZoneID = d.string(forKey: "secondZoneID") ?? "Europe/Berlin"
+        firstWeekday = d.object(forKey: "firstWeekday") as? Int ?? Calendar.current.firstWeekday
+        calendarViewMode = d.string(forKey: "calendarViewMode")
+            .flatMap(CalendarViewMode.init(rawValue:)) ?? .stepped
+        hideDeclined = d.object(forKey: "hideDeclined") as? Bool ?? false
+        snoozeMinutes = d.object(forKey: "snoozeMinutes") as? Int ?? 2
+        menuBarStyle = d.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:)) ?? .titleAndCountdown
+        onlyWithLink = d.object(forKey: "onlyWithLink") as? Bool ?? false
+        hidePastEvents = d.object(forKey: "hidePastEvents") as? Bool ?? false
+        quietNotifications = d.object(forKey: "quietNotifications") as? Bool ?? true
+        warnOnConflicts = d.object(forKey: "warnOnConflicts") as? Bool ?? true
+        quickAddEnabled = d.object(forKey: "quickAddEnabled") as? Bool ?? true
         hotkeyEnabled = d.object(forKey: "hotkeyEnabled") as? Bool ?? true
+        hotkeyWidgetKey = d.object(forKey: "hotkeyWidgetKey") as? Int ?? Int(HotKeyManager.defaultKeyCode)
+        hotkeyWidgetMods = d.object(forKey: "hotkeyWidgetMods") as? Int ?? Int(HotKeyManager.defaultModifiers)
+        hotkeyWidgetLabel = d.string(forKey: "hotkeyWidgetLabel") ?? HotKeyManager.defaultLabel
+        hotkeyJoinKey = d.object(forKey: "hotkeyJoinKey") as? Int ?? Int(HotKeyManager.defaultJoinKeyCode)
+        hotkeyJoinMods = d.object(forKey: "hotkeyJoinMods") as? Int ?? Int(HotKeyManager.defaultJoinModifiers)
+        hotkeyJoinLabel = d.string(forKey: "hotkeyJoinLabel") ?? HotKeyManager.defaultJoinLabel
         selectedCalendarIDs = Set(d.object(forKey: "selectedCalendarIDs") as? [String] ?? [])
         alertCalendarIDs = Set(d.object(forKey: "alertCalendarIDs") as? [String] ?? [])
         birthdayCalendarIDs = Set(d.object(forKey: "birthdayCalendarIDs") as? [String] ?? [])
@@ -251,6 +443,86 @@ final class AppState: ObservableObject {
         Task { await requestCalendarAccess() }
         if showReminders { Task { await requestRemindersAccess() } }
     }
+
+    // MARK: - Join per Tastenkürzel (F5)
+
+    /// ⌃⌥J: ins LAUFENDE Meeting, sonst ins nächste. Der laufende Call hat
+    /// Vorrang — drückt man das Kürzel mitten drin, will man dort hinein und
+    /// nicht in den Termin danach. Ohne Link öffnet sich das Widget, damit der
+    /// Druck nie folgenlos verpufft.
+    func joinCurrentOrNext() {
+        if let c = currentMeeting, c.joinURL != nil { MeetingLauncher.join(c); return }
+        if let n = nextMeeting, n.joinURL != nil { MeetingLauncher.join(n); return }
+        WidgetPanelController.shared.toggle(state: self, statusButton: nil,
+                                            anchorToMouseScreen: true)
+    }
+
+    // MARK: - Sofort-Meeting (F11)
+
+    /// One click: mint a Meet link, drop a 30-minute event starting NOW (full
+    /// minute) into the target calendar, then open the room itself. Reuses the
+    /// existing create path, so the clipboard invite and the optional
+    /// auto-transcribe behave exactly like the form.
+    func startInstantMeeting() {
+        guard !GoogleService.shared.busy else { return }
+        instantError = nil
+        // Lazy guess: covers the preference arriving WITHOUT the didSet
+        // (defaults import, fresh machine). Imperative context, so mutating
+        // here is safe, unlike in the computed target below.
+        if instantTarget.usesGoogle && googleTargetCalendarID.isEmpty {
+            googleTargetCalendarID = calendar.guessGoogleCalendarID() ?? ""
+        }
+        let now = Date()
+        // Round DOWN to the minute, the calendar should say 14:23, not 14:23:47.
+        let start = now.addingTimeInterval(
+            -now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
+        let title = L.t("Sofort-Meeting", "Instant meeting")
+        // Google gewählt, aber kein Kalender ermittelbar: lieber sichtbar
+        // abbrechen als den Termin still nur im Apple-Kalender anzulegen.
+        if instantTarget.usesGoogle && googleTargetCalendarID.isEmpty {
+            instantError = L.t("Kein Google-Kalender gefunden. In den Einstellungen unter Google einen wählen.",
+                               "No Google calendar found. Pick one in Settings → Google.")
+            return
+        }
+        Task {
+            let ok = await GoogleService.shared.createAppleMeeting(
+                title: title, start: start, minutes: 30,
+                calendarIDs: calendarIDs(for: instantTarget),
+                autoTranscribe: autoTranscribe, makeICS: false,
+                calendarService: calendar)
+            if ok {
+                monitor.tickNow()   // agenda/timeline pick it up immediately
+                // Through the launcher, NOT NSWorkspace: the Chrome profile +
+                // authuser routing (Runde 43) must apply, or the room opens as
+                // the wrong signed-in account.
+                if let link = GoogleService.shared.lastMeetLink,
+                   let url = URL(string: link) {
+                    MeetingLauncher.open(url, title: title)
+                }
+            } else {
+                instantError = GoogleService.shared.lastError
+            }
+        }
+    }
+
+    /// Target calendars for one creation route (F11). One entry per calendar
+    /// that should receive the event, so `.both` returns two. A nil entry means
+    /// "the system default calendar". Never empty.
+    func calendarIDs(for target: CreateTarget) -> [String?] {
+        var ids: [String?] = []
+        if target.usesGoogle, !googleTargetCalendarID.isEmpty {
+            ids.append(googleTargetCalendarID)
+        }
+        if target.usesApple {
+            let stored = d.string(forKey: "createCalendarID") ?? ""
+            ids.append(appleTargetCalendarID.isEmpty ? (stored.isEmpty ? nil : stored)
+                                                     : appleTargetCalendarID)
+        }
+        return ids.isEmpty ? [nil] : ids
+    }
+
+    /// Ziele des Formulars („Neues Meeting").
+    var effectiveCreateCalendarIDs: [String?] { calendarIDs(for: createTarget) }
 
     // MARK: - Launch at login (Runde 4 fix)
 
@@ -488,6 +760,15 @@ final class AppState: ObservableObject {
         CreatePanelController.shared.toggle(state: self, anchor: WidgetPanelController.shared.frame)
     }
 
+    /// F9: Öffnet das Erstellen-Formular, ohne es bei erneutem Aufruf wieder
+    /// zuzuklappen — ein `meetingblitz://create` darf nie zufällig schließen.
+    func openCreatePanel() {
+        if !CreatePanelController.shared.isOpen { toggleCreatePanel() }
+    }
+
+    /// F9: Freitext, mit dem das Formular beim Öffnen vorbelegt wird.
+    @Published var pendingQuickAdd: String?
+
     func copyLink(_ url: URL) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url.absoluteString, forType: .string)
@@ -573,12 +854,23 @@ final class AppState: ObservableObject {
         RunLoop.main.add(t, forMode: .common)
     }
 
+    /// F6: nur das Symbol zeigen heißt NICHT, die Information zu verlieren —
+    /// der volle Text landet dann im Tooltip (`menuBarTooltip`). Das Blinken
+    /// zum Meeting-Start bleibt in jedem Stil, das ist Sicherheitsfunktion.
     var menuBarText: String? {
+        menuBarStyle == .iconOnly ? nil : menuBarString(style: menuBarStyle)
+    }
+
+    /// Immer der VOLLE Text, egal welcher Anzeigestil eingestellt ist.
+    var menuBarTooltip: String? { menuBarString(style: .titleAndCountdown) }
+
+    private func menuBarString(style: MenuBarStyle) -> String? {
         guard calendarAuthorized else { return L.t("Zugriff nötig", "Access needed") }
         // A running call wins: show it with the remaining time.
         if let c = currentMeeting {
             let mins = max(1, Int(c.end.timeIntervalSinceNow / 60))
-            return "\(c.menuBarTitle) · " + L.t("noch \(hmLabel(mins))", "\(hmLabel(mins)) left")
+            let left = L.t("noch \(hmLabel(mins))", "\(hmLabel(mins)) left")
+            return style == .countdownOnly ? left : "\(c.menuBarTitle) · \(left)"
         }
         guard let m = nextMeeting else { return nil }
         // Menu bar announces TODAY only: once the day's last call is done it

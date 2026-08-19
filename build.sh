@@ -45,6 +45,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>LSUIElement</key>             <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>    <string>$BUNDLE_ID</string>
+        <key>CFBundleURLSchemes</key> <array><string>meetingblitz</string></array>
+      </dict>
+    </array>
     <key>NSCalendarsUsageDescription</key>
     <string>MeetingBlitz liest deinen Kalender, um dich rechtzeitig vor Meetings zu warnen.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
@@ -98,6 +105,16 @@ else
     echo "    (ad-hoc signiert. Fuer stabile Berechtigungen siehe signing.local.example)"
     codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" >/dev/null 2>&1 || \
         codesign --force --sign - "$APP"
+fi
+
+# F7: Selbsttest der Link-Erkennung. Ersetzt ein Test-Target, denn XCTest
+# gehoert zu Xcode und nicht zu den Command Line Tools (geprueft 18.08.2026:
+# "no such module 'XCTest'"). Laeuft vor dem Einzelinstanz-Schutz, sonst wuerde
+# er sich neben der laufenden App beenden und faelschlich Erfolg melden.
+echo "==> Selbsttest"
+if ! "$APP/Contents/MacOS/MeetingBlitz" --selftest; then
+    echo "    ABGEBROCHEN: Link-Erkennung ist kaputt (siehe oben)."
+    exit 1
 fi
 
 echo "==> Done: $APP"

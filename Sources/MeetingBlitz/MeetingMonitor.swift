@@ -12,6 +12,9 @@ final class MeetingMonitor {
     private unowned let state: AppState
     private var timer: Timer?
     private var alertedKeys: Set<String> = []   // lead-time banner fired
+    /// P1: stille Meldung schon geschickt. Getrennt von `alertedKeys`, damit
+    /// das Banner nach dem Ende der Ruhe trotzdem noch fliegt.
+    private var quietNoticeKeys: Set<String> = []
     private var startedKeys: Set<String> = []   // start blink fired
     private var autoJoinedKeys: Set<String> = [] // auto-join opened (Runde 5)
     private var endWarnedKeys: Set<String> = []  // end-of-meeting warning blinked (Runde 5)
@@ -41,6 +44,9 @@ final class MeetingMonitor {
     func tickNow() { tick() }
 
     private func tick() {
+        // Befristete Ruhe hier ablaufen lassen, nicht per Timer: ein Timer über
+        // Stunden oder Tage überlebt weder Ruhezustand noch Neustart.
+        state.expireQuietIfNeeded()
         guard state.calendarAuthorized else { return }
         let ids = state.selectedCalendarIDs
         // Two filters (Runde 40): DISPLAY = selected calendars, not hidden (the
@@ -49,9 +55,20 @@ final class MeetingMonitor {
         // fire a banner.
         // Runde 55 adds the birthday gate to BOTH: a foreign calendar's birthdays
         // are dropped entirely, while its timed meetings pass through untouched.
-        let display: (Meeting) -> Bool = { [state] in !state.isHidden($0) && state.showsBirthday($0) }
-        let alert: (Meeting) -> Bool = { [state] in
-            !state.isHidden($0) && state.showsBirthday($0) && state.isAlertCalendar($0)
+        // F3/P3 kommen hier dazu: ABGELEHNTE Termine warnen NIE (man geht nicht
+        // hin), stehen aber standardmäßig durchgestrichen in der Liste — sonst
+        // sucht man einen Termin, der scheinbar verschwunden ist. „Nur mit Link"
+        // und „Vergangene ausblenden" betreffen ausschließlich die Anzeige,
+        // niemals die Warnung: ein Termin ohne Link ist trotzdem ein Termin.
+        let display: (Meeting) -> Bool = { [state] m in
+            !state.isHidden(m) && state.showsBirthday(m)
+                && !(state.hideDeclined && m.myStatus == .declined)
+                && !(state.onlyWithLink && m.joinURL == nil && !m.isBirthday && !m.isAllDay)
+                && !(state.hidePastEvents && m.end < Date() && !m.isAllDay && !m.isBirthday)
+        }
+        let alert: (Meeting) -> Bool = { [state] m in
+            !state.isHidden(m) && state.showsBirthday(m) && state.isAlertCalendar(m)
+                && m.myStatus != .declined
         }
 
         // Alert-relevant future meetings (drives nextMeeting, banner, auto-join).
@@ -67,9 +84,12 @@ final class MeetingMonitor {
         state.currentMeeting = todayAlert.first {
             !$0.isAllDay && !$0.isBirthday && $0.start <= now && $0.end > now
         }
-        state.agenda = state.dayOffset == 0
+        // NUR die Anzeigeliste folgt dem gewählten Tag (F2). `upcoming`,
+        // `todayAlert`, Banner, Blinken und Menüleiste oben rechnen weiter auf
+        // dem ECHTEN Heute — diese Trennung ist die Kern-Invariante der App.
+        state.agenda = state.showsToday
             ? todayDisplay
-            : state.calendar.dayAgenda(offset: state.dayOffset, selected: ids).filter(display)
+            : state.calendar.dayAgenda(for: state.selectedDay, selected: ids).filter(display)
 
         // --- Lead-time banner: fire once per occurrence inside the window. ---
         let lead = Double(state.leadMinutes) * 60
@@ -79,12 +99,24 @@ final class MeetingMonitor {
             if secondsUntil > 0, secondsUntil <= lead, !alertedKeys.contains(key) {
                 // Runde 5: hold back while quiet / screen sharing, but DON'T mark
                 // it done, retry next tick so it still fires once un-suppressed.
-                if state.bannersSuppressed { continue }
+                if state.bannersSuppressed {
+                    // P1: Statt gar nichts eine stille Systemmeldung, EINMAL pro
+                    // Termin. Ohne sie verpasst man in genau der Situation, in
+                    // der man nicht gestört werden will, sein nächstes Meeting.
+                    // `alertedKeys` bleibt unberührt: sobald die Ruhe endet,
+                    // fliegt das Banner trotzdem noch.
+                    if state.quietNotifications, !quietNoticeKeys.contains(key) {
+                        quietNoticeKeys.insert(key)
+                        QuietNotice.show(meeting)
+                    }
+                    continue
+                }
                 alertedKeys.insert(key)
                 state.announce(meeting)
             }
         }
         alertedKeys.formIntersection(Set(upcoming.map(alertKey(for:))))
+        quietNoticeKeys.formIntersection(Set(upcoming.map(alertKey(for:))))
 
         // --- Auto-join (Runde 5, opt-in): open the link ~10s before start. ---
         if state.autoJoin {
