@@ -64,6 +64,12 @@ and where this one is genuinely different.
 | Calendar sources | Apple Calendar (so iCloud, Google, Exchange via macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
 | Maturity | hobby project | 5.3k stars, years of polish | 4.0k stars | 2.3k stars |
 
+Those three are the field: below Calendr, a search for macOS menu-bar calendars
+turns up nothing above a handful of stars. The other well-known options are
+commercial and closed source — **Dato** and **Fantastical** — so they are named
+here rather than ticked off in a table, since their feature set cannot be
+verified from the outside.
+
 ### The other camp: apps that interrupt you
 
 The table above compares calendars. But MeetingBlitz is not really trying to be
