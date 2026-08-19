@@ -1,5 +1,15 @@
 # MeetingBlitz
 
+**Eine macOS-Menüleisten-App, die dich vor jedem Termin warnt.** Kurz bevor
+etwas aus deinem Apple Kalender beginnt, fliegt ein U-Boot über deine
+Bildschirme.
+
+### ⬇ [MeetingBlitz 1.4 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+
+Fertige App · 2,8 MB · macOS 14+ · Apple Silicon **und** Intel ·
+[ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·
+oder [selbst bauen](#möglichkeit-b-selbst-bauen) in zwei Minuten
+
 [English version](README.md)
 
 ![Zwei Termine um 17:00, jeder mit eigenem fliegendem Banner](docs/demo.gif)

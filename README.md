@@ -4,6 +4,12 @@
 before something from your Apple Calendar starts, a submarine flies across your
 screens.
 
+### ⬇ [Download MeetingBlitz 1.4](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+
+Ready-made app · 2.8 MB · macOS 14+ · Apple Silicon **and** Intel ·
+[one extra command on first launch](#option-a-download-the-ready-made-app) ·
+or [build it yourself](#option-b-build-it-yourself) in two minutes
+
 [Deutsche Version](README.de.md)
 
 ![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)
