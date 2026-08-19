@@ -121,6 +121,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 Optional, only with your own Google Cloud credentials: create an event with a
 ready Google Meet link straight from the app. Without that config the whole
 feature hides itself, everything else works the same.
+[Setup instructions below.](#optional-create-meetings-with-a-google-meet-link)
 
 ## Requirements
 
@@ -204,6 +205,42 @@ Only if it actually says "damaged and can't be opened":
 ```bash
 xattr -cr "/Applications/MeetingBlitz.app"
 ```
+
+## Optional: create meetings with a Google Meet link
+
+Everything above works without this. This one feature — the **Instant meeting**
+button and the Meet link on events you create — talks to Google on your behalf,
+so it needs credentials that belong to *you*. There is no shared app key, and
+none ships in this repo.
+
+It is a ten-minute, one-time setup:
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create
+   a project (any name).
+2. **APIs & Services → Library**: enable the **Google Calendar API**.
+3. **APIs & Services → OAuth consent screen**: pick **External**, fill in the app
+   name and your email. Under **Audience**, add your own Google address as a test
+   user. *(If you have a Workspace account, choose Internal instead — then tokens
+   don't expire every 7 days.)*
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
+   application type **Desktop app**. Download the JSON.
+5. Put that file here, creating the folder if needed:
+
+```bash
+mkdir -p ~/Library/Application\ Support/MeetingBlitz
+cp ~/Downloads/client_secret_*.json ~/Library/Application\ Support/MeetingBlitz/google-oauth.json
+```
+
+6. Restart MeetingBlitz. **Settings → Creating meetings** now offers
+   **Connect Google**. Sign in once; the refresh token is stored in your macOS
+   Keychain, never in a file.
+
+Without that JSON the whole section stays hidden and no Google code ever runs.
+
+**Heads-up on the 7-day expiry:** while the OAuth client sits in *Testing* mode,
+Google invalidates refresh tokens after a week and you have to reconnect. The
+consent screen's **Publish** button (or an Internal Workspace audience) ends
+that for good.
 
 ## Permissions and privacy
 
