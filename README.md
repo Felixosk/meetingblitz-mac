@@ -6,7 +6,7 @@ screens.
 
 ### ⬇ [Download MeetingBlitz 1.4](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
-Ready-made app · 2.8 MB · macOS 14+ · Apple Silicon **and** Intel ·
+Ready-made app · 9.5 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
 or [build it yourself](#option-b-build-it-yourself) in two minutes
 
