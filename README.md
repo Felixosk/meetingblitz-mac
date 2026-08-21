@@ -102,6 +102,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 ## Features
 
 - **A banner before every meeting**, on all monitors at once, with configurable lead time
+- **27 skins in 4 styles** for that banner — swap the submarine for a whale, a jet, a UFO or 24 others; the photo style shows the real thing, and double-clicking one reveals its true, sourced story
 - **Today at a glance** in the menu bar, with a timeline, a week/month picker and any day one click away
 - **One-click join** for 53 services: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack huddles, GoTo, Tencent and more
 - **Type an event in one line**: `fri 4pm to 5pm call with chris`, with a live preview before anything is created
@@ -122,6 +123,17 @@ Optional, only with your own Google Cloud credentials: create an event with a
 ready Google Meet link straight from the app. Without that config the whole
 feature hides itself, everything else works the same.
 [Setup instructions below.](#optional-create-meetings-with-a-google-meet-link)
+
+## Not just a submarine
+
+**Settings → Alerts & reminders** lets you swap the flying object for one of
+27 motifs, in four visual styles from a plain outline to real photographs.
+Every photo-style motif is a real thing — a Cold War submarine, a whale that
+sank a whaling ship, a rubber duck that drifted the Pacific for fifteen years
+— and double-clicking a tile opens its actual story with a source, fact-checked
+against real references rather than written from memory.
+
+![The skin picker with 27 real-photo motifs, and the sourced story behind one of them](docs/skins.png)
 
 ## Requirements
 
