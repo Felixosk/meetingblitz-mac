@@ -373,7 +373,22 @@ struct SettingsPane: View {
                 .labelsHidden().pickerStyle(.segmented).fixedSize()
             }
             Toggle(L.t("Ton abspielen", "Play sound"), isOn: $state.soundEnabled).font(.system(size: 12))
-            Toggle(L.t("Sprung aus dem Wasser", "Jump out of the water"), isOn: $state.waterEffect).font(.system(size: 12))
+            // Runde 72: wirkt jetzt für BEIDE Elemente gleichwertig — Wasser
+            // springt aus dem Meer, Luft bricht aus einer Wolke hervor — daher
+            // nicht mehr ausgegraut für Luft-Motive (war 20.08.: dort wirkungslos).
+            Toggle(L.t("Dramatischer Auftritt", "Dramatic entrance"), isOn: $state.dramaticEntrance)
+                .font(.system(size: 12))
+            Text(state.currentSkinElement == .air
+                 ? L.t("Luft-Motiv: bricht aus einer Wolke hervor. Aus lässt es schlicht level hereinfliegen.",
+                       "Air motif: bursts out of a cloud. Off, and it just flies in level.")
+                 : L.t("Wasser-Motiv: springt aus dem Meer. Aus lässt es schlicht level hereinfliegen.",
+                       "Water motif: jumps out of the sea. Off, and it just flies in level."))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            skinSection
 
             Divider()
 
@@ -500,6 +515,92 @@ struct SettingsPane: View {
             }
             .font(.system(size: 12)).buttonStyle(.borderless)
         }
+    }
+
+    // MARK: - Flugobjekt (Skin-Auswahl, 20.08.2026)
+
+    /// Style-Umschalter + Motivraster + Test-Knopf. Eigener Block, damit der
+    /// lange Banner-Reiter nicht noch unübersichtlicher wird.
+    private var skinSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.t("Flugobjekt", "Flying object")).font(.system(size: 12, weight: .semibold))
+            Picker("", selection: $state.skinStyle) {
+                ForEach(SkinStyle.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.segmented)
+
+            if state.skinStyle == .classic {
+                Text(L.t("Das klassische U-Boot, ohne Motivwahl.",
+                         "The classic U-Boot, no motif to pick."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            } else {
+                skinGrid
+            }
+
+            Button(L.t("Vorschau fliegen lassen", "Preview it flying")) { state.showTestBanner() }
+                .font(.system(size: 12)).buttonStyle(.borderless)
+        }
+    }
+
+    /// 27 Motive in einem 3-spaltigen Raster, echte SVG-Vorschauen. Panelbreite
+    /// ist 300 (272 nutzbar nach dem Padding), 3 Spalten passen knapp ohne die
+    /// Seite zu sprengen. ScrollView mit fester Höhe (hat keine intrinsische,
+    /// Runde 14) statt eines wachsenden VStack: bei 27 Kacheln würde das Panel
+    /// sonst über den Bildschirm hinauswachsen.
+    private var skinGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                      spacing: 8) {
+                ForEach(Skin.all) { skin in
+                    skinCell(skin)
+                }
+            }
+            .padding(.top, 2)
+            .padding(.trailing, 4)   // Platz für den Overlay-Scrollbalken (Runde 41 Muster)
+        }
+        .frame(height: 240)
+    }
+
+    private func skinCell(_ skin: Skin) -> some View {
+        let selected = state.skinID == skin.id
+        let image = Skins.shared.image(for: skin, style: state.skinStyle)
+        return Button {
+            state.skinID = skin.id
+        } label: {
+            VStack(spacing: 3) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.06))
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(6)
+                    } else {
+                        // Fällt die Datei aus (fehlt im Bundle), sauber ein
+                        // Platzhalter statt Absturz oder leerer Kachel.
+                        Image(systemName: "questionmark.square.dashed")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(height: 44)
+                Text(skin.name)
+                    .font(.system(size: 9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+            }
+            .padding(5)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 9)
+                .fill(selected ? Color.accentColor.opacity(0.16) : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.08),
+                              lineWidth: selected ? 1.5 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .help(skin.name)
     }
 
     // MARK: - Tab: Kalender

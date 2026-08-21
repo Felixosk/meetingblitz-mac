@@ -10,8 +10,24 @@ final class AppState: ObservableObject {
     @Published var leadMinutes: Int { didSet { d.set(leadMinutes, forKey: "leadMinutes") } }
     @Published var soundEnabled: Bool { didSet { d.set(soundEnabled, forKey: "soundEnabled") } }
     @Published var animationSeconds: Double { didSet { d.set(animationSeconds, forKey: "animationSeconds") } }
-    /// Breakthrough splash at the entry edge when the banner flies in (Runde 6, toggleable).
-    @Published var waterEffect: Bool { didSet { d.set(waterEffect, forKey: "waterEffect") } }
+    /// Dramatic entrance when the banner flies in (Runde 6, toggleable; Runde 72:
+    /// renamed from "Sprung aus dem Wasser" — jetzt gilt er für BEIDE Elemente,
+    /// Wasser springt aus dem Meer, Luft bricht aus einer Wolke hervor, siehe
+    /// `currentSkinElement`). UserDefaults-Key bleibt "waterEffect", damit eine
+    /// bereits gesetzte Einstellung nicht zurückgesetzt wird.
+    @Published var dramaticEntrance: Bool { didSet { d.set(dramaticEntrance, forKey: "waterEffect") } }
+    /// Which flying object shows in the banner (20.08.2026 Skin-Feature).
+    /// `.classic` keeps the original Canvas-drawn U-Boot; the other styles
+    /// pick one of the 27 SVG motifs below by `skinID`.
+    @Published var skinStyle: SkinStyle { didSet { d.set(skinStyle.rawValue, forKey: "skinStyle") } }
+    @Published var skinID: String { didSet { d.set(skinID, forKey: "skinID") } }
+    /// The currently selected motif, falling back to the first one if the
+    /// stored id is stale (e.g. after an asset rename).
+    var currentSkin: Skin { Skin.byID[skinID] ?? Skin.all[0] }
+    /// Whether the CURRENT selection is a water or air motif (Rückmeldung
+    /// 20.08.: ein Jet springt nicht aus dem Meer). The classic U-Boot always
+    /// counts as water, it has no `Skin` entry of its own.
+    var currentSkinElement: SkinElement { skinStyle == .classic ? .water : currentSkin.element }
     // Runde 5 feature toggles.
     @Published var quietMode: Bool {
         didSet {
@@ -329,7 +345,9 @@ final class AppState: ObservableObject {
 
         leadMinutes = d.object(forKey: "leadMinutes") as? Int ?? 5
         soundEnabled = d.object(forKey: "soundEnabled") as? Bool ?? true
-        waterEffect = d.object(forKey: "waterEffect") as? Bool ?? true
+        dramaticEntrance = d.object(forKey: "waterEffect") as? Bool ?? true
+        skinStyle = d.string(forKey: "skinStyle").flatMap(SkinStyle.init(rawValue:)) ?? .classic
+        skinID = d.string(forKey: "skinID") ?? Skin.all[0].id
         quietMode = d.object(forKey: "quietMode") as? Bool ?? false
         let qu = d.double(forKey: "quietUntil")
         quietUntil = qu > 0 ? Date(timeIntervalSince1970: qu) : nil
@@ -617,8 +635,13 @@ final class AppState: ObservableObject {
     }
 
     func announce(_ meeting: Meeting, pinnedDocked: Bool = false) {
+        // Runde 72: "Dramatischer Auftritt" wirkt jetzt für BEIDE Elemente —
+        // diese eine Stelle steuert sowohl die Sprung-Phase als auch welches
+        // Panel BannerPresenter an der Startstelle aufsetzt (SeaSplash für
+        // Wasser, CloudBurst für Luft, siehe FlightVM.entranceElement).
         presenter.present(meeting, leadMinutes: leadMinutes, seconds: animationSeconds,
-                          playSound: soundEnabled && !pinnedDocked, water: waterEffect,
+                          playSound: soundEnabled && !pinnedDocked,
+                          dramaticEntrance: dramaticEntrance, element: currentSkinElement,
                           pinnedDocked: pinnedDocked)
     }
 

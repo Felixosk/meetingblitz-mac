@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4 290 104">
+  <defs>
+    <linearGradient id="u48fG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a2abb3"/><stop offset=".2" stop-color="#79838d"/>
+      <stop offset=".5" stop-color="#5a646e"/><stop offset=".54" stop-color="#353e47"/>
+      <stop offset=".88" stop-color="#1d2329"/><stop offset="1" stop-color="#2c343c"/>
+    </linearGradient>
+    <filter id="u48fb" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="u48fn" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .65  0 0 0 0 .7  0 0 0 0 .75  0 0 0 .24 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="u48fHull">
+      <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .u48-bob { transform-box: fill-box; transform-origin: center; animation: u48bob 3s ease-in-out infinite alternate; animation-delay: -2.2s; }
+    @keyframes u48bob { from{ transform: translateY(-3px) rotate(-1deg); } to{ transform: translateY(3px) rotate(1deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; }
+    @keyframes propSide { 0%{transform:scaleY(1)} 50%{transform:scaleY(0.15)} 100%{transform:scaleY(1)} }
+    .pw { transform-box: fill-box; animation: propwash 1.7s linear infinite; }
+    .pw.d2 { animation-delay: -.55s; }
+    @keyframes propwash {
+      0% { transform: translate(0,0) scale(.5); opacity:.55; }
+      100% { transform: translate(-40px,-12px) scale(1.4); opacity:0; }
+    }
+  </style>
+  <g class="u48-bob">
+    <g class="pw"><circle cx="28" cy="56" r="3.5" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="pw d2"><circle cx="26" cy="62" r="2.6" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="prop"><ellipse cx="18" cy="56" rx="4.5" ry="11" fill="#3d4854" opacity=".85"/></g>
+    <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z" fill="url(#u48fG)"/>
+    <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z" fill="#fff" filter="url(#u48fn)" opacity=".35"/>
+    <path d="M281 50 L268 40 M282 48 L272 34 M279 44 L273 31" stroke="#1e242b" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M62 32 L236 38 L234 43 L64 38 Z" fill="#4c565f"/>
+    <path d="M58 58 Q140 70 232 60 L230 68 Q140 78 62 66 Z" fill="#272e35" opacity=".95"/>
+    <g fill="#181d23">
+      <rect x="76" y="61" width="7" height="2.4" rx="1"/><rect x="96" y="63" width="7" height="2.4" rx="1"/>
+      <rect x="116" y="64.5" width="7" height="2.4" rx="1"/><rect x="136" y="65.5" width="7" height="2.4" rx="1"/>
+      <rect x="156" y="65.5" width="7" height="2.4" rx="1"/><rect x="176" y="64.5" width="7" height="2.4" rx="1"/>
+      <rect x="196" y="63" width="7" height="2.4" rx="1"/>
+    </g>
+    <path d="M126 34 L162 34 L159 12 L130 12 Z" fill="#6e7883"/>
+    <path d="M127 19 Q144 14 161 19 L161 16 Q144 11 127 16 Z" fill="#353e47"/>
+    <text x="134" y="29" fill="#e4e9ed" font-size="6.5" font-weight="600" font-family="Georgia, serif">U 48</text>
+    <line x1="141" y1="12" x2="141" y2="3" stroke="#262d34" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="142" y1="4" x2="196" y2="20" stroke="#b3bcc3" stroke-width=".9"/>
+    <path d="M150 7 l9 2.5 l-9 3.5 Z" fill="#dfe5ea" stroke="#262d34" stroke-width=".7" stroke-linejoin="round"/>
+    <path d="M164 11 l9 2.5 l-9 3.5 Z" fill="#dfe5ea" stroke="#262d34" stroke-width=".7" stroke-linejoin="round"/>
+    <path d="M178 15 l9 2.5 l-9 3.5 Z" fill="#dfe5ea" stroke="#262d34" stroke-width=".7" stroke-linejoin="round"/>
+    <rect x="170" y="28" width="10" height="6" rx="2" fill="#353e47"/>
+    <line x1="176" y1="29" x2="200" y2="23" stroke="#262d34" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="176" cy="27" r="2" fill="#2c343c"/>
+    <g clip-path="url(#u48fHull)">
+      <ellipse cx="150" cy="32" rx="108" ry="3.5" fill="#dfe9ee" opacity=".28" filter="url(#u48fb)"/>
+      <ellipse cx="150" cy="64" rx="110" ry="5" fill="#0a0f14" opacity=".45" filter="url(#u48fb)"/>
+    </g>
+  </g>
+</svg>

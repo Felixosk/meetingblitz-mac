@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-16 -2 296 72">
+  <defs>
+    <linearGradient id="v25body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9aa6b2"/><stop offset="1" stop-color="#6b7885"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; animation: bob 2.9s ease-in-out infinite alternate; animation-delay: -.6s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.6deg);} to { transform: translateY(4px) rotate(1.6deg);} }
+    .flame { transform-box: fill-box; transform-origin: right center; animation: flick .14s ease-in-out infinite alternate; animation-delay: -.06s; }
+    @keyframes flick { from{transform:scaleX(1)} to{transform:scaleX(1.45)} }
+  </style>
+  <g class="bob">
+    <g class="flame">
+      <path d="M48 45 Q22 39 8 45 Q22 51 48 45 Z" fill="#7ec8ff"/>
+      <path d="M48 45 Q32 42 22 45 Q32 48 48 45 Z" fill="#fff3b0"/>
+    </g>
+    <path d="M62 42 L46 12 L70 20 L82 42 Z" fill="#5d6a77"/>
+    <path d="M74 46 L62 8 L88 17 L98 46 Z" fill="#8b98a5" stroke="#4c5865" stroke-width="1.5"/>
+    <path d="M50 50 L84 44 L96 54 L62 57 Z" fill="#5d6a77"/>
+    <path d="M44 48 Q60 38 98 36 L152 34 Q214 32 246 40 Q268 44 274 48 Q250 56 210 58 L120 60 Q68 60 44 52 Z"
+          fill="url(#v25body)" stroke="#4c5865" stroke-width="2"/>
+    <path d="M102 50 L178 45 L150 61 L104 58 Z" fill="#77848f"/>
+    <path d="M180 50 L206 48 L202 58 L184 58 Z" fill="#3c4854"/>
+    <path d="M212 36 Q230 26 248 40 Q232 44 214 42 Z" fill="#d9b64a" stroke="#8a733a" stroke-width="1.5"/>
+    <circle cx="150" cy="42" r="5" fill="none" stroke="#54626f" stroke-width="2"/>
+    <path d="M147 42 h6 M150 39 v6" stroke="#54626f" stroke-width="1.5"/>
+  </g>
+</svg>

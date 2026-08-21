@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -4 297 77">
+  <defs>
+    <linearGradient id="v26body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#aab4bd"/><stop offset="1" stop-color="#7c8894"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; animation: bob 2.9s ease-in-out infinite alternate; animation-delay: -2.5s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.6deg);} to { transform: translateY(4px) rotate(1.6deg);} }
+    .flame { transform-box: fill-box; transform-origin: right center; animation: flick .14s ease-in-out infinite alternate; animation-delay: -.11s; }
+    @keyframes flick { from{transform:scaleX(1)} to{transform:scaleX(1.45)} }
+  </style>
+  <g class="bob">
+    <g class="flame">
+      <path d="M50 47 Q26 41 12 47 Q26 53 50 47 Z" fill="#ffab40"/>
+      <path d="M50 47 Q34 44 24 47 Q34 50 50 47 Z" fill="#fff3b0"/>
+    </g>
+    <path d="M66 44 L60 6 L86 16 L92 44 Z" fill="#98a3ae" stroke="#5a6672" stroke-width="1.5"/>
+    <path d="M46 50 Q80 42 130 40 L210 38 Q252 40 272 47 Q248 55 202 57 L112 59 Q68 57 46 52 Z"
+          fill="url(#v26body)" stroke="#5a6672" stroke-width="2"/>
+    <path d="M96 52 L174 46 L142 63 L98 59 Z" fill="#8a95a0"/>
+    <path d="M206 42 L232 33 L238 41 Z" fill="#68747f" stroke="#5a6672" stroke-width="1.5"/>
+    <path d="M188 52 L212 50 L208 60 L190 60 Z" fill="#414d58"/>
+    <path d="M196 38 Q212 28 230 40 Q214 42 198 42 Z" fill="#9fd0e8" stroke="#5a7c8c" stroke-width="1.5"/>
+    <circle cx="140" cy="46" r="5.5" fill="none" stroke="#54626f" stroke-width="2"/>
+    <circle cx="140" cy="46" r="2" fill="#54626f"/>
+  </g>
+</svg>

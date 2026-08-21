@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 -6 260 106">
+  <defs>
+    <linearGradient id="pq10" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#97a3ad"/><stop offset=".3" stop-color="#66727e"/>
+      <stop offset=".58" stop-color="#4c5862"/><stop offset="1" stop-color="#39434d"/>
+    </linearGradient>
+    <filter id="pq10b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="pq10n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .6  0 0 0 0 .65  0 0 0 0 .7  0 0 0 .18 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="sharkBodyClip10f">
+      <path d="M40 50 Q62 32 118 26 Q188 20 242 42 Q254 48 256 52 Q248 58 228 62 Q176 74 120 72 Q64 70 40 54 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.2s ease-in-out infinite alternate; animation-delay: -2.1s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: flap 0.9s ease-in-out infinite alternate; }
+    @keyframes flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+  </style>
+  <g class="root">
+    <g class="tail" style="animation-delay:-0.6s">
+      <path d="M44 48 Q26 34 16 12 Q32 30 48 42 Z" fill="#46525c"/>
+      <path d="M44 52 Q32 62 28 76 Q40 64 48 58 Z" fill="#46525c"/>
+      <path d="M44 48 L48 56" stroke="#39434d" stroke-width="2"/>
+    </g>
+    <path d="M112 30 Q122 6 140 4 Q130 20 134 30 Z" fill="#46525c"/>
+    <path d="M186 32 q5 -8 12 -8 q-5 7 -4 10 Z" fill="#46525c"/>
+    <path d="M40 50 Q62 32 118 26 Q188 20 242 42 Q254 48 256 52 Q248 58 228 62 Q176 74 120 72 Q64 70 40 54 Z" fill="url(#pq10)"/>
+    <path d="M40 50 Q62 32 118 26 Q188 20 242 42 Q254 48 256 52 Q248 58 228 62 Q176 74 120 72 Q64 70 40 54 Z" fill="#fff" filter="url(#pq10n)" opacity=".4"/>
+    <path d="M56 42 Q130 26 232 40" stroke="#b9c6d0" stroke-width="1.3" fill="none" opacity=".45" clip-path="url(#sharkBodyClip10f)"/>
+    <path d="M58 58 Q126 72 208 62 Q234 56 250 52 Q234 64 200 68 Q132 76 64 66 Z" fill="#e8edf1"/>
+    <path d="M58 58 Q130 64 250 52" stroke="#8d99a3" stroke-width="1" fill="none" opacity=".6" clip-path="url(#sharkBodyClip10f)"/>
+    <path d="M152 60 Q170 76 164 90 Q146 80 142 62 Z" fill="#46525c"/>
+    <path d="M152 62 L160 82" stroke="#39434d" stroke-width="1.2" opacity=".6"/>
+    <g stroke="#333d47" stroke-width="1.6" fill="none" opacity=".85">
+      <path d="M198 34 Q196 42 198 50"/><path d="M205 34 Q203 42 205 49"/><path d="M212 35 Q210 42 212 48"/>
+      <path d="M219 36 Q217 42 219 47"/><path d="M226 37 Q224 42 226 46"/>
+    </g>
+    <circle cx="236" cy="40" r="3.2" fill="#0a0f14"/>
+    <circle cx="235" cy="39" r="1" fill="#fff" opacity=".5"/>
+    <path d="M254 52 Q238 61 216 61" stroke="#1e262e" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M240 57 l2.5 3 l2.5 -2 l2.5 3 l2.5 -2" stroke="#f4f7f9" stroke-width="1" fill="none" opacity=".85"/>
+    <path d="M247 47 l4 1.5" stroke="#39434d" stroke-width="1" opacity=".6"/>
+    <ellipse cx="140" cy="32" rx="90" ry="3.5" fill="#e4edf2" opacity=".3" filter="url(#pq10b)" clip-path="url(#sharkBodyClip10f)"/>
+    <ellipse cx="140" cy="60" rx="92" ry="4.5" fill="#0a1016" opacity=".35" filter="url(#pq10b)" clip-path="url(#sharkBodyClip10f)"/>
+  </g>
+</svg>

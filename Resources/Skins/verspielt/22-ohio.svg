@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -110 300 230">
+  <defs>
+    <linearGradient id="o22vG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4550"/><stop offset="1" stop-color="#12181f"/>
+    </linearGradient>
+    <clipPath id="o22vHull">
+      <path d="M40 86 Q60 62 140 60 L230 60 Q272 64 288 86 Q272 106 230 110 L120 110 Q60 108 40 86 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .o22-bob { transform-box: fill-box; transform-origin: center; animation: o22bob 3.1s ease-in-out infinite alternate; animation-delay: -1.6s; }
+    @keyframes o22bob { from{ transform: translateY(-3px) rotate(-1deg); } to{ transform: translateY(3px) rotate(1deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; }
+    @keyframes propSide { 0%{transform:scaleY(1)} 50%{transform:scaleY(0.15)} 100%{transform:scaleY(1)} }
+    .missile { transform-box: fill-box; animation: launch 6s ease-in infinite; animation-delay: -3.2s; }
+    @keyframes launch {
+      0%, 52% { transform: translateY(4px); opacity: 0; }
+      56% { transform: translateY(-2px); opacity: 1; }
+      92% { transform: translateY(-88px); opacity: 1; }
+      100% { transform: translateY(-102px); opacity: 0; }
+    }
+    .mflame { transform-box: fill-box; transform-origin: center top; animation: mflick .12s ease-in-out infinite alternate; }
+    @keyframes mflick { from { transform: scaleY(1); } to { transform: scaleY(1.45); } }
+  </style>
+  <g class="o22-bob">
+    <g class="missile">
+      <g class="mflame">
+        <path d="M126 98 Q121 110 117 116 Q125 112 127 104 Q129 112 135 116 Q131 108 129 98 Z" fill="#ff9800"/>
+        <path d="M126 98 Q124 106 122 110 Q127 107 127 102 Q128 107 131 110 Q129 104 128 98 Z" fill="#ffeb3b"/>
+      </g>
+      <rect x="122" y="62" width="10" height="36" rx="3" fill="#cfd6dc" stroke="#8a949d" stroke-width="1.5"/>
+      <path d="M122 62 L127 48 L132 62 Z" fill="#e53935"/>
+      <path d="M122 92 L113 100 L122 98 Z" fill="#8a949d"/>
+      <path d="M132 92 L141 100 L132 98 Z" fill="#8a949d"/>
+    </g>
+    <g class="prop"><ellipse cx="24" cy="86" rx="6" ry="14" fill="#4b5a68"/></g>
+    <path d="M28 76 L46 66 L46 104 L28 96 Z" fill="#1a222b"/>
+    <path d="M40 86 Q60 62 140 60 L230 60 Q272 64 288 86 Q272 106 230 110 L120 110 Q60 108 40 86 Z"
+          fill="url(#o22vG)" stroke="#0a0f15" stroke-width="2"/>
+    <rect x="176" y="30" width="30" height="34" rx="5" fill="#12181f" stroke="#0a0f15" stroke-width="2"/>
+    <rect x="166" y="42" width="50" height="6" rx="3" fill="#1e2731"/>
+    <line x1="184" y1="30" x2="184" y2="20" stroke="#4b5a68" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="193" y1="30" x2="193" y2="16" stroke="#4b5a68" stroke-width="2.5" stroke-linecap="round"/>
+    <g clip-path="url(#o22vHull)">
+      <g fill="#232e39" stroke="#0a0f15">
+        <rect x="66" y="62" width="13" height="6" rx="2"/><rect x="84" y="61" width="13" height="6" rx="2"/>
+        <rect x="102" y="60" width="13" height="6" rx="2"/><rect x="138" y="60" width="13" height="6" rx="2"/>
+        <rect x="156" y="60" width="13" height="6" rx="2"/>
+      </g>
+      <rect x="120" y="58" width="15" height="7" rx="2" fill="#0a0f15" stroke="#4b5a68"/>
+    </g>
+    <text x="244" y="92" fill="#7e8d9b" font-size="11" font-family="monospace">726</text>
+    <g clip-path="url(#o22vHull)">
+      <ellipse cx="160" cy="72" rx="95" ry="7" fill="#ffffff" opacity=".06"/>
+    </g>
+  </g>
+</svg>

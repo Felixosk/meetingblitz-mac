@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 -2 236 96">
+  <defs>
+    <linearGradient id="sharkG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fa4b8"/><stop offset="1" stop-color="#5d7183"/>
+    </linearGradient>
+    <clipPath id="sharkBodyClip10v">
+      <path d="M36 50 Q70 24 130 24 Q190 26 226 46 Q230 50 226 54 Q190 76 130 76 Q70 76 36 50 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3s ease-in-out infinite alternate; animation-delay: -1.2s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: flap 0.9s ease-in-out infinite alternate; }
+    @keyframes flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+  </style>
+  <g class="root">
+    <g class="tail" style="animation-delay:-0.5s"><path d="M14 28 Q28 44 40 50 Q30 58 20 74 Q26 56 18 50 Q26 42 14 28 Z" fill="#5d7183"/></g>
+    <path d="M96 34 L118 8 L128 34 Z" fill="#5d7183"/>
+    <path d="M36 50 Q70 24 130 24 Q190 26 226 46 Q230 50 226 54 Q190 76 130 76 Q70 76 36 50 Z"
+          fill="url(#sharkG)" stroke="#42525f" stroke-width="2"/>
+    <path d="M52 58 Q130 84 218 54 Q170 76 110 74 Q74 70 52 58 Z" fill="#e8eef3" opacity=".9"/>
+    <path d="M108 66 L120 82 L128 66 Z" fill="#5d7183"/>
+    <circle cx="200" cy="44" r="4" fill="#16232e"/>
+    <path d="M206 58 Q216 62 224 56" stroke="#2c3944" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M209 58 L211 62 M215 59 L217 63" stroke="#e8eef3" stroke-width="2" stroke-linecap="round"/>
+    <g stroke="#42525f" stroke-width="2" opacity=".7">
+      <path d="M160 38 Q158 48 160 56"/><path d="M170 38 Q168 48 170 56"/><path d="M180 39 Q178 47 180 54"/>
+    </g>
+    <ellipse cx="130" cy="34" rx="60" ry="5" fill="#ffffff" opacity=".14" clip-path="url(#sharkBodyClip10v)"/>
+  </g>
+</svg>

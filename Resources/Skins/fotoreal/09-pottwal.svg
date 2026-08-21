@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -8 274 116">
+  <defs>
+    <linearGradient id="pq9" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a2aeb8"/><stop offset=".25" stop-color="#75828e"/>
+      <stop offset=".6" stop-color="#535e68"/><stop offset=".9" stop-color="#39424b"/>
+      <stop offset="1" stop-color="#4d5761"/>
+    </linearGradient>
+    <filter id="pq9b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="pq9n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .62  0 0 0 0 .67  0 0 0 0 .72  0 0 0 .24 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="whaleBodyClip9f">
+      <path d="M48 60 Q62 44 100 36 Q142 28 176 26 L240 24 Q262 27 262 50 Q262 74 244 80 L204 84 Q156 92 112 84 Q72 76 48 60 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.4s ease-in-out infinite alternate; animation-delay: -0.6s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: flap 0.9s ease-in-out infinite alternate; }
+    @keyframes flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+    .spout { transform-box: fill-box; transform-origin: bottom center; animation: spout 4.2s ease-in-out infinite; }
+    @keyframes spout {
+      0%, 52% { transform: scaleY(0); opacity: 0; }
+      62% { transform: scaleY(1); opacity: .95; }
+      82% { transform: scaleY(1.06); opacity: .55; }
+      100% { transform: scaleY(.2); opacity: 0; }
+    }
+  </style>
+  <g class="root">
+    <g class="spout" style="animation-delay:-1.5s">
+      <path d="M248 20 Q255 9 264 5" stroke="#cfe6ef" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".75"/>
+      <path d="M246 20 Q250 7 255 2" stroke="#cfe6ef" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".6"/>
+    </g>
+    <g class="tail" style="animation-delay:-0.3s"><path d="M8 34 Q28 50 50 58 Q30 66 10 86 Q23 64 14 60 Q23 52 8 34 Z" fill="#434c56"/></g>
+    <path d="M48 60 Q62 44 100 36 Q142 28 176 26 L240 24 Q262 27 262 50 Q262 74 244 80 L204 84 Q156 92 112 84 Q72 76 48 60 Z" fill="url(#pq9)"/>
+    <path d="M48 60 Q62 44 100 36 Q142 28 176 26 L240 24 Q262 27 262 50 Q262 74 244 80 L204 84 Q156 92 112 84 Q72 76 48 60 Z" fill="#fff" filter="url(#pq9n)" opacity=".45"/>
+    <path d="M60 52 Q120 36 200 28 L238 26" stroke="#c3d2dc" stroke-width="1.4" fill="none" opacity=".45" clip-path="url(#whaleBodyClip9f)"/>
+    <path d="M100 35 q4 -5 8 0 M113 33 q4 -5 8 0 M126 31 q4 -4 8 0" stroke="#39424b" stroke-width="1.4" fill="none" opacity=".7"/>
+    <g stroke="#39424b" stroke-width="1" fill="none" opacity=".4">
+      <path d="M150 38 Q146 58 150 78"/><path d="M164 36 Q160 56 164 77"/><path d="M178 34 Q175 52 178 74"/>
+      <path d="M192 32 Q190 50 192 72"/><path d="M206 31 Q205 48 206 70"/>
+    </g>
+    <g fill="#9aa6b0" opacity=".16">
+      <ellipse cx="130" cy="52" rx="16" ry="6"/><ellipse cx="180" cy="44" rx="12" ry="5"/>
+      <ellipse cx="212" cy="58" rx="13" ry="5"/><ellipse cx="96" cy="62" rx="10" ry="4"/>
+    </g>
+    <path d="M204 46 l7 3 M208 44 l6 2.5" stroke="#b3bfc8" stroke-width="1" opacity=".5"/>
+    <path d="M258 68 L192 64 Q226 59 258 59 Z" fill="#dfe5ea" opacity=".85"/>
+    <path d="M202 77 Q213 87 208 97 Q196 89 195 79 Z" fill="#39424b"/>
+    <circle cx="200" cy="56" r="3" fill="#0e141a"/>
+    <ellipse cx="155" cy="33" rx="92" ry="4" fill="#dfe9ee" opacity=".3" filter="url(#pq9b)" clip-path="url(#whaleBodyClip9f)"/>
+  </g>
+</svg>

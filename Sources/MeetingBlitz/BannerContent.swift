@@ -21,19 +21,26 @@ final class FlightVM: ObservableObject {
     let title: String
     let subtitle: String
     let hasLink: Bool
-    let waterEffect: Bool
+    /// Whether this flight gets a dramatic entrance at all (Runde 72, was
+    /// `waterEffect` — now applies to both elements, see `entranceElement`).
+    let dramaticEntrance: Bool
+    /// Which entrance panel to show when `dramaticEntrance` is on: `.water`
+    /// gets the SeaSplash, `.air` gets the CloudBurst (see `BannerPresenter`).
+    let entranceElement: SkinElement
     var onCopy: () -> Void = {}
     var onJoin: () -> Void = {}
     var onCloseTap: () -> Void = {}
     var onDetails: () -> Void = {}
     var onSnooze: () -> Void = {}
 
-    init(meeting: Meeting, title: String, subtitle: String, hasLink: Bool, waterEffect: Bool = true) {
+    init(meeting: Meeting, title: String, subtitle: String, hasLink: Bool,
+         dramaticEntrance: Bool = true, entranceElement: SkinElement = .water) {
         self.meeting = meeting
         self.title = title
         self.subtitle = subtitle
         self.hasLink = hasLink
-        self.waterEffect = waterEffect
+        self.dramaticEntrance = dramaticEntrance
+        self.entranceElement = entranceElement
     }
 }
 
@@ -44,10 +51,12 @@ private func smoothstep(_ x: Double, _ a: Double, _ b: Double) -> Double {
     return t * t * (3 - 2 * t)
 }
 
-/// The banner: a submarine that leaps out of the sea in an arc, then cruises
-/// left→right. This view fills the whole (transparent) panel; `Flight` moves the
-/// panel along the jump arc and drives `emergeT`/`tilt`/`docked` on the shared
-/// `FlightVM`. The sea + splash are a SEPARATE stationary panel (`SeaSplash`).
+/// The banner: a submarine (or another skin) that leaps out of the sea — or,
+/// for air motifs, bursts out of a cloud — in an arc, then cruises left→right.
+/// This view fills the whole (transparent) panel; `Flight` moves the panel
+/// along the jump arc and drives `emergeT`/`tilt`/`docked` on the shared
+/// `FlightVM`. The sea/cloud entrance effect is a SEPARATE stationary panel
+/// (`SeaSplash` or `CloudBurst`, Runde 72).
 ///
 /// Runde 9: the capsule stays upright (text always readable); the leap is sold by
 /// the panel's arc motion plus the submarine tilting along the arc's tangent,
@@ -61,14 +70,28 @@ struct BannerContentView: View {
     let bandOriginX: CGFloat
     let bandTopY: CGFloat
 
+    /// Gesamtskalierung des Banners (20.08.2026, Rückmeldung "das ganze Banner
+    /// ist zu klein"). EIN Faktor statt zwanzig Einzelzahlen: multipliziert die
+    /// komplette Kapsel (Icon, Schrift, Buttons, Innenabstände) UND die
+    /// Flugbahn-Geometrie unten, die von der Kapselgröße abhängt (Panelbox,
+    /// Splash-Ansatzpunkt, reservierte Docking-Breite). Ändert NUR die Größe,
+    /// nicht das Timing/Gefühl des Fluges (Sprungdauer/-höhe bleiben unten in
+    /// BannerPresenter unangetastet).
+    static let scale: CGFloat = 1.35
+
     // Virtual banner-box geometry (the moving region the capsule lives in).
     // Wide/tall enough for the DOCKED capsule (buttons) + the raised sub + ×.
-    static let panelW: CGFloat = 640
-    static let panelH: CGFloat = 132
-    static let capsuleLeading: CGFloat = 18
-    static let capsuleTop: CGFloat = 42
+    static let panelW: CGFloat = 640 * scale
+    static let panelH: CGFloat = 132 * scale
+    static let capsuleLeading: CGFloat = 18 * scale
+    static let capsuleTop: CGFloat = 42 * scale
     /// Capsule strip used for hover-docking + the detail popover.
-    static let capsuleZone: CGFloat = 118
+    static let capsuleZone: CGFloat = 118 * scale
+    /// Reserved width for the DOCKED capsule (buttons out) so it never clamps
+    /// off-screen — used both for the hover-dock clamp and the detail popover
+    /// clamp (Runde 9/19). Was a bare "560" in two places; now one constant
+    /// that scales with everything else.
+    static let dockedWidthEstimate: CGFloat = 560 * scale
 
     var body: some View {
         TimelineView(.animation) { context in
@@ -94,28 +117,32 @@ private struct CapsuleView: View {
     let bubble: Double
     let now: Double
 
+    /// Kurzname für den globalen Banner-Maßstab (Rückmeldung 20.08.: "das
+    /// ganze Banner ist zu klein"). JEDE Größe hier unten geht durch `s`, damit
+    /// Icon, Schrift, Buttons und Abstände gemeinsam wachsen statt nur die
+    /// Hülle — sonst sieht es aus wie eine leere Kapsel mit kleinem Inhalt.
+    private var s: CGFloat { BannerContentView.scale }
+
     var body: some View {
-        HStack(spacing: 12) {
-            SubmarineView(bubblePhase: bubble)
-                .scaleEffect(x: vm.facingLeft ? -1.32 : 1.32, y: 1.32)   // mirror when flying left
-                .frame(width: 62, height: 54)
-                .shadow(color: Color(hex: 0x2EC7A0).opacity(0.6), radius: 9)
-                .offset(y: -6)
+        HStack(spacing: 12 * s) {
+            flyingObject
+                .shadow(color: Color(hex: 0x2EC7A0).opacity(0.6), radius: 9 * s)
+                .offset(y: -6 * s)
                 // Nose follows the jump arc's tangent (nose-up climbing, nose-down
                 // on the way down); flips sign when mirrored. Small idle bob on top.
                 .rotationEffect(.degrees((vm.facingLeft ? 1 : -1) * vm.tilt + sin(now * 2.2) * 2))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2 * s) {
                 Text(vm.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15 * s, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
                 Text(vm.subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * s))
                     .foregroundStyle(Color(hex: 0xEAF6F2))
                     .shadow(color: .black.opacity(0.30), radius: 1, y: 0.5)
             }
             if vm.docked {
-                Divider().frame(height: 26).overlay(Color.white.opacity(0.18))
+                Divider().frame(height: 26 * s).overlay(Color.white.opacity(0.18))
                 // F4: zeigt die eingestellte Dauer statt fester „2 min".
                 actionButton("moon.zzz.fill", "\(AppState.shared.snoozeMinutes) min") { vm.onSnooze() }
                 if vm.hasLink {
@@ -128,18 +155,18 @@ private struct CapsuleView: View {
                 // erscheinen erst beim Andocken, und wer das nicht weiß, zeigt
                 // nie mit der Maus hin. Das Kamerasymbol ist der Hinweis darauf.
                 Image(systemName: "video.fill")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13 * s))
                     .foregroundStyle(Color(hex: 0xEAF6F2).opacity(0.8))
                     .shadow(color: .black.opacity(0.30), radius: 1, y: 0.5)
-                    .padding(.leading, 2)
+                    .padding(.leading, 2 * s)
             }
         }
-        .padding(.leading, 12)
-        .padding(.trailing, vm.docked ? 14 : 20)
-        .padding(.vertical, 11)
+        .padding(.leading, 12 * s)
+        .padding(.trailing, (vm.docked ? 14 : 20) * s)
+        .padding(.vertical, 11 * s)
         .background(
             // Deterministic ocean gradient, clearly teal, never a black slab.
-            RoundedRectangle(cornerRadius: 19, style: .continuous)
+            RoundedRectangle(cornerRadius: 19 * s, style: .continuous)
                 .fill(LinearGradient(
                     colors: [Color(hex: 0x18A9B4), Color(hex: 0x0A4E58)],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -147,10 +174,10 @@ private struct CapsuleView: View {
         // A hairline rim in a TEAL tint (not the old near-white stroke, which
         // showed as bright "white corners"), just enough to define the edge.
         .overlay(
-            RoundedRectangle(cornerRadius: 19, style: .continuous)
-                .strokeBorder(Color(hex: 0x2EC7A0).opacity(0.30), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 19 * s, style: .continuous)
+                .strokeBorder(Color(hex: 0x2EC7A0).opacity(0.30), lineWidth: 1 * s)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 19 * s, style: .continuous))
         .onTapGesture { vm.onDetails() }
         .overlay(alignment: .topTrailing) { closeButton }
         // No drop shadow, it read as a black bar/cut under the pill (mehrfach gemeldet).
@@ -159,23 +186,68 @@ private struct CapsuleView: View {
         .animation(.easeInOut(duration: 0.18), value: vm.docked)
     }
 
+    /// The mascot itself: the classic Canvas-drawn U-Boot, or one of the 27
+    /// SVG skins the user picked in Settings → Banner → Flugobjekt. Falls
+    /// cleanly back to the classic sub if the chosen skin can't be loaded
+    /// (missing bundle resource etc.) — never crashes, never shows nothing.
+    ///
+    /// Runde 20.08. (2. Rückmeldung): ein fester quadratischer Rahmen
+    /// zwängte breite Motive (F-22 ~4,15:1) per aspectRatio(.fit) auf einen
+    /// dünnen Streifen. Jetzt folgt die Breite dem echten Seitenverhältnis der
+    /// geladenen SVG (`image.size`, das die SVGs korrekt liefern), Höhe fix,
+    /// gedeckelt auf `skinMaxWidth` — jenseits davon schrumpft die Höhe
+    /// mit, nie eine Verzerrung.
+    @ViewBuilder
+    private var flyingObject: some View {
+        let state = AppState.shared
+        if state.skinStyle != .classic,
+           let image = Skins.shared.image(for: state.currentSkin, style: state.skinStyle) {
+            let size = skinFrameSize(for: image)
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size.width, height: size.height)
+                .scaleEffect(x: vm.facingLeft ? -1 : 1, y: 1)   // mirror when flying left
+        } else {
+            SubmarineView(bubblePhase: bubble)
+                .scaleEffect(x: vm.facingLeft ? -1.32 * s : 1.32 * s, y: 1.32 * s)   // mirror when flying left
+                .frame(width: 62 * s, height: 54 * s)
+        }
+    }
+
+    /// Zielhöhe für jedes Skin-Motiv (gleiche Bildwucht für alle 27), Breite
+    /// = Höhe × Seitenverhältnis, gedeckelt auf `skinMaxWidth`. Beide Werte
+    /// hängen am globalen Banner-Maßstab `s`, damit sie mitwachsen, wenn der
+    /// Maßstab sich ändert.
+    private func skinFrameSize(for image: NSImage) -> CGSize {
+        let targetHeight = 54 * s
+        let maxWidth = 160 * s
+        let w = image.size.width, h = image.size.height
+        guard w > 0, h > 0 else { return CGSize(width: targetHeight, height: targetHeight) }
+        let aspect = w / h
+        let width = targetHeight * aspect
+        if width <= maxWidth { return CGSize(width: width, height: targetHeight) }
+        return CGSize(width: maxWidth, height: maxWidth / aspect)   // width capped → height gives way, never stretched
+    }
+
     private var closeButton: some View {
         CornerCloseButton(help: L.t("Banner schließen, der Termin bleibt, nur die Anzeige geht weg",
-                                    "Close the banner, the event stays, only this display goes away")) {
+                                    "Close the banner, the event stays, only this display goes away"),
+                          scale: s) {
             vm.onCloseTap()
         }
     }
 
     private func actionButton(_ icon: String, _ label: String, filled: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 11))
-                Text(label).font(.system(size: 12, weight: .medium))
+            HStack(spacing: 4 * s) {
+                Image(systemName: icon).font(.system(size: 11 * s))
+                Text(label).font(.system(size: 12 * s, weight: .medium))
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 10 * s).padding(.vertical, 6 * s)
             .background(filled ? Color(hex: 0x2EC7A0) : Color.white.opacity(0.14))
             .foregroundStyle(filled ? Color(hex: 0x06231C) : .white)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 9 * s, style: .continuous))
         }
         .buttonStyle(.plain)
     }

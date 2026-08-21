@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 90">
+  <defs>
+    <linearGradient id="v13G" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fc4dd"/><stop offset="1" stop-color="#5f8cab"/>
+    </linearGradient>
+    <clipPath id="v13Clip">
+      <path d="M32 48 Q62 24 110 24 Q152 26 178 44 Q186 50 178 55 Q150 72 108 72 Q62 72 32 48 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .nod { transform-box: fill-box; transform-origin: center; animation: v13nod 3s ease-in-out infinite alternate; animation-delay: -1.1s; }
+    @keyframes v13nod { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: v13flap 0.9s ease-in-out infinite alternate; animation-delay: -.3s; }
+    @keyframes v13flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+  </style>
+  <g class="nod">
+    <g class="tail"><path d="M12 32 Q24 44 36 48 Q26 56 14 68 Q22 52 16 48 Q24 40 12 32 Z" fill="#5f8cab"/></g>
+    <path d="M84 34 Q94 12 106 10 Q104 26 108 36 Z" fill="#5f8cab"/>
+    <path d="M32 48 Q62 24 110 24 Q152 26 178 44 Q186 50 178 55 Q150 72 108 72 Q62 72 32 48 Z"
+          fill="url(#v13G)" stroke="#44677f" stroke-width="2"/>
+    <g clip-path="url(#v13Clip)">
+      <path d="M48 56 Q110 80 172 52 Q140 72 100 70 Q68 66 48 56 Z" fill="#e4eef5" opacity=".9"/>
+      <ellipse cx="104" cy="34" rx="48" ry="4.5" fill="#ffffff" opacity=".2"/>
+    </g>
+    <path d="M170 48 Q184 46 190 50 Q184 54 172 54" fill="#5f8cab" stroke="#44677f" stroke-width="1.5"/>
+    <circle cx="158" cy="42" r="3.5" fill="#182835"/>
+    <path d="M96 64 L106 78 L114 62" fill="#5f8cab"/>
+  </g>
+</svg>

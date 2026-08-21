@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 -8 216 106">
+  <defs>
+    <linearGradient id="n20vG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4d9e6f"/><stop offset="1" stop-color="#2c6647"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .n20-bob { transform-box: fill-box; transform-origin: center; animation: n20bob 2.9s ease-in-out infinite alternate; animation-delay: -1.1s; }
+    @keyframes n20bob { from{ transform: translateY(-3px) rotate(-1.2deg); } to{ transform: translateY(3px) rotate(1.2deg); } }
+    .hump { transform-box: fill-box; animation: humpBob 1.9s ease-in-out infinite alternate; }
+    .hump.d2 { animation-delay: -0.65s; }
+    .hump.d3 { animation-delay: -1.3s; }
+    @keyframes humpBob { from{transform:translateY(-4px)} to{transform:translateY(4px)} }
+  </style>
+  <g class="n20-bob">
+    <g class="hump"><path d="M20 92 Q22 58 52 58 Q82 58 84 92 Z" fill="url(#n20vG)" stroke="#1d4630" stroke-width="2"/></g>
+    <g class="hump d2"><path d="M92 92 Q94 52 128 52 Q162 52 164 92 Z" fill="url(#n20vG)" stroke="#1d4630" stroke-width="2"/></g>
+    <g class="hump d3">
+      <path d="M172 92 Q172 60 186 42 Q194 28 192 16 Q198 4 212 8 Q228 12 224 26 Q220 36 206 36 Q202 52 204 66 Q206 82 208 92 Z"
+            fill="url(#n20vG)" stroke="#1d4630" stroke-width="2"/>
+      <circle cx="212" cy="18" r="2.8" fill="#0e2418"/>
+      <path d="M220 24 Q226 25 229 22" stroke="#1d4630" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M196 10 L192 2 M204 8 L203 0" stroke="#2c6647" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

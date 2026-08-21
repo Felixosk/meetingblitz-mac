@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 251 126">
+  <style>
+    .bob { transform-box: fill-box; transform-origin: 50% 50%; animation: bob 3s ease-in-out infinite alternate; animation-delay: -1.9s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.5deg); } to { transform: translateY(4px) rotate(1.5deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; animation-delay: -.27s; }
+    @keyframes propSide { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+    .pw { transform-box: fill-box; animation: propwash 1.7s linear infinite; }
+    .pw.d2 { animation-delay: -1.25s; }
+    @keyframes propwash { 0% { transform: translate(0,0) scale(.5); opacity: .55; } 100% { transform: translate(-40px,-12px) scale(1.4); opacity: 0; } }
+    .light { animation: blink 1.1s ease-in-out infinite; animation-delay: -.15s; }
+    @keyframes blink { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+  </style>
+  <defs>
+    <linearGradient id="t7f-hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#e4ebf0"/>
+      <stop offset=".75" stop-color="#bcc9d3"/><stop offset="1" stop-color="#94a4b0"/>
+    </linearGradient>
+    <radialGradient id="t7f-acryl" cx=".38" cy=".3" r=".85">
+      <stop offset="0" stop-color="#e8f6fd" stop-opacity=".55"/>
+      <stop offset=".55" stop-color="#9fcde4" stop-opacity=".18"/>
+      <stop offset=".92" stop-color="#5c93b3" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#dff2fc" stop-opacity=".5"/>
+    </radialGradient>
+    <filter id="t7f-blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="t7f-noise" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .84  0 0 0 0 .87  0 0 0 0 .9  0 0 0 .14 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="t7f-clip">
+      <path d="M46 72 Q52 50 94 48 L132 50 Q146 54 152 62 Q156 74 150 82 L98 88 Q54 86 46 72 Z"/>
+    </clipPath>
+  </defs>
+  <g class="bob">
+    <g class="pw"><circle cx="52" cy="70" r="3" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="pw d2"><circle cx="50" cy="76" r="2.4" fill="#bfe8f5" opacity=".4"/></g>
+    <path d="M46 72 Q52 50 94 48 L132 50 Q146 54 152 62 Q156 74 150 82 L98 88 Q54 86 46 72 Z" fill="url(#t7f-hull)"/>
+    <g clip-path="url(#t7f-clip)">
+      <path d="M46 72 Q52 50 94 48 L132 50 Q146 54 152 62 Q156 74 150 82 L98 88 Q54 86 46 72 Z" fill="#fff" filter="url(#t7f-noise)" opacity=".4"/>
+      <path d="M56 58 Q100 48 144 58" stroke="#ffffff" stroke-width="1.6" fill="none" opacity=".8"/>
+    </g>
+    <circle cx="156" cy="50" r="30" fill="url(#t7f-acryl)"/>
+    <path d="M134 32 Q150 20 170 26" stroke="#ffffff" stroke-width="2.5" fill="none" opacity=".8" stroke-linecap="round"/>
+    <path d="M180 62 Q174 72 162 76" stroke="#bfe0f0" stroke-width="1.6" fill="none" opacity=".5" stroke-linecap="round"/>
+    <path d="M146 44 Q151 40 156 42 L156 62 Q148 62 145 55 Z" fill="#141f27" opacity=".85"/>
+    <path d="M162 44 Q167 41 171 44 L170 62 Q162 63 160 57 Z" fill="#18242c" opacity=".8"/>
+    <circle cx="150" cy="41" r="2.6" fill="#2b3a44" opacity=".9"/>
+    <circle cx="166" cy="42" r="2.6" fill="#2b3a44" opacity=".85"/>
+    <rect x="48" y="58" width="17" height="21" rx="7" fill="#7e909c"/>
+    <rect x="49" y="59" width="15" height="6" rx="3" fill="#93a5b1"/>
+    <g class="prop"><ellipse cx="46" cy="68" rx="4" ry="9" fill="#5d6f7b" opacity=".9"/></g>
+    <rect x="122" y="78" width="19" height="14" rx="6" fill="#7e909c"/>
+    <path d="M66 86 L142 90 L142 94 L68 92 Z" fill="#8a9ba7"/>
+    <path d="M128 80 Q154 86 176 72" stroke="#57e3ff" stroke-width="2" fill="none" opacity=".7" stroke-linecap="round"/>
+    <circle class="light" cx="70" cy="52" r="1.8" fill="#ff5252"/>
+    <g clip-path="url(#t7f-clip)">
+      <ellipse cx="96" cy="56" rx="34" ry="3.5" fill="#ffffff" opacity=".6" filter="url(#t7f-blur)"/>
+      <ellipse cx="112" cy="84" rx="58" ry="4.5" fill="#101820" opacity=".35" filter="url(#t7f-blur)"/>
+    </g>
+  </g>
+</svg>

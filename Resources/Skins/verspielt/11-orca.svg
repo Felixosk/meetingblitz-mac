@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 -8 238 108">
+  <defs>
+    <clipPath id="orcaBodyClip11v">
+      <path d="M42 56 Q76 28 138 28 Q198 30 230 50 Q234 56 230 60 Q198 82 138 82 Q76 82 42 56 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.1s ease-in-out infinite alternate; animation-delay: -0.8s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: flap 0.9s ease-in-out infinite alternate; }
+    @keyframes flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+  </style>
+  <g class="root">
+    <g class="tail" style="animation-delay:-0.7s"><path d="M16 36 Q32 50 46 56 Q34 64 18 80 Q28 62 20 56 Q30 46 16 36 Z" fill="#141a21"/></g>
+    <path d="M104 36 Q112 4 126 2 Q128 22 132 36 Z" fill="#141a21"/>
+    <path d="M42 56 Q76 28 138 28 Q198 30 230 50 Q234 56 230 60 Q198 82 138 82 Q76 82 42 56 Z"
+          fill="#1c242e" stroke="#0b0f14" stroke-width="2"/>
+    <path d="M58 64 Q138 90 224 58 Q180 82 120 80 Q82 76 58 64 Z" fill="#f2f6f9"/>
+    <ellipse cx="196" cy="42" rx="12" ry="6" fill="#f2f6f9" transform="rotate(-12 196 42)"/>
+    <circle cx="206" cy="50" r="3.5" fill="#0b0f14"/>
+    <path d="M120 70 L134 86 L142 68" fill="#1c242e"/>
+    <path d="M212 62 Q222 64 228 58" stroke="#0b0f14" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="134" cy="38" rx="58" ry="5" fill="#ffffff" opacity=".12" clip-path="url(#orcaBodyClip11v)"/>
+  </g>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -8 266 114">
+  <defs>
+    <linearGradient id="spermG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8494a0"/><stop offset="1" stop-color="#535f6b"/>
+    </linearGradient>
+    <clipPath id="whaleBodyClip9v">
+      <path d="M46 58 Q60 40 94 34 Q136 27 180 27 L232 26 Q252 28 252 50 Q252 74 234 78 L196 82 Q150 90 108 82 Q70 74 46 58 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.2s ease-in-out infinite alternate; animation-delay: -2s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: flap 0.9s ease-in-out infinite alternate; }
+    @keyframes flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+    .spout { transform-box: fill-box; transform-origin: bottom center; animation: spout 4.2s ease-in-out infinite; }
+    @keyframes spout {
+      0%, 52% { transform: scaleY(0); opacity: 0; }
+      62% { transform: scaleY(1); opacity: .95; }
+      82% { transform: scaleY(1.06); opacity: .55; }
+      100% { transform: scaleY(.2); opacity: 0; }
+    }
+  </style>
+  <g class="root">
+    <g class="spout" style="animation-delay:-1.8s">
+      <path d="M241 22 Q246 10 256 6" stroke="#bfe8f5" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M239 22 Q241 8 246 2" stroke="#bfe8f5" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    </g>
+    <g class="tail" style="animation-delay:-0.4s"><path d="M10 34 Q26 48 46 56 Q28 66 10 86 Q22 64 14 60 Q22 52 10 34 Z" fill="#535f6b"/></g>
+    <path d="M46 58 Q60 40 94 34 Q136 27 180 27 L232 26 Q252 28 252 50 Q252 74 234 78 L196 82 Q150 90 108 82 Q70 74 46 58 Z"
+          fill="url(#spermG)" stroke="#3c4650" stroke-width="2"/>
+    <path d="M96 33 q5 -7 10 0 M110 31 q5 -7 10 0 M124 29.5 q5 -6 10 0" stroke="#3c4650" stroke-width="2" fill="none"/>
+    <path d="M250 70 L180 66 Q216 61 250 61 Z" fill="#e8edf1" opacity=".95"/>
+    <g stroke="#4a5560" stroke-width="1.5" fill="none" opacity=".5">
+      <path d="M150 40 Q146 60 150 78"/><path d="M166 38 Q162 58 166 78"/><path d="M182 36 Q179 54 182 74"/>
+    </g>
+    <path d="M198 76 Q208 86 202 96 Q190 88 190 78 Z" fill="#414c57"/>
+    <circle cx="192" cy="57" r="3.5" fill="#12181e"/>
+    <ellipse cx="150" cy="36" rx="72" ry="6" fill="#ffffff" opacity=".1" clip-path="url(#whaleBodyClip9v)"/>
+  </g>
+</svg>

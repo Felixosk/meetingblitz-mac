@@ -264,6 +264,21 @@ struct OnboardingPane: View {
                     Tick MeetingBlitz under Privacy & Security → Calendars.
                     """))
             }
+
+            // Wer die App selbst aus dem Quellcode baut: ohne eigenes Zertifikat ist
+            // jeder Rebuild für macOS eine neue App, und genau diese Freigabe ist
+            // danach wieder weg. Mit einem stabilen eigenen Zertifikat (siehe
+            // signing.local.example) bleibt sie über Updates hinweg erhalten.
+            Divider().padding(.vertical, 4)
+            body(L.t("""
+                Baust du die App selbst aus dem Quellcode: ein Rebuild ohne eigenes \
+                Zertifikat setzt diese Freigabe bei jedem Update wieder zurück. \
+                Anleitung dazu in signing.local.example im Repo.
+                """, """
+                Building the app yourself from source: a rebuild without your own \
+                certificate resets this permission on every update. See \
+                signing.local.example in the repo for setup.
+                """))
         }
     }
 
