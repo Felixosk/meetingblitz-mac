@@ -103,6 +103,7 @@ aufeinanderfolgenden Terminen
 ## Was sie kann
 
 - **Banner vor jedem Termin**, gleichzeitig auf allen Monitoren, Vorlaufzeit einstellbar
+- **27 Skins in 4 Stilen** für dieses Banner — statt des U-Boots auch ein Wal, ein Jet, ein UFO oder 24 andere; der Foto-Stil zeigt das echte Vorbild, ein Doppelklick zeigt die belegte Geschichte dahinter
 - **Tagesübersicht** in der Menüleiste, mit Zeitachse, Wochen-/Monatswahl und jedem Tag einen Klick entfernt
 - **Beitreten mit einem Klick** für 53 Dienste: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack-Huddles, GoTo, Tencent und mehr
 - **Termin in einer Zeile tippen**: `fr 16 uhr bis 17 uhr call mit chris`, mit Vorschau bevor etwas entsteht
@@ -123,6 +124,18 @@ Optional, nur mit eigener Google-Cloud-Konfiguration: Termine mit fertigem
 Google-Meet-Link direkt aus der App anlegen. Ohne diese Konfiguration ist die
 Funktion einfach ausgeblendet, alles andere funktioniert normal.
 [Anleitung dazu weiter unten.](#optional-termine-mit-google-meet-link-anlegen)
+
+## Nicht nur ein U-Boot
+
+Unter **Einstellungen → Banner & Erinnern** lässt sich das Flugobjekt aus 27
+Motiven wählen, in vier Stilen von der schlichten Silhouette bis zum echten
+Foto. Jedes Motiv im Foto-Stil bildet etwas Reales nach, ein U-Boot aus dem
+Kalten Krieg, einen Wal, der ein Walfangschiff versenkt hat, eine Badeente,
+die fünfzehn Jahre durch den Pazifik trieb, und ein Doppelklick auf eine
+Kachel zeigt die tatsächliche Geschichte dahinter samt Quelle, geprüft gegen
+echte Belege statt aus dem Gedächtnis geschrieben.
+
+![Die Skin-Auswahl mit 27 echten Foto-Motiven, und die belegte Geschichte hinter einem davon](docs/skins.png)
 
 ## Voraussetzungen
 
