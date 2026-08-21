@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 -2 128 132">
+  <defs>
+    <radialGradient id="v12P" cx=".4" cy=".35" r=".8">
+      <stop offset="0" stop-color="#b07ad6"/><stop offset="1" stop-color="#6d3f96"/>
+    </radialGradient>
+    <clipPath id="v12Clip">
+      <path d="M85 14 Q124 14 128 52 Q128 70 112 76 L58 76 Q42 70 42 52 Q46 14 85 14 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; transform-origin: center; animation: v12bob 2.9s ease-in-out infinite alternate; animation-delay: -1.1s; }
+    @keyframes v12bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .tent { transform-box: fill-box; transform-origin: top center; animation: v12tent 1.6s ease-in-out infinite alternate; }
+    @keyframes v12tent { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+  </style>
+  <g class="bob">
+    <path d="M85 14 Q124 14 128 52 Q128 70 112 76 L58 76 Q42 70 42 52 Q46 14 85 14 Z"
+          fill="url(#v12P)" stroke="#4d2a6e" stroke-width="2"/>
+    <g class="tent" style="animation-delay:-.2s"><path d="M52 74 Q46 96 34 102 Q44 104 54 94 Q58 84 56 74 Z" fill="#8551ad"/></g>
+    <g class="tent" style="animation-delay:-.7s"><path d="M68 76 Q66 100 56 112 Q70 110 76 96 Q78 84 74 76 Z" fill="#9563bd"/></g>
+    <g class="tent" style="animation-delay:-1.1s"><path d="M85 76 Q85 104 78 118 Q92 112 92 96 Q92 84 90 76 Z" fill="#8551ad"/></g>
+    <g class="tent" style="animation-delay:-.45s"><path d="M102 76 Q106 100 118 110 Q104 110 96 96 Q94 84 97 76 Z" fill="#9563bd"/></g>
+    <g class="tent" style="animation-delay:-.9s"><path d="M116 74 Q124 92 136 98 Q124 102 112 90 Q108 80 112 74 Z" fill="#8551ad"/></g>
+    <circle cx="70" cy="48" r="8" fill="#ffffff"/><circle cx="72" cy="50" r="4" fill="#26123a"/>
+    <circle cx="102" cy="48" r="8" fill="#ffffff"/><circle cx="104" cy="50" r="4" fill="#26123a"/>
+    <path d="M78 64 Q86 70 94 64" stroke="#4d2a6e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <g clip-path="url(#v12Clip)">
+      <ellipse cx="80" cy="28" rx="26" ry="6" fill="#ffffff" opacity=".18"/>
+    </g>
+  </g>
+</svg>

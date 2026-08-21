@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 10 184 96">
+  <defs>
+    <linearGradient id="pq8" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfc9ba"/><stop offset=".35" stop-color="#a89f8d"/>
+      <stop offset=".8" stop-color="#7d7463"/><stop offset="1" stop-color="#655c4d"/>
+    </linearGradient>
+    <linearGradient id="pq8h" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fae66"/><stop offset=".45" stop-color="#177a42"/>
+      <stop offset="1" stop-color="#0a3d22"/>
+    </linearGradient>
+    <filter id="pq8b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="pq8n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .6  0 0 0 0 .56  0 0 0 0 .46  0 0 0 .2 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="duckBodyClip8">
+      <path d="M36 76 Q40 56 78 52 L124 54 Q156 58 158 74 Q154 90 116 94 L74 94 Q42 90 36 76 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.3s ease-in-out infinite alternate; animation-delay: -1.1s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+  </style>
+  <g class="root">
+    <path d="M26 58 q-7 -7 -2 -14 q9 3 9 12 Z" fill="#2b2921"/>
+    <path d="M22 60 Q34 66 44 70 L40 82 Q28 74 22 60 Z" fill="#3d3a30"/>
+    <path d="M36 76 Q40 56 78 52 L124 54 Q156 58 158 74 Q154 90 116 94 L74 94 Q42 90 36 76 Z" fill="url(#pq8)"/>
+    <path d="M36 76 Q40 56 78 52 L124 54 Q156 58 158 74 Q154 90 116 94 L74 94 Q42 90 36 76 Z" fill="#fff" filter="url(#pq8n)" opacity=".4"/>
+    <path d="M64 60 Q100 52 128 60 Q122 80 88 84 Q66 78 64 60 Z" fill="#93896f" opacity=".9"/>
+    <g stroke="#6e6553" stroke-width=".9" fill="none" opacity=".6">
+      <path d="M72 64 Q92 58 116 63"/><path d="M74 70 Q94 64 118 69"/><path d="M78 76 Q96 70 116 75"/>
+    </g>
+    <rect x="102" y="70" width="15" height="6.5" rx="2" fill="#2b4f9e"/>
+    <line x1="102" y1="69" x2="117" y2="69" stroke="#f2efe6" stroke-width="1.4"/>
+    <line x1="102" y1="77.5" x2="117" y2="77.5" stroke="#f2efe6" stroke-width="1.4"/>
+    <path d="M124 56 Q144 58 154 70 Q152 84 132 90 Q122 74 124 56 Z" fill="#5a3820"/>
+    <path d="M128 60 Q140 62 148 70" stroke="#7a5232" stroke-width="1.4" fill="none" opacity=".7"/>
+    <path d="M130 54 Q140 56 146 62 L142 66 Q135 59 128 58 Z" fill="#f2efe6"/>
+    <path d="M130 28 Q152 22 163 38 Q167 50 155 56 Q139 58 131 50 Q123 38 130 28 Z" fill="url(#pq8h)"/>
+    <path d="M133 32 Q146 26 157 34" stroke="#6fd39a" stroke-width="1.8" fill="none" opacity=".6"/>
+    <path d="M161 40 Q177 40 181 45 Q177 50 161 49 Z" fill="#d8b13c"/>
+    <path d="M162 42 Q172 42 178 45" stroke="#a8862a" stroke-width=".9" fill="none" opacity=".8"/>
+    <circle cx="174" cy="43.5" r="1" fill="#8a6d1d"/>
+    <circle cx="148" cy="38" r="2.8" fill="#1c1408"/>
+    <circle cx="149" cy="37" r=".9" fill="#fff" opacity=".8"/>
+    <ellipse cx="96" cy="58" rx="46" ry="3.5" fill="#fff" opacity=".3" filter="url(#pq8b)" clip-path="url(#duckBodyClip8)"/>
+  </g>
+</svg>

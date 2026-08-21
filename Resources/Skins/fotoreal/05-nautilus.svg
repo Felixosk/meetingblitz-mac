@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 281 126">
+  <style>
+    .bob { transform-box: fill-box; transform-origin: 50% 50%; animation: bob 3.1s ease-in-out infinite alternate; animation-delay: -2.4s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.5deg); } to { transform: translateY(4px) rotate(1.5deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; animation-delay: -.12s; }
+    @keyframes propSide { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+    .pw { transform-box: fill-box; animation: propwash 1.7s linear infinite; }
+    .pw.d2 { animation-delay: -1.25s; }
+    @keyframes propwash { 0% { transform: translate(0,0) scale(.5); opacity: .55; } 100% { transform: translate(-40px,-12px) scale(1.4); opacity: 0; } }
+  </style>
+  <defs>
+    <linearGradient id="n5f-hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a796a"/><stop offset=".2" stop-color="#5d4e42"/>
+      <stop offset=".55" stop-color="#3a2f26"/><stop offset=".88" stop-color="#191410"/>
+      <stop offset="1" stop-color="#2e261e"/>
+    </linearGradient>
+    <filter id="n5f-blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="n5f-noise" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .6  0 0 0 0 .5  0 0 0 0 .38  0 0 0 .32 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="n5f-clip">
+      <path d="M36 60 Q44 32 114 30 Q186 28 228 48 L252 60 L228 72 Q186 92 114 90 Q44 88 36 60 Z"/>
+    </clipPath>
+  </defs>
+  <g class="bob">
+    <g class="pw"><circle cx="30" cy="62" r="3.5" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="pw d2"><circle cx="28" cy="68" r="2.6" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="prop"><ellipse cx="24" cy="62" rx="6" ry="14" fill="#4a3d31" opacity=".9"/></g>
+    <path d="M28 54 L44 46 L44 78 L28 70 Z" fill="#2b2118"/>
+    <path d="M62 34 Q94 24 134 24 L174 26 Q192 28 204 34 L62 40 Z" fill="#4a3d31"/>
+    <path d="M36 60 Q44 32 114 30 Q186 28 228 48 L252 60 L228 72 Q186 92 114 90 Q44 88 36 60 Z" fill="url(#n5f-hull)"/>
+    <g clip-path="url(#n5f-clip)">
+      <path d="M36 60 Q44 32 114 30 Q186 28 228 48 L252 60 L228 72 Q186 92 114 90 Q44 88 36 60 Z" fill="#fff" filter="url(#n5f-noise)" opacity=".45"/>
+      <path d="M46 46 Q114 33 206 42" stroke="#c9ad8a" stroke-width="1.4" fill="none" opacity=".45"/>
+    </g>
+    <circle cx="196" cy="60" r="14" fill="#16262d"/>
+    <circle cx="196" cy="60" r="14" fill="none" stroke="#6e5d50" stroke-width="3.5"/>
+    <circle cx="196" cy="60" r="9" fill="none" stroke="#4a3d31" stroke-width="1.5"/>
+    <circle cx="192" cy="55" r="3.5" fill="#d9a74a" opacity=".5" filter="url(#n5f-blur)"/>
+    <circle cx="124" cy="60" r="7" fill="#16262d" stroke="#6e5d50" stroke-width="2.5"/>
+    <circle cx="84" cy="60" r="6" fill="#16262d" stroke="#6e5d50" stroke-width="2.5"/>
+    <g clip-path="url(#n5f-clip)">
+      <g fill="#1c1610" opacity=".85">
+        <circle cx="58" cy="46" r="1.2"/><circle cx="72" cy="43" r="1.2"/><circle cx="86" cy="40" r="1.2"/>
+        <circle cx="100" cy="38" r="1.2"/><circle cx="114" cy="37" r="1.2"/><circle cx="128" cy="37" r="1.2"/>
+        <circle cx="142" cy="37" r="1.2"/><circle cx="156" cy="38" r="1.2"/><circle cx="170" cy="40" r="1.2"/>
+        <circle cx="58" cy="74" r="1.2"/><circle cx="72" cy="77" r="1.2"/><circle cx="86" cy="80" r="1.2"/>
+        <circle cx="100" cy="82" r="1.2"/><circle cx="114" cy="83" r="1.2"/><circle cx="128" cy="83" r="1.2"/>
+        <circle cx="142" cy="83" r="1.2"/><circle cx="156" cy="82" r="1.2"/><circle cx="170" cy="80" r="1.2"/>
+      </g>
+      <g stroke="#1c1610" stroke-width=".9" opacity=".55">
+        <path d="M70 32 Q68 60 70 88"/><path d="M108 30 Q106 60 108 90"/><path d="M146 30 Q146 60 146 90"/><path d="M184 34 Q184 60 184 86"/>
+      </g>
+      <ellipse cx="135" cy="38" rx="92" ry="4" fill="#e8cfae" opacity=".26" filter="url(#n5f-blur)"/>
+      <ellipse cx="135" cy="82" rx="96" ry="5.5" fill="#0a0703" opacity=".5" filter="url(#n5f-blur)"/>
+    </g>
+  </g>
+</svg>

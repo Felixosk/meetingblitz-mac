@@ -15,6 +15,10 @@ import SwiftUI
 /// Einheitlichkeit, sondern eine Verwechslungsgefahr.
 struct CornerCloseButton: View {
     let help: String
+    /// Optionaler Maßstab (Runde 20.08.: das Banner wuchs insgesamt, das ×
+    /// soll proportional mitwachsen). Default 1 hält den Popover-Aufruf
+    /// unverändert, der nicht mit vergrößert wurde.
+    var scale: CGFloat = 1
     let action: () -> Void
 
     var body: some View {
@@ -22,13 +26,13 @@ struct CornerCloseButton: View {
             // Klarer Kontrast: weißes Kreuz auf dunkler Scheibe, kein blasser
             // Ring, Ring plus gedimmtes Kreuz wirkte auf dem Türkis matschig.
             Image(systemName: "xmark")
-                .font(.system(size: 7.5, weight: .bold))
+                .font(.system(size: 7.5 * scale, weight: .bold))
                 .foregroundStyle(.white.opacity(0.95))
-                .frame(width: 15, height: 15)
+                .frame(width: 15 * scale, height: 15 * scale)
                 .background(Circle().fill(Color.black.opacity(0.40)))
         }
         .buttonStyle(.plain)
-        .offset(x: 1, y: -4)   // ragt leicht über die abgerundete Ecke
+        .offset(x: 1 * scale, y: -4 * scale)   // ragt leicht über die abgerundete Ecke
         .help(help)
     }
 }

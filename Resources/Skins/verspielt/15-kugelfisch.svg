@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -18 166 156">
+  <defs>
+    <radialGradient id="v15O" cx=".42" cy=".38" r=".8">
+      <stop offset="0" stop-color="#ffd166"/><stop offset="1" stop-color="#ef8a17"/>
+    </radialGradient>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; transform-origin: center; animation: v15bob 2.9s ease-in-out infinite alternate; animation-delay: -.8s; }
+    @keyframes v15bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .puffer-body { transform-box: fill-box; transform-origin: center; animation: v15puff 5s ease-in-out infinite; animation-delay: -1.5s; }
+    @keyframes v15puff { 0%,52%,100% { transform: scale(1); } 62%,86% { transform: scale(1.30); } }
+    .tail { transform-box: fill-box; transform-origin: right center; animation: v15flap 0.9s ease-in-out infinite alternate; animation-delay: -.4s; }
+    @keyframes v15flap { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+  </style>
+  <g class="bob">
+    <g class="puffer-body">
+      <g fill="#d97710">
+        <path d="M75 8 L70 22 L82 22 Z"/><path d="M104 16 L94 26 L106 30 Z"/>
+        <path d="M126 42 L112 46 L120 54 Z"/><path d="M130 72 L116 70 L120 80 Z"/>
+        <path d="M108 100 L100 88 L112 86 Z"/><path d="M75 110 L70 96 L82 96 Z"/>
+        <path d="M42 100 L48 88 L36 86 Z"/><path d="M22 72 L34 70 L28 80 Z"/>
+        <path d="M20 42 L34 46 L26 54 Z"/><path d="M46 16 L54 26 L42 30 Z"/>
+      </g>
+      <circle cx="75" cy="60" r="42" fill="url(#v15O)" stroke="#b85e08" stroke-width="2.5"/>
+      <g fill="#d97710" opacity=".6">
+        <circle cx="58" cy="76" r="3"/><circle cx="76" cy="84" r="3"/><circle cx="92" cy="74" r="3"/>
+        <circle cx="52" cy="58" r="3"/><circle cx="94" cy="52" r="3"/>
+      </g>
+      <circle cx="88" cy="46" r="9" fill="#ffffff"/><circle cx="90" cy="48" r="4.5" fill="#26170a"/>
+      <circle cx="60" cy="46" r="8" fill="#ffffff"/><circle cx="62" cy="48" r="4" fill="#26170a"/>
+      <path d="M70 66 Q77 71 84 66" stroke="#8f4a06" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </g>
+    <g class="tail"><path d="M18 48 Q28 56 34 60 Q28 64 18 72 Q24 60 18 48 Z" fill="#ef8a17"/></g>
+  </g>
+</svg>

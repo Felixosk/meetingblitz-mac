@@ -18,8 +18,9 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 }
 
 /// One announcement. Runde 9 sequence: `.jumping` (capsule leaps out of the sea
-/// along a parabolic arc, sub tilting with the tangent) → `.flying` (cruises
-/// toward the far edge with a gentle wog). Hover docks it in place with actions,
+/// — or, for air motifs since Runde 72, bursts out of a cloud — along a
+/// parabolic arc, sub tilting with the tangent) → `.flying` (cruises toward
+/// the far edge with a gentle wog). Hover docks it in place with actions,
 /// a click pins it with the detail popover, the × closes it.
 ///
 /// WINDOW ARCHITECTURE (Runde 21, the definitive fix for the cross-display
@@ -45,7 +46,9 @@ final class Flight {
     private let laneIndex: Int
     private let pinnedDocked: Bool     // debug: stay docked at centre (--demo-dock)
     private var bands: [NSPanel] = []
-    private var splashPanels: [NSPanel] = []
+    /// The stationary entrance-effect panel(s) at the launch point: a
+    /// SeaSplash for water motifs, a CloudBurst for air motifs (Runde 72).
+    private var entrancePanels: [NSPanel] = []
     private var phase: Phase
     private var startedAt = Date()
     private var travelStartedAt = Date()
@@ -82,7 +85,7 @@ final class Flight {
         self.seconds = seconds
         self.laneIndex = laneIndex
         self.pinnedDocked = pinnedDocked
-        self.phase = pinnedDocked ? .docked : (vm.waterEffect ? .jumping : .flying)
+        self.phase = pinnedDocked ? .docked : (vm.dramaticEntrance ? .jumping : .flying)
         vm.docked = pinnedDocked
         vm.emergeT = 1
         vm.tilt = 0
@@ -111,14 +114,20 @@ final class Flight {
             launchX = toRight ? (sf.minX + sf.width * 0.09) : (sf.maxX - sf.width * 0.09 - panelW)
             cruiseX = launchX + dir * (sf.width * 0.06)
             endX = toRight ? allMaxX : (allMinX - panelW)
-            let centerX = sf.midX - 272
+            // 272 was half of an assumed ~544pt docked width; scales with the
+            // banner (Runde 20.08.) so the pinned/docked debug pose (--demo-dock)
+            // still centres the now-bigger capsule instead of drifting off-centre.
+            let centerX = sf.midX - 272 * BannerContentView.scale
             vm.facingLeft = !toRight
 
             // Initial global position of the virtual box.
             if pinnedDocked {
                 vm.globalX = centerX; vm.globalY = cruiseY
                 dockCenterX = centerX; dockCenterY = cruiseY
-            } else if vm.waterEffect {
+            } else if vm.dramaticEntrance {
+                // Both elements launch from the same submerged/below-cruise
+                // point and ride the identical jump arc (Runde 72) — only the
+                // stationary panel at this point differs (splash vs. cloud).
                 vm.globalX = launchX; vm.globalY = waterY
             } else {
                 vm.globalX = toRight ? (sf.minX - panelW) : sf.maxX
@@ -137,16 +146,19 @@ final class Flight {
                 guard y1 - y0 > 40 else { continue }
                 bands.append(makeBand(at: CGRect(x: f.minX, y: y0, width: f.width, height: y1 - y0)))
             }
-            if vm.waterEffect && !pinnedDocked { splashPanels.append(makeSplash()) }
+            if vm.dramaticEntrance && !pinnedDocked {
+                entrancePanels.append(vm.entranceElement == .water ? makeSplash() : makeCloud())
+            }
         }
         startedAt = Date()
         travelStartedAt = startedAt
         lastTickAt = startedAt
         lastX = vm.globalX; lastY = vm.globalY; haveLast = true
 
-        if !splashPanels.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + SplashMetalView.duration + 0.3) { [weak self] in
-                Task { @MainActor in self?.closeSplashes() }
+        if !entrancePanels.isEmpty {
+            let entranceDuration = vm.entranceElement == .water ? SplashMetalView.duration : CloudBurst.duration
+            DispatchQueue.main.asyncAfter(deadline: .now() + entranceDuration + 0.3) { [weak self] in
+                Task { @MainActor in self?.closeEntrancePanels() }
             }
         }
 
@@ -202,8 +214,11 @@ final class Flight {
         // keeps them the same size; the extra room just prevents clipping).
         let splashW: CGFloat = 720, splashH: CGFloat = 600
         // Submarine centre on screen at the launch (capsule is top-padded).
-        let subScreenX = launchX + BannerContentView.capsuleLeading + 31
-        let subMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27
+        // The 31/27 offsets estimate the classic sub's rendered centre inside
+        // its icon frame; scale with the banner (Runde 20.08.) so the splash
+        // still lines up with the (now bigger) nose instead of drifting.
+        let subScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.scale
+        let subMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.scale
         let originX = subScreenX - 0.50 * splashW
         let originY = subMidScreenY - 0.333 * splashH
         let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: splashW, height: splashH),
@@ -226,12 +241,52 @@ final class Flight {
         return panel
     }
 
-    private func closeSplashes() {
-        for p in splashPanels {
+    /// Stationary cloud-burst panel at the launch point, for AIR motifs
+    /// (Runde 72, "Dramatischer Auftritt"). Same panel mechanic as
+    /// `makeSplash()` — borderless/nonactivating, screenSaver level,
+    /// click-through, closed after its duration — but the content is a plain
+    /// SwiftUI `Canvas` (`CloudBurst`) painted with deterministic, softly
+    /// graded fills. NEVER an NSVisualEffectView/behindWindow blur here: a
+    /// material falls back to solid black in a panel that is never key/active
+    /// (teure Projektlektion, siehe `SeaSplash`).
+    private func makeCloud() -> NSPanel {
+        // Same panel size/anchor formula as the splash: approximates the
+        // flying object's nose inside the capsule, close enough across every
+        // skin (water or air) without per-skin tuning.
+        let cloudW: CGFloat = 720, cloudH: CGFloat = 600
+        let objScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.scale
+        let objMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.scale
+        let originX = objScreenX - 0.50 * cloudW
+        let originY = objMidScreenY - 0.333 * cloudH
+        let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: cloudW, height: cloudH),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.hidesOnDeactivate = false
+        // SwiftUI/Canvas y is DOWN inside the hosted view, AppKit screen y is
+        // UP, so the local burst point is flipped against the panel's own
+        // height (same trick as the splash's uv flip above).
+        let localX = objScreenX - originX
+        let localY = cloudH - (objMidScreenY - originY)
+        let host = FirstMouseHostingView(rootView:
+            CloudBurst(startedAt: Date(), launchX: localX, launchY: localY)
+                .frame(width: cloudW, height: cloudH))
+        host.frame = CGRect(origin: .zero, size: CGSize(width: cloudW, height: cloudH))
+        panel.contentView = host
+        panel.orderFrontRegardless()
+        return panel
+    }
+
+    private func closeEntrancePanels() {
+        for p in entrancePanels {
             (p.contentView as? SplashMetalView)?.stop()
             p.orderOut(nil); p.contentView = nil
         }
-        splashPanels = []
+        entrancePanels = []
     }
 
     /// The moving virtual banner box, in global screen coordinates.
@@ -337,8 +392,7 @@ final class Flight {
                 // Dock in place, nudged only as far as needed so the widened
                 // docked capsule (buttons) stays fully on the cursor's screen.
                 if let sf = (NSScreen.screens.first { $0.frame.contains(mouse) })?.frame {
-                    let dockedCapsuleW: CGFloat = 560
-                    dockCenterX = min(max(vm.globalX, sf.minX + 8), sf.maxX - dockedCapsuleW)
+                    dockCenterX = min(max(vm.globalX, sf.minX + 8), sf.maxX - BannerContentView.dockedWidthEstimate)
                     dockCenterY = vm.globalY
                 } else {
                     dockCenterX = vm.globalX; dockCenterY = vm.globalY
@@ -362,7 +416,7 @@ final class Flight {
         detailsOpen = true
         phase = .docked
         vm.docked = true
-        dockCenterX = min(max(vm.globalX, screen.minX + 8), screen.maxX - 560)
+        dockCenterX = min(max(vm.globalX, screen.minX + 8), screen.maxX - BannerContentView.dockedWidthEstimate)
         dockCenterY = vm.globalY
         DetailPopover.shared.show(meeting: vm.meeting, below: hit, clampedTo: screen,
                                   onClosed: { [weak self] in self?.close() })
@@ -373,7 +427,7 @@ final class Flight {
         closed = true
         gcdTimer?.cancel(); gcdTimer = nil
         backupTimer?.invalidate(); backupTimer = nil
-        closeSplashes()
+        closeEntrancePanels()
         // Banner-× while the popover is open: both go down together. Safe
         // against recursion, the popover's onClosed re-enters close(), which
         // the `closed` guard above swallows.
@@ -389,7 +443,8 @@ final class Flight {
 final class BannerPresenter {
     private var active: [Flight] = []
 
-    func present(_ meeting: Meeting, leadMinutes: Int, seconds: Double, playSound: Bool, water: Bool = true, pinnedDocked: Bool = false) {
+    func present(_ meeting: Meeting, leadMinutes: Int, seconds: Double, playSound: Bool,
+                dramaticEntrance: Bool = true, element: SkinElement = .water, pinnedDocked: Bool = false) {
         // Runde 56: Der NAME des Termins steht groß, die Vorwarnzeit klein
         // darunter. Vorher war es umgekehrt („Meeting in 2 min" groß), das ist
         // für jedes Banner derselbe Satz und beantwortet ausgerechnet die Frage
@@ -400,7 +455,8 @@ final class BannerPresenter {
             title: meeting.title,
             subtitle: "\(lead) · \(meeting.timeLabel)",
             hasLink: meeting.joinURL != nil,
-            waterEffect: water
+            dramaticEntrance: dramaticEntrance,
+            entranceElement: element
         )
         if let url = meeting.joinURL {
             vm.onCopy = { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url.absoluteString, forType: .string) }

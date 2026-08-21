@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 4 138 110">
+  <defs>
+    <linearGradient id="duckY" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffdf3d"/><stop offset="1" stop-color="#f2b705"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .root { transform-box: fill-box; transform-origin: center; animation: bob 3.1s ease-in-out infinite alternate; animation-delay: -1.6s; }
+    @keyframes bob { from { transform: translateY(-3.5px) rotate(-1.5deg); } to { transform: translateY(3.5px) rotate(1.5deg); } }
+  </style>
+  <g class="root">
+    <line x1="58" y1="34" x2="58" y2="14" stroke="#78909c" stroke-width="4" stroke-linecap="round"/>
+    <line x1="58" y1="15" x2="70" y2="15" stroke="#78909c" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="71" cy="15" r="2.5" fill="#37474f"/>
+    <ellipse cx="74" cy="74" rx="44" ry="30" fill="url(#duckY)" stroke="#d69e00" stroke-width="2"/>
+    <path d="M44 70 Q30 62 34 48 Q48 52 56 62" fill="#f2b705" stroke="#d69e00" stroke-width="2"/>
+    <circle cx="106" cy="46" r="22" fill="url(#duckY)" stroke="#d69e00" stroke-width="2"/>
+    <path d="M126 44 Q142 42 144 48 Q142 54 126 52 Z" fill="#f57c00" stroke="#c95f00" stroke-width="1.5"/>
+    <circle cx="112" cy="40" r="3.5" fill="#263238"/>
+    <circle cx="113.4" cy="38.8" r="1.2" fill="#ffffff"/>
+    <path d="M52 78 Q64 70 84 76" stroke="#d69e00" stroke-width="2" fill="none" opacity=".7"/>
+  </g>
+</svg>

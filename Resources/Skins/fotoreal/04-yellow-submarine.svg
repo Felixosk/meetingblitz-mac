@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 3 206 96">
+  <defs>
+    <linearGradient id="f4Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe482"/><stop offset=".22" stop-color="#f2c62e"/>
+      <stop offset=".6" stop-color="#cf9d0a"/><stop offset=".9" stop-color="#8f6b05"/>
+      <stop offset="1" stop-color="#b3890a"/>
+    </linearGradient>
+    <filter id="f4b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="f4n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .75  0 0 0 0 .65  0 0 0 0 .3  0 0 0 .22 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="f4Clip">
+      <path d="M42 58 Q48 32 102 28 L152 30 Q188 36 192 58 Q188 80 150 86 L98 86 Q48 82 42 58 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { animation: f4bob 2.9s ease-in-out infinite alternate; animation-delay: -1.6s; }
+    @keyframes f4bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: f4prop .5s linear infinite; animation-delay: -0.25s; }
+    @keyframes f4prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+    .pw { transform-box: fill-box; animation: f4pw 1.7s linear infinite; }
+    .pw.d2 { animation-delay: -.55s; }
+    @keyframes f4pw { 0% { transform: translate(0,0) scale(.5); opacity: .55; } 100% { transform: translate(-40px,-12px) scale(1.4); opacity: 0; } }
+  </style>
+  <g class="bob">
+    <g class="pw"><circle cx="40" cy="60" r="3.5" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="pw d2"><circle cx="38" cy="66" r="2.6" fill="#bfe8f5" opacity=".4"/></g>
+    <rect x="30" y="46" width="15" height="22" rx="6" fill="#8f6f07"/>
+    <g class="prop"><ellipse cx="28" cy="57" rx="4" ry="10" fill="#6e5605" opacity=".9"/></g>
+    <path d="M42 58 Q48 32 102 28 L152 30 Q188 36 192 58 Q188 80 150 86 L98 86 Q48 82 42 58 Z" fill="url(#f4Hull)"/>
+    <g clip-path="url(#f4Clip)">
+      <path d="M42 58 Q48 32 102 28 L152 30 Q188 36 192 58 Q188 80 150 86 L98 86 Q48 82 42 58 Z" fill="#fff" filter="url(#f4n)" opacity=".35"/>
+      <path d="M54 40 Q110 30 176 40" stroke="#fff2c4" stroke-width="1.6" fill="none" opacity=".6"/>
+      <circle cx="168" cy="56" r="12" fill="#12222c"/>
+      <circle cx="168" cy="56" r="12" fill="none" stroke="#8a6d08" stroke-width="3"/>
+      <path d="M160 48 Q166 44 172 48" stroke="#9fc8da" stroke-width="2" fill="none" opacity=".8"/>
+      <circle cx="126" cy="58" r="7" fill="#12222c" stroke="#8a6d08" stroke-width="2.5"/>
+      <circle cx="92" cy="58" r="6" fill="#12222c" stroke="#8a6d08" stroke-width="2.5"/>
+      <g stroke="#a3800a" stroke-width=".9" fill="none" opacity=".6">
+        <path d="M72 33 Q70 58 74 84"/><path d="M142 31 Q144 56 140 85"/><path d="M108 29 Q108 58 108 86"/>
+      </g>
+      <ellipse cx="116" cy="36" rx="62" ry="4" fill="#fff8d9" opacity=".4" filter="url(#f4b)"/>
+    </g>
+    <path d="M98 30 L136 30 L132 12 L104 12 Z" fill="#dfb10c"/>
+    <path d="M99 13 L131 13" stroke="#8f6b05" stroke-width="1.2" opacity=".7"/>
+    <ellipse cx="118" cy="12" rx="10" ry="3" fill="#a3800a"/>
+    <path d="M54 74 Q114 86 182 72 L180 78 Q114 92 58 80 Z" fill="#2e2d25" opacity=".9"/>
+    <path d="M76 88 L154 88 L154 92 L76 92 Z" fill="#7a5c06"/>
+    <line x1="88" y1="86" x2="88" y2="92" stroke="#7a5c06" stroke-width="3"/>
+    <line x1="142" y1="86" x2="142" y2="92" stroke="#7a5c06" stroke-width="3"/>
+  </g>
+</svg>

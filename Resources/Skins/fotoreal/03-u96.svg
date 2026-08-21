@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -4 312 88">
+  <defs>
+    <linearGradient id="f3Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bfc8ce"/><stop offset=".2" stop-color="#939da5"/>
+      <stop offset=".5" stop-color="#707a83"/><stop offset=".54" stop-color="#434d56"/>
+      <stop offset=".88" stop-color="#262e35"/><stop offset="1" stop-color="#39424a"/>
+    </linearGradient>
+    <filter id="f3b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="f3n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .8  0 0 0 0 .84  0 0 0 0 .88  0 0 0 .22 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="f3Clip">
+      <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { animation: f3bob 2.9s ease-in-out infinite alternate; animation-delay: -2.3s; }
+    @keyframes f3bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: f3prop .5s linear infinite; animation-delay: -0.4s; }
+    @keyframes f3prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+    .pw { transform-box: fill-box; animation: f3pw 1.7s linear infinite; }
+    .pw.d2 { animation-delay: -.55s; }
+    @keyframes f3pw { 0% { transform: translate(0,0) scale(.5); opacity: .55; } 100% { transform: translate(-40px,-12px) scale(1.4); opacity: 0; } }
+  </style>
+  <g class="bob">
+    <g class="pw"><circle cx="28" cy="56" r="3.5" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="pw d2"><circle cx="26" cy="62" r="2.6" fill="#bfe8f5" opacity=".4"/></g>
+    <g class="prop"><ellipse cx="18" cy="56" rx="4.5" ry="11" fill="#4d5862" opacity=".85"/></g>
+    <path d="M282 46 Q220 4 150 6 Q76 8 24 44" stroke="#252c33" stroke-width=".9" fill="none" opacity=".7"/>
+    <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z" fill="url(#f3Hull)"/>
+    <g clip-path="url(#f3Clip)">
+      <path d="M22 46 Q64 30 140 28 L262 34 Q282 42 284 52 Q276 62 252 66 L96 74 Q48 70 24 58 Q19 51 22 46 Z" fill="#fff" filter="url(#f3n)" opacity=".3"/>
+      <path d="M62 32 L236 38 L234 43 L64 38 Z" fill="#5a646d"/>
+      <path d="M64 33 L234 39" stroke="#c9d2d8" stroke-width=".9" opacity=".6"/>
+      <path d="M58 58 Q140 70 232 60 L230 68 Q140 78 62 66 Z" fill="#333b43" opacity=".95"/>
+      <g fill="#20262d">
+        <rect x="76" y="61" width="7" height="2.4" rx="1"/><rect x="96" y="63" width="7" height="2.4" rx="1"/>
+        <rect x="116" y="64.5" width="7" height="2.4" rx="1"/><rect x="136" y="65.5" width="7" height="2.4" rx="1"/>
+        <rect x="156" y="65.5" width="7" height="2.4" rx="1"/><rect x="176" y="64.5" width="7" height="2.4" rx="1"/>
+        <rect x="196" y="63" width="7" height="2.4" rx="1"/><rect x="216" y="61" width="7" height="2.4" rx="1"/>
+      </g>
+      <ellipse cx="150" cy="32" rx="108" ry="3.5" fill="#e4edf2" opacity=".3" filter="url(#f3b)"/>
+    </g>
+    <path d="M126 34 L162 34 L159 10 L130 10 Z" fill="#8d97a0"/>
+    <path d="M127 19 Q144 13 161 19 L161 15 Q144 9 127 14 Z" fill="#434d56"/>
+    <path d="M116 34 L126 34 L126 28 L118 29 Z" fill="#5a646d"/>
+    <line x1="120" y1="29" x2="120" y2="25" stroke="#434d56" stroke-width="1.5"/>
+    <line x1="124" y1="29" x2="124" y2="24" stroke="#434d56" stroke-width="1.5"/>
+    <text x="134" y="30" fill="#e8edf1" font-size="7.5" font-weight="600" font-family="Georgia, serif">U 96</text>
+    <line x1="141" y1="10" x2="141" y2="1" stroke="#2e363e" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="149" y1="10" x2="149" y2="4" stroke="#2e363e" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="180" y="28" width="11" height="6" rx="2" fill="#434d56"/>
+    <line x1="186" y1="29" x2="212" y2="23" stroke="#2e363e" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="186" cy="27" r="2.2" fill="#39424a"/>
+  </g>
+</svg>

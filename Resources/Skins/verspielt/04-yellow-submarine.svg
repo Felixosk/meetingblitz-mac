@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 -8 200 104">
+  <defs>
+    <linearGradient id="v4Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe14d"/><stop offset="1" stop-color="#f4b400"/>
+    </linearGradient>
+    <clipPath id="v4Clip">
+      <ellipse cx="118" cy="60" rx="76" ry="28"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { animation: v4bob 2.9s ease-in-out infinite alternate; animation-delay: -0.3s; }
+    @keyframes v4bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: v4prop .5s linear infinite; animation-delay: -0.15s; }
+    @keyframes v4prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+  </style>
+  <g class="bob">
+    <g class="prop"><ellipse cx="24" cy="58" rx="7" ry="15" fill="#e74c3c"/></g>
+    <path d="M28 48 L46 38 L46 74 L28 66 Z" fill="#e74c3c"/>
+    <ellipse cx="118" cy="60" rx="76" ry="28" fill="url(#v4Hull)" stroke="#d68910" stroke-width="2.5"/>
+    <g clip-path="url(#v4Clip)">
+      <path d="M46 52 Q118 40 190 52 L190 58 Q118 46 46 58 Z" fill="#e74c3c" opacity=".9"/>
+      <circle cx="84" cy="64" r="9" fill="#5dade2" stroke="#ffffff" stroke-width="3.5"/>
+      <circle cx="116" cy="64" r="9" fill="#5dade2" stroke="#ffffff" stroke-width="3.5"/>
+      <circle cx="148" cy="64" r="9" fill="#5dade2" stroke="#ffffff" stroke-width="3.5"/>
+      <ellipse cx="115" cy="46" rx="55" ry="7" fill="#ffffff" opacity=".25"/>
+    </g>
+    <rect x="86" y="12" width="40" height="30" rx="10" fill="#e74c3c" stroke="#ffffff" stroke-width="3"/>
+    <line x1="98" y1="12" x2="98" y2="2" stroke="#3498db" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="98" cy="0" r="4" fill="#3498db"/>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 -6 148 106">
+  <style>
+    .bob-strong { transform-box: fill-box; transform-origin: center; animation: v16bob 2.2s ease-in-out infinite alternate; animation-delay: -0.7s; }
+    @keyframes v16bob { from { transform: translateY(-5px) rotate(-4deg); } to { transform: translateY(5px) rotate(4deg); } }
+  </style>
+  <g class="bob-strong">
+    <path d="M82 10 L120 56 L44 56 Z" fill="#f5f7f9" stroke="#c3ccd4" stroke-width="2"/>
+    <path d="M82 10 L82 56" stroke="#c3ccd4" stroke-width="1.5"/>
+    <path d="M82 10 L98 56 L66 56 Z" fill="#e4e9ee" stroke="#c3ccd4" stroke-width="1.5"/>
+    <path d="M24 56 L140 56 L112 84 L52 84 Z" fill="#ffffff" stroke="#c3ccd4" stroke-width="2"/>
+    <path d="M24 56 L52 84 M140 56 L112 84" stroke="#dfe5ea" stroke-width="1.5"/>
+  </g>
+</svg>

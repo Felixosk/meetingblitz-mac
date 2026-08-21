@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 -8 246 104">
+  <defs>
+    <linearGradient id="v2Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b4a5e"/><stop offset=".55" stop-color="#232f3f"/><stop offset="1" stop-color="#161f2b"/>
+    </linearGradient>
+    <clipPath id="v2Clip">
+      <path d="M30 40 Q60 26 130 26 L210 26 Q244 30 250 56 Q244 82 210 86 L110 86 Q50 84 30 72 Q24 58 30 40 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { animation: v2bob 2.9s ease-in-out infinite alternate; animation-delay: -0.7s; }
+    @keyframes v2bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: v2prop .5s linear infinite; animation-delay: -0.2s; }
+    @keyframes v2prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+  </style>
+  <g class="bob">
+    <g class="prop"><ellipse cx="22" cy="58" rx="7" ry="17" fill="#5b6b80"/></g>
+    <path d="M26 48 L46 36 L46 78 L26 68 Z" fill="#1d2836"/>
+    <path d="M30 40 Q60 26 130 26 L210 26 Q244 30 250 56 Q244 82 210 86 L110 86 Q50 84 30 72 Q24 58 30 40 Z" fill="url(#v2Hull)" stroke="#0e1520" stroke-width="2"/>
+    <g clip-path="url(#v2Clip)">
+      <g fill="#2f3d50" stroke="#0e1520" stroke-width="1">
+        <rect x="168" y="28" width="11" height="7" rx="1.5"/><rect x="183" y="28" width="11" height="7" rx="1.5"/>
+        <rect x="198" y="28" width="11" height="7" rx="1.5"/><rect x="213" y="28" width="11" height="7" rx="1.5"/>
+        <rect x="60" y="30" width="11" height="7" rx="1.5"/><rect x="75" y="30" width="11" height="7" rx="1.5"/>
+        <rect x="90" y="30" width="11" height="7" rx="1.5"/>
+      </g>
+      <line x1="40" y1="70" x2="240" y2="70" stroke="#c0392b" stroke-width="3" opacity=".55"/>
+      <text x="222" y="52" fill="#8fa3bc" font-size="11" font-family="monospace">941</text>
+      <ellipse cx="130" cy="38" rx="80" ry="7" fill="#ffffff" opacity=".08"/>
+    </g>
+    <rect x="118" y="8" width="42" height="26" rx="6" fill="#1d2836" stroke="#0e1520" stroke-width="2"/>
+    <rect x="126" y="14" width="26" height="5" rx="2.5" fill="#9fb4cd" opacity=".8"/>
+    <line x1="130" y1="8" x2="130" y2="0" stroke="#5b6b80" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="139" y1="8" x2="139" y2="-2" stroke="#5b6b80" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>

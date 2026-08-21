@@ -29,6 +29,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp design/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# 27 Skin-Motive x 2 Stile (verspielt/fotoreal), SVGs als Bundle-Resource fuer
+# das auswaehlbare Flugobjekt im Banner (Skins.swift laedt sie per NSImage).
+cp -R Resources/Skins "$APP/Contents/Resources/Skins"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

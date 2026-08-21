@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 -6 298 114">
+  <defs>
+    <linearGradient id="f27body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#68715a"/><stop offset=".25" stop-color="#4a5140"/>
+      <stop offset=".62" stop-color="#353b2b"/><stop offset="1" stop-color="#1e2218"/>
+    </linearGradient>
+    <filter id="f27blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="f27noise" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .4  0 0 0 0 .44  0 0 0 0 .32  0 0 0 .2 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="f27clip">
+      <path d="M114 34 Q132 25 176 25 Q224 25 244 39 Q254 48 249 58 Q240 73 210 75 L140 75 Q118 71 114 52 Z"/>
+      <path d="M58 50 L122 44 L122 66 L62 60 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; animation: bob 2.9s ease-in-out infinite alternate; animation-delay: -2.7s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.6deg);} to { transform: translateY(4px) rotate(1.6deg);} }
+    .rotor { transform-box: fill-box; transform-origin: center; animation: rotorSpin .13s linear infinite alternate; animation-delay: -.09s; }
+    @keyframes rotorSpin { from { transform: scaleX(1); opacity:.55; } to { transform: scaleX(.8); opacity:.28; } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; animation-delay: -.38s; }
+    @keyframes propSide { 0%{transform:scaleY(1)} 50%{transform:scaleY(.15)} 100%{transform:scaleY(1)} }
+  </style>
+  <g class="bob">
+    <g transform="rotate(-2.5 156 60)">
+      <g class="rotor"><ellipse cx="156" cy="15" rx="132" ry="3" fill="#7d858c" opacity=".45"/></g>
+      <path d="M36 13 Q98 11 154 14 M158 14 Q218 11 276 13" stroke="#7d858c" stroke-width=".9" opacity=".25" fill="none"/>
+      <rect x="152" y="15" width="8" height="13" fill="#181c12"/>
+      <ellipse cx="156" cy="29" rx="13" ry="5" fill="#272c1f"/>
+      <path d="M146 27 Q156 24 166 27" stroke="#3d4432" stroke-width="1" fill="none" opacity=".7"/>
+      <path d="M58 50 L122 44 L122 66 L62 60 Z" fill="url(#f27body)"/>
+      <path d="M58 50 L122 44 L122 66 L62 60 Z" fill="#fff" filter="url(#f27noise)" opacity=".4"/>
+      <path d="M60 50 L120 45" stroke="#5d6449" stroke-width="1" opacity=".7"/>
+      <path d="M58 51 L42 24 L58 30 L70 51 Z" fill="#2c3123"/>
+      <path d="M44 26 L57 32" stroke="#181c12" stroke-width="1" opacity=".7"/>
+      <g class="prop"><ellipse cx="40" cy="27" rx="3" ry="12" fill="#7d858c" opacity=".7"/></g>
+      <circle cx="40" cy="27" r="2" fill="#14170f"/>
+      <path d="M52 60 L34 65 L54 68 Z" fill="#2c3123"/>
+      <path d="M114 34 Q132 25 176 25 Q224 25 244 39 Q254 48 249 58 Q240 73 210 75 L140 75 Q118 71 114 52 Z" fill="url(#f27body)"/>
+      <path d="M114 34 Q132 25 176 25 Q224 25 244 39 Q254 48 249 58 Q240 73 210 75 L140 75 Q118 71 114 52 Z" fill="#fff" filter="url(#f27noise)" opacity=".45"/>
+      <path d="M122 33 Q170 24 228 30 Q244 34 250 44" stroke="#7d8663" stroke-width="1.2" fill="none" opacity=".5"/>
+      <path d="M236 33 Q248 42 248 52 L229 49 L224 31 Z" fill="#2e3a44"/>
+      <path d="M237 35 Q246 42 247 50" stroke="#5c7684" stroke-width="1" fill="none" opacity=".7"/>
+      <path d="M206 29 L221 31 L224 47 L207 45 Z" fill="#2e3a44"/>
+      <path d="M208 31 L220 33" stroke="#5c7684" stroke-width=".8" opacity=".6"/>
+      <rect x="156" y="38" width="18" height="14" rx="2" fill="#232c34"/>
+      <path d="M157 39 L173 39 L173 44 L157 44 Z" fill="#39434d" opacity=".7"/>
+      <rect x="178" y="38" width="16" height="14" rx="2" fill="#232c34" opacity=".92"/>
+      <path d="M128 64 Q166 71 208 66" stroke="#181c12" stroke-width="1.1" fill="none" opacity=".6"/>
+      <rect x="196" y="70" width="24" height="8" rx="2" fill="#14170f"/>
+      <path d="M197 71 L219 71" stroke="#2c3123" stroke-width="1" opacity=".8"/>
+      <line x1="146" y1="75" x2="146" y2="85" stroke="#14170f" stroke-width="3"/>
+      <circle cx="146" cy="88" r="4.5" fill="#0b0d07"/>
+      <circle cx="146" cy="88" r="1.6" fill="#2c3123"/>
+      <line x1="222" y1="75" x2="225" y2="85" stroke="#14170f" stroke-width="3"/>
+      <circle cx="226" cy="88" r="4.5" fill="#0b0d07"/>
+      <circle cx="70" cy="64" r="3.5" fill="#0b0d07"/>
+      <text x="132" y="62" fill="#5d6449" font-size="7" letter-spacing="1" font-family="-apple-system, sans-serif">ARMY</text>
+      <ellipse cx="182" cy="30" rx="52" ry="2.6" fill="#dfe6d8" opacity=".18" filter="url(#f27blur)" clip-path="url(#f27clip)"/>
+      <ellipse cx="182" cy="72" rx="56" ry="3" fill="#0e100a" opacity=".35" filter="url(#f27blur)" clip-path="url(#f27clip)"/>
+    </g>
+  </g>
+</svg>

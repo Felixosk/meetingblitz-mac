@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 261 126">
+  <style>
+    .bob { transform-box: fill-box; transform-origin: 50% 50%; animation: bob 2.9s ease-in-out infinite alternate; animation-delay: -1.6s; }
+    @keyframes bob { from { transform: translateY(-4px) rotate(-1.5deg); } to { transform: translateY(4px) rotate(1.5deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: propSide .5s linear infinite; animation-delay: -.31s; }
+    @keyframes propSide { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+  </style>
+  <defs>
+    <linearGradient id="n5v-hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9a45f"/><stop offset=".55" stop-color="#a97142"/><stop offset="1" stop-color="#7a4d2a"/>
+    </linearGradient>
+    <radialGradient id="n5v-port" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffe9ad"/><stop offset=".7" stop-color="#ffc95e"/><stop offset="1" stop-color="#b57718"/>
+    </radialGradient>
+    <clipPath id="n5v-clip">
+      <path d="M36 58 Q44 30 110 28 Q180 26 224 46 L242 58 L224 70 Q180 90 110 88 Q44 86 36 58 Z"/>
+    </clipPath>
+  </defs>
+  <g class="bob">
+    <g class="prop"><ellipse cx="26" cy="58" rx="8" ry="16" fill="#8a5a30"/></g>
+    <circle cx="34" cy="58" r="6" fill="#c9925a" stroke="#6b3f1f" stroke-width="2"/>
+    <path d="M60 30 L74 12 L84 30 Z" fill="#8a5a30"/>
+    <path d="M96 26 L108 6 L120 26 Z" fill="#8a5a30"/>
+    <path d="M132 28 L142 12 L152 28 Z" fill="#8a5a30"/>
+    <path d="M36 58 Q44 30 110 28 Q180 26 224 46 L242 58 L224 70 Q180 90 110 88 Q44 86 36 58 Z"
+          fill="url(#n5v-hull)" stroke="#5d3418" stroke-width="2.5"/>
+    <circle cx="192" cy="58" r="15" fill="url(#n5v-port)" stroke="#5d3418" stroke-width="3"/>
+    <circle cx="192" cy="58" r="15" fill="none" stroke="#ffd98a" stroke-width="1" opacity=".8"/>
+    <circle cx="120" cy="58" r="8" fill="url(#n5v-port)" stroke="#5d3418" stroke-width="2.5"/>
+    <circle cx="76" cy="58" r="6.5" fill="url(#n5v-port)" stroke="#5d3418" stroke-width="2.5"/>
+    <g clip-path="url(#n5v-clip)">
+      <g fill="#5d3418">
+        <circle cx="60" cy="40" r="1.6"/><circle cx="80" cy="36" r="1.6"/><circle cx="100" cy="34" r="1.6"/>
+        <circle cx="120" cy="33" r="1.6"/><circle cx="140" cy="34" r="1.6"/><circle cx="160" cy="37" r="1.6"/>
+        <circle cx="60" cy="76" r="1.6"/><circle cx="80" cy="80" r="1.6"/><circle cx="100" cy="82" r="1.6"/>
+        <circle cx="120" cy="83" r="1.6"/><circle cx="140" cy="82" r="1.6"/><circle cx="160" cy="79" r="1.6"/>
+      </g>
+      <ellipse cx="120" cy="42" rx="60" ry="6" fill="#ffe9c4" opacity=".22"/>
+    </g>
+  </g>
+</svg>

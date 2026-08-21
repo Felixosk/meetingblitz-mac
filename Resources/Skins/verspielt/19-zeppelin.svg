@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -4 280 86">
+  <defs>
+    <linearGradient id="v19Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8ecef"/><stop offset=".55" stop-color="#b6c2cc"/><stop offset="1" stop-color="#8d9ca8"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; transform-origin: center; animation: v19bob 2.9s ease-in-out infinite alternate; animation-delay: -1.9s; }
+    @keyframes v19bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: v19prop .5s linear infinite; animation-delay: -0.18s; }
+    @keyframes v19prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+  </style>
+  <g class="bob">
+    <rect x="8" y="16" width="66" height="26" rx="4" fill="#fff8e1" stroke="#d6c791" stroke-width="2"/>
+    <text x="41" y="28" fill="#7a6c33" font-size="10" font-weight="700" text-anchor="middle" font-family="-apple-system, sans-serif">MEETING</text>
+    <text x="41" y="39" fill="#7a6c33" font-size="9" text-anchor="middle" font-family="-apple-system, sans-serif">in 5 Min</text>
+    <line x1="74" y1="29" x2="96" y2="32" stroke="#d6c791" stroke-width="2"/>
+    <path d="M96 18 L112 6 L112 56 L96 44 Z" fill="#9fb0bc"/>
+    <ellipse cx="185" cy="32" rx="92" ry="26" fill="url(#v19Hull)" stroke="#6d7f8c" stroke-width="2"/>
+    <path d="M100 26 Q185 12 268 26" stroke="#6d7f8c" stroke-width="1.5" fill="none" opacity=".6"/>
+    <path d="M100 38 Q185 52 268 38" stroke="#6d7f8c" stroke-width="1.5" fill="none" opacity=".6"/>
+    <rect x="160" y="56" width="52" height="16" rx="6" fill="#5d6d79" stroke="#42505a" stroke-width="2"/>
+    <circle cx="172" cy="64" r="3" fill="#ffe082"/><circle cx="186" cy="64" r="3" fill="#ffe082"/><circle cx="200" cy="64" r="3" fill="#ffe082"/>
+    <g class="prop"><ellipse cx="156" cy="64" rx="4" ry="9" fill="#37444d"/></g>
+    <line x1="176" y1="56" x2="170" y2="46" stroke="#42505a" stroke-width="2"/>
+    <line x1="196" y1="56" x2="202" y2="46" stroke="#42505a" stroke-width="2"/>
+  </g>
+</svg>

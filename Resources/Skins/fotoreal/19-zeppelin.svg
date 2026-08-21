@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 -2 276 86">
+  <defs>
+    <linearGradient id="f19Hull" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#eef1f4"/>
+      <stop offset=".68" stop-color="#cbd4da"/><stop offset=".92" stop-color="#9dabb5"/>
+      <stop offset="1" stop-color="#b6c2cb"/>
+    </linearGradient>
+    <filter id="f19b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <filter id="f19n" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 .82  0 0 0 0 .85  0 0 0 0 .88  0 0 0 .1 0"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+    </filter>
+    <clipPath id="f19Clip">
+      <ellipse cx="172" cy="34" rx="120" ry="24"/>
+    </clipPath>
+  </defs>
+  <style>
+    .bob { transform-box: fill-box; transform-origin: center; animation: f19bob 2.9s ease-in-out infinite alternate; animation-delay: -2.4s; }
+    @keyframes f19bob { from { transform: translateY(-4px) rotate(-1.6deg); } to { transform: translateY(4px) rotate(1.6deg); } }
+    .prop { transform-box: fill-box; transform-origin: center; animation: f19prop .5s linear infinite; animation-delay: -0.22s; }
+    @keyframes f19prop { 0% { transform: scaleY(1); } 50% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+  </style>
+  <g class="bob">
+    <path d="M32 10 L66 22 L32 34 Z" fill="#23508c"/>
+    <path d="M34 12 L62 22 L34 20 Z" fill="#5a82b3" opacity=".6"/>
+    <path d="M34 40 L66 34 L44 54 Z" fill="#1c4173"/>
+    <path d="M36 41 L60 36" stroke="#3d64a0" stroke-width="1" opacity=".7"/>
+    <ellipse cx="172" cy="34" rx="120" ry="24" fill="url(#f19Hull)"/>
+    <g clip-path="url(#f19Clip)">
+      <ellipse cx="172" cy="34" rx="120" ry="24" fill="#fff" filter="url(#f19n)" opacity=".5"/>
+      <path d="M60 24 Q172 7 282 28" stroke="#9fb0bc" stroke-width=".9" fill="none" opacity=".7"/>
+      <path d="M58 40 Q172 59 284 40" stroke="#9fb0bc" stroke-width=".9" fill="none" opacity=".7"/>
+      <path d="M64 30 Q172 17 278 32" stroke="#c3ccd3" stroke-width=".7" fill="none" opacity=".6"/>
+      <path d="M70 45 Q172 64 276 45" stroke="#8d9ca8" stroke-width=".7" fill="none" opacity=".5"/>
+      <path d="M96 14 Q120 10 150 9 M198 9 Q230 10 254 15" stroke="#dfe5ea" stroke-width="1" fill="none" opacity=".7"/>
+      <ellipse cx="172" cy="18" rx="76" ry="4.5" fill="#ffffff" opacity=".65" filter="url(#f19b)"/>
+      <text x="186" y="38" fill="#8a99a5" font-size="11" font-weight="600" letter-spacing="2" font-family="-apple-system, sans-serif">MEETING</text>
+    </g>
+    <path d="M198 56 Q218 66 242 58 L240 66 Q218 72 200 64 Z" fill="#f4f6f8"/>
+    <path d="M200 58 Q218 66 239 60" stroke="#b6c2cb" stroke-width=".9" fill="none" opacity=".8"/>
+    <rect x="206" y="58" width="28" height="6" rx="2" fill="#1e2a32"/>
+    <line x1="213" y1="58" x2="213" y2="64" stroke="#43525c" stroke-width=".9"/>
+    <line x1="221" y1="58" x2="221" y2="64" stroke="#43525c" stroke-width=".9"/>
+    <rect x="152" y="55" width="17" height="11" rx="4" fill="#5d6d79"/>
+    <path d="M153 56 L168 56 L168 60 L153 60 Z" fill="#78838c" opacity=".5"/>
+    <g class="prop"><ellipse cx="149" cy="61" rx="3.5" ry="8.5" fill="#2c363e"/></g>
+    <line x1="160" y1="55" x2="160" y2="47" stroke="#5d6d79" stroke-width="2"/>
+    <rect x="96" y="52" width="15" height="10" rx="4" fill="#5d6d79"/>
+    <g class="prop" style="animation-delay:-0.4s"><ellipse cx="93" cy="57" rx="3" ry="8" fill="#2c363e"/></g>
+    <line x1="103" y1="52" x2="103" y2="45" stroke="#5d6d79" stroke-width="2"/>
+  </g>
+</svg>

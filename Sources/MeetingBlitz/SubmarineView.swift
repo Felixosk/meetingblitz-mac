@@ -150,3 +150,88 @@ struct SeaSplash: View {
         }
     }
 }
+
+/// The puff of cloud an AIR motif (jet/heli/rocket/UFO/zeppelin) bursts out of
+/// (Runde 72, "Dramatischer Auftritt" für Luft-Motive — das Gegenstück zu
+/// `SeaSplash`, gleiche Panel-Mechanik und gleiche Gesamtdauer). A loose core
+/// of cloud puffs sits at the launch point the whole time; a ring of them gets
+/// thrown outward the instant the object punches through and drifts apart as
+/// it fades, then everything dissolves together with `duration`.
+///
+/// TEURE PROJEKTLEKTION: this is drawn with deterministic, opaque fill colours
+/// and soft radial gradients — no NSVisualEffectView/behindWindow material.
+/// A material blur in a stationary panel that is never the key/active window
+/// (like this one, and like the moving banner panels) silently falls back to
+/// a solid black slab instead of blurring the desktop underneath.
+struct CloudBurst: View {
+    let startedAt: Date       // drives the burst + the whole-cloud fade
+    let launchX: CGFloat      // x in this panel where the object punches through
+    let launchY: CGFloat      // y in this panel where the object punches through
+    static let duration: Double = 1.5
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSince(startedAt)
+            Canvas { ctx, _ in
+                let fade = max(0, 1 - t / Self.duration)
+                guard fade > 0.015 else { return }
+
+                let light = Color(hex: 0xFFFFFF)
+                let cloudBody = Color(hex: 0xE8EEF4)
+                let shade = Color(hex: 0x98A6B8)
+
+                func puff(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat, _ alpha: Double, _ tint: Color) {
+                    guard r > 0.4, alpha > 0.01 else { return }
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                             with: .radialGradient(Gradient(colors: [tint.opacity(alpha), tint.opacity(0)]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: r))
+                }
+
+                // Core cluster: a loose cloud mass right at the launch point,
+                // present throughout, dissolving together with the overall fade.
+                // Fixed seed → same silhouette every time, still irregular.
+                var core = SeededRandom(seed: 271)
+                var puffs: [(CGFloat, CGFloat, CGFloat)] = []
+                for i in 0..<9 {
+                    let ang = Double(i) / 9 * 2 * .pi + core.next() * 0.6
+                    let dist = 10 + 22 * core.next()
+                    let r = 15 + 19 * core.next()
+                    puffs.append((launchX + CGFloat(cos(ang) * dist),
+                                  launchY + CGFloat(sin(ang) * dist * 0.6),
+                                  CGFloat(r)))
+                }
+                // Shadowed underside first, lighter body on top → a hint of
+                // volume instead of a flat smear (also what keeps it legible
+                // over a light desktop background, not just a dark one).
+                for (x, y, r) in puffs { puff(x, y, r, 0.40 * fade, shade) }
+                for (x, y, r) in puffs { puff(x, y - r * 0.15, r * 0.82, 0.66 * fade, cloudBody) }
+
+                // Burst puffs: thrown outward at t≈0 as the object punches
+                // through, drifting apart and fading faster than the core —
+                // the intended "kurzes Aufwirbeln" (quick swirl-up) look.
+                let burst = bump(t, center: 0.10, width: 0.6)
+                if burst > 0.02 {
+                    var rng = SeededRandom(seed: 88)
+                    for i in 0..<16 {
+                        let ang = rng.next() * 2 * .pi        // disperses in every direction
+                        let sp = (16 + 96 * rng.next()) * burst
+                        let life = rng.next()
+                        let px = launchX + CGFloat(cos(ang) * sp)
+                        let py = launchY + CGFloat(sin(ang) * sp) - CGFloat(18 * life * max(0, t))
+                        let r = CGFloat((3 + 11 * rng.next()) * burst)
+                        let tint = i % 3 == 0 ? light : cloudBody
+                        puff(px, py, r, 0.85 * burst * fade, tint)
+                    }
+                }
+
+                // Brief bright flash right at the punch-through instant, sells
+                // the "breaking out" moment before the puffs are done drifting.
+                let flash = bump(t, center: 0.02, width: 0.16)
+                if flash > 0.02 {
+                    puff(launchX, launchY, 26 + CGFloat(24 * flash), 0.55 * flash, light)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
