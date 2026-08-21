@@ -172,6 +172,22 @@ struct SettingsPane: View {
     @State private var keyMonitor: Any?
     /// F1: inline list open + custom IANA field state for the second zone.
     @State private var zoneListOpen = false
+    /// Motiv, das gerade groß mit seiner Geschichte gezeigt wird (Doppelklick
+    /// im Raster). `nil` = Raster sichtbar.
+    ///
+    /// Startwert aus `--demo-skin-detail=<slug>`, damit sich die Detailansicht
+    /// für einen Screenshot öffnen lässt. Ein Doppelklick ist von außen nicht
+    /// auslösbar, ohne der Shell Bedienungshilfen-Rechte zu geben, und ohne
+    /// diesen Schalter wäre die Ansicht gar nicht prüfbar (dasselbe Muster wie
+    /// `--demo-hint` und `--onboarding-step=N`).
+    @State private var detailSkin: Skin? = SettingsPane.initialDetailSkin
+
+    static var initialDetailSkin: Skin? {
+        for a in CommandLine.arguments where a.hasPrefix("--demo-skin-detail=") {
+            return Skin.byID[String(a.dropFirst("--demo-skin-detail=".count))]
+        }
+        return nil
+    }
     @State private var zoneCustom = ""
     @State private var zoneCustomBad = false
 
@@ -533,12 +549,89 @@ struct SettingsPane: View {
                 Text(L.t("Das klassische U-Boot, ohne Motivwahl.",
                          "The classic U-Boot, no motif to pick."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+            } else if let skin = detailSkin {
+                skinDetail(skin)
             } else {
                 skinGrid
+                Text(L.t("Doppelklick auf ein Motiv zeigt es groß, mit seiner Geschichte.",
+                         "Double-click a motif to see it large, with its story."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
             }
 
             Button(L.t("Vorschau fliegen lassen", "Preview it flying")) { state.showTestBanner() }
                 .font(.system(size: 12)).buttonStyle(.borderless)
+        }
+    }
+
+    /// Große Ansicht eines Motivs samt der Geschichte dahinter.
+    ///
+    /// BEWUSST INLINE statt Popover oder eigenem Fenster: Das Einstellungs-Panel
+    /// ist nonactivating, und darin hängen modale Menüs (Runde 13), während
+    /// frisch geordnete Kleinfenster sich nach dem Anzeigen selbst verschieben
+    /// (Runde 56c). Die Detailansicht ersetzt deshalb einfach das Raster, das
+    /// hält die Panelhöhe konstant und braucht keinerlei Fenster-Akrobatik.
+    private func skinDetail(_ skin: Skin) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Button {
+                    detailSkin = nil
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                        Text(L.t("Alle Motive", "All motifs")).font(.system(size: 11))
+                    }
+                }
+                .buttonStyle(.borderless)
+                Spacer()
+                if state.skinID != skin.id {
+                    Button(L.t("Auswählen", "Select")) { state.skinID = skin.id }
+                        .font(.system(size: 11)).buttonStyle(.borderless)
+                }
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06))
+                if let image = Skins.shared.image(for: skin, style: state.skinStyle) {
+                    Image(nsImage: image)
+                        .resizable().aspectRatio(contentMode: .fit).padding(10)
+                } else {
+                    Image(systemName: "questionmark.square.dashed")
+                        .font(.system(size: 20)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 104)
+
+            Text(skin.name).font(.system(size: 12, weight: .semibold))
+
+            if let text = skin.loreText {
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                // Feste Höhe: ScrollView hat keine intrinsische (Runde 14) und
+                // würde in diesem sich selbst messenden Panel auf 0 fallen.
+                .frame(height: 92)
+
+                if let url = skin.loreSource {
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.right.square").font(.system(size: 9))
+                            Text(L.t("Quelle", "Source")).font(.system(size: 10))
+                        }
+                    }
+                    .buttonStyle(.link)
+                }
+            } else {
+                Text(L.t("Zu diesem Motiv ist noch keine Geschichte hinterlegt.",
+                         "No story recorded for this motif yet."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .frame(height: 92, alignment: .top)
+            }
         }
     }
 
@@ -564,10 +657,10 @@ struct SettingsPane: View {
     private func skinCell(_ skin: Skin) -> some View {
         let selected = state.skinID == skin.id
         let image = Skins.shared.image(for: skin, style: state.skinStyle)
-        return Button {
-            state.skinID = skin.id
-        } label: {
-            VStack(spacing: 3) {
+        // Kein Button: der würde den Doppelklick als zwei Einzelklicks
+        // schlucken. Stattdessen eine normale View mit beiden Tap-Gesten,
+        // Doppelklick zuerst registriert, sonst gewinnt immer der Einzelklick.
+        return VStack(spacing: 3) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.06))
                     if let image {
@@ -598,9 +691,9 @@ struct SettingsPane: View {
                 .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.08),
                               lineWidth: selected ? 1.5 : 1))
             .contentShape(RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(.plain)
-        .help(skin.name)
+            .onTapGesture(count: 2) { detailSkin = skin }
+            .onTapGesture { state.skinID = skin.id }
+            .help(skin.name)
     }
 
     // MARK: - Tab: Kalender

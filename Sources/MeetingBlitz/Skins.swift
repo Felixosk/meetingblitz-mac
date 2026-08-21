@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 /// Which visual family the flying object is drawn in. `classic` is the
-/// original Canvas-drawn U-Boot (`SubmarineView`, no assets needed); the other
-/// two load one of the 27 pre-made SVG motifs from the app bundle.
+/// original Canvas-drawn U-Boot (`SubmarineView`, no assets needed); the others
+/// load one of the 27 pre-made motifs from the app bundle.
 enum SkinStyle: String, CaseIterable, Identifiable {
-    case classic, playful, photoreal
+    case classic, playful, photoreal, photo
     var id: String { rawValue }
 
     /// Folder name under `Resources/Skins/` (matches the design asset export).
@@ -15,7 +15,15 @@ enum SkinStyle: String, CaseIterable, Identifiable {
         case .classic:   return nil
         case .playful:   return "verspielt"
         case .photoreal: return "fotoreal"
+        case .photo:     return "foto"
         }
+    }
+
+    /// `.photo` is the only raster family: those motifs are real photographs
+    /// (generated, then background-removed and trimmed), so there is no vector
+    /// version of them. Everything else ships as SVG.
+    var fileExtension: String {
+        self == .photo ? "png" : "svg"
     }
 
     var label: String {
@@ -23,6 +31,7 @@ enum SkinStyle: String, CaseIterable, Identifiable {
         case .classic:   return L.t("Klassisch", "Classic")
         case .playful:   return L.t("Verspielt", "Playful")
         case .photoreal: return L.t("Fotoreal", "Photoreal")
+        case .photo:     return L.t("Foto", "Photo")
         }
     }
 }
@@ -113,7 +122,7 @@ final class Skins {
         let url = resourceURL
             .appendingPathComponent("Skins", isDirectory: true)
             .appendingPathComponent(folder, isDirectory: true)
-            .appendingPathComponent("\(skin.slug).svg")
+            .appendingPathComponent("\(skin.slug).\(style.fileExtension)")
         guard let image = NSImage(contentsOf: url) else { return nil }
         cache[key] = image
         return image
