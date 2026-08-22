@@ -10,6 +10,10 @@ final class FlightVM: ObservableObject {
     /// the timeline picks up the current value on its own.
     var emergeT: Double = 0   // 0 = text hidden during the launch, 1 = settled/legible
     var tilt: Double = 0      // submarine tilt in degrees, follows the jump arc's tangent
+    /// Overlapping Action (Runde 70): wie weit das Flugobjekt der Kapsel gerade
+    /// vorauseilt, in Punkten. Der Presenter rechnet dafür eine Feder gegen die
+    /// aktuelle Fluggeschwindigkeit, die Kapsel selbst bleibt starr.
+    var capsuleLag: CGFloat = 0
     var facingLeft = false    // mirror the sub when the flight travels right→left
     /// Global (screen-coordinate) origin of the virtual banner box. The windows
     /// never move (Runde 21), every screen's stationary band renders the capsule
@@ -131,6 +135,11 @@ private struct CapsuleView: View {
                 // Nose follows the jump arc's tangent (nose-up climbing, nose-down
                 // on the way down); flips sign when mirrored. Small idle bob on top.
                 .rotationEffect(.degrees((vm.facingLeft ? 1 : -1) * vm.tilt + sin(now * 2.2) * 2))
+                // Overlapping Action (Runde 70): das Objekt zieht voraus, alles
+                // dahinter bleibt beim Beschleunigen kurz zurück. Deshalb wandert
+                // NUR das Objekt um die Rücklage nach vorn, der Rest der Kapsel
+                // bleibt stehen. Die Feder rechnet der Presenter (capsuleLag).
+                .offset(x: (vm.facingLeft ? -1 : 1) * -vm.capsuleLag)
             VStack(alignment: .leading, spacing: 2 * s) {
                 Text(vm.title)
                     .font(.system(size: 15 * s, weight: .semibold))
@@ -220,8 +229,20 @@ private struct CapsuleView: View {
     /// hängen am globalen Banner-Maßstab `s`, damit sie mitwachsen, wenn der
     /// Maßstab sich ändert.
     private func skinFrameSize(for image: NSImage) -> CGSize {
-        let targetHeight = 54 * s
-        let maxWidth = 160 * s
+        // „Motiv ragt heraus" (Runde 71): das Objekt wird höher als die Kapsel
+        // und steht dadurch körperlich davor statt darin. Nur die HÖHE wächst,
+        // die Breitengrenze bleibt: sonst schiebt sich ein langes flaches Motiv
+        // wie ein U-Boot über den Titel, während ein hohes wie Nessie oder die
+        // Ente gut aussieht. Die 42 pt Kopfraum über der Kapsel (`capsuleTop`)
+        // fassen den Überstand, deshalb ist der Faktor gedeckelt.
+        let oversize = AppState.shared.skinOversize
+        let targetHeight = (oversize ? 78 : 54) * s
+        // Die Breitengrenze muss mitwachsen, sonst greift sie ZUERST und drückt
+        // die Höhe wieder herunter: Nessie kam so auf 71 statt der gewollten 78
+        // Punkte, und vom Überstand blieb kaum etwas übrig (gemessen 21.08.).
+        // Mehr Breite verdeckt dabei nichts, sie schiebt den Text nur nach
+        // rechts, die Kapsel wird also breiter statt enger.
+        let maxWidth = (oversize ? 210 : 160) * s
         let w = image.size.width, h = image.size.height
         guard w > 0, h > 0 else { return CGSize(width: targetHeight, height: targetHeight) }
         let aspect = w / h

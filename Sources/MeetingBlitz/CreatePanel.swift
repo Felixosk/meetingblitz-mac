@@ -43,6 +43,9 @@ final class CreatePanelController {
         p.level = .popUpMenu
         p.hidesOnDeactivate = false
         p.becomesKeyOnlyIfNeeded = false   // key from the start → focus + accents
+        // Wie beim Widget, sonst liegt das Formular bei laufender Vollbild-App
+        // auf dem Schreibtisch daneben (22.08.2026, Begründung in PanelDock).
+        p.collectionBehavior = PanelDock.companionBehavior
         p.contentView = hosting
 
         // Runde 47g/47h/47i: gemerkte Position gewinnt, sonst neben das Widget.

@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// NSHostingView that accepts the first mouse click even while the app is
@@ -39,7 +40,7 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// panels). Hover is POLLED from `NSEvent.mouseLocation`.
 @MainActor
 final class Flight {
-    private enum Phase { case jumping, flying, docked, exiting }
+    private enum Phase { case winding, jumping, flying, docked, exiting }
 
     private let vm: FlightVM
     private let seconds: Double
@@ -80,12 +81,44 @@ final class Flight {
     private let cruiseWog: CGFloat = 6     // gentle up/down while cruising
     private let wogCount = 2.5
 
+    // MARK: Runde 70, drei Handwerksregeln aus der Motion-Design-Recherche
+
+    /// Anticipation: kurzes Ausholen entgegen der Flugrichtung vor dem Absprung.
+    /// Bewusst kurz gehalten, ab etwa einer Viertelsekunde wirkt es zögerlich
+    /// statt kraftvoll.
+    private let windUpDuration = 0.18
+    private let windUpBack: CGFloat = 26   // wie weit zurück
+    private let windUpDown: CGFloat = 14   // wie weit zusätzlich abtauchen
+
+    /// Beschleunigter Abgang: ab `exitFrom` (Anteil der Strecke) legt sich
+    /// `exitBoost` quadratisch obendrauf, das Banner zieht also zum Schluss an.
+    /// Das Ziel darf dabei leicht überschossen werden, es fliegt ohnehin aus
+    /// dem Bild.
+    private let exitFrom = 0.78
+    private let exitBoost = 0.14
+
+    /// Overlapping Action: Wie stark die Kapsel bei Beschleunigung zurückbleibt
+    /// (Punkte pro Punkt-pro-Sekunde), plus Federsteifigkeit und Dämpfung ihrer
+    /// Rückkehr. Profis lassen ein angehängtes Element 50 bis 150 ms verzögert
+    /// folgen, statt es starr mitzuziehen.
+    private let lagPerSpeed: CGFloat = 0.030
+    private let lagStiffness: CGFloat = 120
+    private let lagDamping: CGFloat = 13
+    private let lagMax: CGFloat = 34
+
+    /// Laufende Werte der Feder zwischen Objekt und Kapsel.
+    private var lagVelocity: CGFloat = 0
+    private var lastGlobalX: CGFloat = 0
+    private var haveLastX = false
+
     init(vm: FlightVM, seconds: Double, laneIndex: Int, pinnedDocked: Bool = false) {
         self.vm = vm
         self.seconds = seconds
         self.laneIndex = laneIndex
         self.pinnedDocked = pinnedDocked
-        self.phase = pinnedDocked ? .docked : (vm.dramaticEntrance ? .jumping : .flying)
+        // Der Wind-up gehört zum dramatischen Auftritt: erst ausholen, dann
+        // springen. Ohne dramatischen Auftritt fliegt es wie bisher level herein.
+        self.phase = pinnedDocked ? .docked : (vm.dramaticEntrance ? .winding : .flying)
         vm.docked = pinnedDocked
         vm.emergeT = 1
         vm.tilt = 0
@@ -137,7 +170,9 @@ final class Flight {
             // Stationary bands: full width of each screen, tall enough for the
             // whole flight (launch depth … arc overshoot). Clipped to the screen;
             // screens the flight band misses get no window.
-            let bandBottom = waterY - 30
+            // windUpDown mit einrechnen: das Objekt taucht beim Ausholen unter
+            // waterY, ohne diesen Zuschlag würde es am Bandrand abgeschnitten.
+            let bandBottom = waterY - 30 - windUpDown
             let bandTop = cruiseY + panelH + arcHeight + 40
             for screen in screens {
                 let f = screen.frame
@@ -146,8 +181,27 @@ final class Flight {
                 guard y1 - y0 > 40 else { continue }
                 bands.append(makeBand(at: CGRect(x: f.minX, y: y0, width: f.width, height: y1 - y0)))
             }
+            // Auftritts-Panel (Gischt bzw. Wolke) NICHT sofort: seit dem Wind-up
+            // (Runde 70) holt das Objekt erst `windUpDuration` lang aus und
+            // springt erst danach. Käme der Splash schon beim Start, spritzte
+            // es, bevor überhaupt etwas durch die Oberfläche stößt.
+            let delay = vm.dramaticEntrance ? windUpDuration : 0
             if vm.dramaticEntrance && !pinnedDocked {
-                entrancePanels.append(vm.entranceElement == .water ? makeSplash() : makeCloud())
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    Task { @MainActor in
+                        // Der Flug kann in diesen 180 ms schon vorbei sein (per
+                        // × geschlossen oder weggeschnoozt). Dann liefe der
+                        // Timer aus und es spritzte ins Leere.
+                        guard let self, self.backupTimer != nil else { return }
+                        self.entrancePanels.append(
+                            self.vm.entranceElement == .water ? self.makeSplash() : self.makeCloud())
+                        let dur = self.vm.entranceElement == .water
+                            ? SplashMetalView.duration : CloudBurst.duration
+                        DispatchQueue.main.asyncAfter(deadline: .now() + dur + 0.3) { [weak self] in
+                            Task { @MainActor in self?.closeEntrancePanels() }
+                        }
+                    }
+                }
             }
         }
         startedAt = Date()
@@ -155,33 +209,81 @@ final class Flight {
         lastTickAt = startedAt
         lastX = vm.globalX; lastY = vm.globalY; haveLast = true
 
-        if !entrancePanels.isEmpty {
-            let entranceDuration = vm.entranceElement == .water ? SplashMetalView.duration : CloudBurst.duration
-            DispatchQueue.main.asyncAfter(deadline: .now() + entranceDuration + 0.3) { [weak self] in
-                Task { @MainActor in self?.closeEntrancePanels() }
-            }
+        // Das Aufräumen der Auftritts-Panels hängt jetzt an ihrer verzögerten
+        // Erzeugung weiter oben, nicht mehr an dieser Stelle.
+
+        // Treiber 1: der Bildschirmtakt selbst (Runde 70).
+        //
+        // WARUM NICHT MEHR NUR EIN TIMER: Ein Timer mit 60 Hz läuft NEBEN dem
+        // Bildwiederholzyklus, nicht mit ihm. Auf einem 120-Hz-Display fällt
+        // jeder zweite Tick zwischen zwei Bilder, unter Last driftet er ohnehin.
+        // Das Ergebnis sind winzige, unregelmäßige Sprünge, die man nicht als
+        // Fehler benennen kann, die eine Bewegung aber billig aussehen lassen.
+        // `CADisplayLink` feuert exakt im Takt des Bildschirms und passt sich
+        // ProMotion an. Auf dem Mac gibt es sie seit macOS 14, und genau das
+        // ist unsere Mindestversion (Package.swift).
+        if let screen = bands.first?.screen ?? NSScreen.main {
+            let link = screen.displayLink(target: self, selector: #selector(displayTick))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
         }
 
-        // Driver 1: GCD main-queue timer, 60 fps.
-        let src = DispatchSource.makeTimerSource(queue: .main)
-        src.schedule(deadline: .now() + frameInterval, repeating: frameInterval)
-        src.setEventHandler { [weak self] in
-            guard let self else { return }
-            MainActor.assumeIsolated { self.tick() }
-        }
-        src.resume()
-        gcdTimer = src
-
-        // Driver 2: common-modes run-loop timer, 30 fps.
+        // Treiber 2: Runloop-Timer als Netz.
+        //
+        // Bleibt drin, obwohl der Bildschirmtakt der genauere Weg ist: Der
+        // DisplayLink pausiert, wenn sein Bildschirm schläft oder verschwindet
+        // (Deckel zu, Monitor abgezogen), und ein Banner, das dann mitten im
+        // Flug einfriert, wäre schlimmer als ein paar ungenaue Frames. `tick()`
+        // rechnet ohnehin mit echten Zeitstempeln statt mit Frame-Zählern,
+        // doppelte Aufrufe im selben Frame filtert es selbst weg.
         let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             guard let self else { return }
-            MainActor.assumeIsolated { self.tick() }
+            MainActor.assumeIsolated {
+                self.backupTicks += 1
+                self.tick()
+            }
         }
         RunLoop.main.add(t, forMode: .common)
         backupTimer = t
+        measureStart = Date()
     }
 
-    private var gcdTimer: DispatchSourceTimer?
+    /// Callback des Bildschirmtakts. `nonisolated`, weil CADisplayLink einen
+    /// nackten @objc-Selector verlangt; der Aufruf kommt garantiert auf dem
+    /// Hauptthread, deshalb ist `assumeIsolated` hier zulässig.
+    @objc nonisolated private func displayTick() {
+        MainActor.assumeIsolated {
+            self.displayTicks += 1
+            self.tick()
+        }
+    }
+
+    /// Zähler für `--motion-log`. Ohne Messung ist nicht zu unterscheiden, ob
+    /// der Bildschirmtakt wirklich läuft oder ob still nur der 30-Hz-Notnagel
+    /// arbeitet: sichtbar wäre in beiden Fällen eine Bewegung, nur eben eine
+    /// halb so feine. Ein grüner Build beweist hier gar nichts.
+    private var displayTicks = 0
+    private var backupTicks = 0
+    private var measureStart = Date()
+
+    static var motionLogEnabled: Bool { CommandLine.arguments.contains("--motion-log") }
+
+    private func writeMotionLog() {
+        guard Self.motionLogEnabled else { return }
+        let secs = Date().timeIntervalSince(measureStart)
+        guard secs > 0.4 else { return }
+        let line = String(format: "flug %.2fs  bildschirmtakt %d ticks (%.1f/s)  notnagel %d ticks (%.1f/s)\n",
+                          secs, displayTicks, Double(displayTicks) / secs,
+                          backupTicks, Double(backupTicks) / secs)
+        let url = URL(fileURLWithPath: "/tmp/mb_motion.log")
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private var displayLink: CADisplayLink?
     private var backupTimer: Timer?
 
     /// A stationary, transparent, click-through band pinned to one screen. The
@@ -296,13 +398,30 @@ final class Flight {
 
     private func tick() {
         let now = Date()
-        // Both drivers call this; collapse near-simultaneous fires into one frame.
-        guard now.timeIntervalSince(lastTickAt) >= frameInterval * 0.5 else { return }
+        // Beide Treiber rufen hier herein; fast gleichzeitige Aufrufe zu einem
+        // Frame zusammenfassen. Die Schwelle muss DEUTLICH unter dem kürzesten
+        // echten Bildabstand liegen: Mit dem alten Wert (halbe 60-Hz-Periode,
+        // also 8,3 ms) lag sie exakt auf dem Bildabstand eines 120-Hz-Displays,
+        // und der Zeit-Jitter warf dadurch rund jeden vierten Frame weg
+        // (gemessen 94 statt 120 Ticks je Sekunde). 1/240 s filtert weiterhin
+        // die Doppelaufrufe, lässt aber jedes echte Bild durch.
+        guard now.timeIntervalSince(lastTickAt) >= 1.0 / 240.0 else { return }
         let dt = min(now.timeIntervalSince(lastTickAt), 0.25)
         lastTickAt = now
         updateHover(now)
 
         switch phase {
+        case .winding:
+            // Anticipation (Runde 70): kurz ZURÜCK und tiefer, bevor es losgeht.
+            // Ohne diesen Wind-up liest sich der Absprung als Ruckler statt als
+            // Absicht; es ist das billigste der Animationsprinzipien und das mit
+            // der größten Wirkung am Anfang einer Bewegung.
+            let wt = min(1, now.timeIntervalSince(startedAt) / windUpDuration)
+            let e = sin(.pi * wt)                          // 0 → 1 → 0, weiches Ausholen
+            vm.globalX = launchX - windUpBack * e
+            vm.globalY = waterY - windUpDown * e
+            updateTilt(CGPoint(x: vm.globalX, y: vm.globalY))
+            if wt >= 1 { phase = .jumping; startedAt = now }
         case .jumping:
             let jt = min(1, now.timeIntervalSince(startedAt) / jumpDuration)
             let e = 1 - (1 - jt) * (1 - jt)                // easeOut: fast off the water, settle
@@ -315,8 +434,11 @@ final class Flight {
             let te = now.timeIntervalSince(travelStartedAt)
             let progress = te / seconds
             if progress >= 1 { close(); return }
-            let eased = readingEase(progress)
-            vm.globalX = cruiseX + (endX - cruiseX) * eased
+            // Abgang (Runde 70): das letzte Stück beschleunigt spürbar aus dem
+            // Bild heraus, statt am Rand einfach aufzuhören. Enter und Exit
+            // dürfen sich unterscheiden, aber beide brauchen eine Richtung.
+            let eased = readingEase(progress) + exitBoost * pow(max(0, progress - exitFrom) / (1 - exitFrom), 2)
+            vm.globalX = cruiseX + (endX - cruiseX) * min(1.12, eased)
             vm.globalY = cruiseY + cruiseWog * sin(2 * .pi * progress * wogCount)
             updateTilt(CGPoint(x: vm.globalX, y: vm.globalY))
         case .docked:
@@ -330,6 +452,33 @@ final class Flight {
             vm.tilt += (0 - vm.tilt) * 0.2
             if abs(vm.globalX - endX) <= 4 { close() }
         }
+        updateCapsuleLag(dt)
+    }
+
+    /// Overlapping Action (Runde 70): Die Kapsel hängt an einer Feder hinter dem
+    /// Flugobjekt, statt starr daran zu kleben. Beschleunigt das Objekt, bleibt
+    /// sie kurz zurück und schwingt danach nach; im gleichmäßigen Flug läuft sie
+    /// wieder auf. Genau daran erkennt das Auge zwei verbundene Körper statt
+    /// eines einzigen steifen Bildes.
+    ///
+    /// Bewusst hier im Presenter und nicht als SwiftUI-Animation: Die View
+    /// zeichnet jeden Frame ohnehin neu (`TimelineView(.animation)`), und eine
+    /// zweite, unabhängig laufende Animationsschleife darüber würde mit dieser
+    /// um dieselbe Position streiten.
+    private func updateCapsuleLag(_ dt: Double) {
+        guard dt > 0 else { return }
+        let speed: CGFloat = haveLastX ? (vm.globalX - lastGlobalX) / CGFloat(dt) : 0
+        lastGlobalX = vm.globalX
+        haveLastX = true
+
+        // Ziel-Rücklage wächst mit dem Tempo, entgegen der Flugrichtung.
+        let target = max(-lagMax, min(lagMax, -speed * lagPerSpeed))
+        // Feder-Dämpfer, halbimplizit integriert: erst Geschwindigkeit aus der
+        // Auslenkung, dann dämpfen, dann Position. Stabil auch bei Frame-Rucklern.
+        let d = CGFloat(min(dt, 1.0 / 30))
+        lagVelocity += (target - vm.capsuleLag) * lagStiffness * d
+        lagVelocity -= lagVelocity * lagDamping * d
+        vm.capsuleLag += lagVelocity * d
     }
 
     /// Submarine tilt from the arc's actual tangent (screen delta since last
@@ -425,7 +574,8 @@ final class Flight {
     private func close() {
         guard !closed else { return }
         closed = true
-        gcdTimer?.cancel(); gcdTimer = nil
+        writeMotionLog()
+        displayLink?.invalidate(); displayLink = nil
         backupTimer?.invalidate(); backupTimer = nil
         closeEntrancePanels()
         // Banner-× while the popover is open: both go down together. Safe

@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Die ältere Instanz gewinnt, die neue beendet sich sofort.
         // Diese Prüf-Aufrufe brauchen den Kalender, aber keine Menüleiste, und
         // laufen deshalb absichtlich neben der App.
-        let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice"]
+        let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels"]
         if !CommandLine.arguments.contains(where: readOnlyChecks.contains),
            let bid = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bid)
@@ -85,7 +85,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)   // menu-bar only, no dock icon
+
+        // Selbsttest für die Schreibtisch-Falle (22.08.2026).
+        //
+        // Warum als Schalter und nicht per Screenshot: Ob ein Fenster über
+        // einer fremden Vollbild-App erscheint, lässt sich von außen nur
+        // prüfen, indem man eine App per Klick in den Vollbildmodus schickt,
+        // und dieser Klick ist ohne Bedienungshilfen-Rechte nicht auslösbar.
+        // Die Ursache selbst ist dagegen eine Zahl im Fenster, und die kann
+        // die App über sich selbst ausgeben. Läuft absichtlich VOR `start()`:
+        // die Panels brauchen keinen Kalender, und so fragt der Selbsttest
+        // keine Rechte an.
+        if CommandLine.arguments.contains("--check-panels") {
+            // Einstieg ZUERST: sein `show` räumt das Einstellungsfenster aus
+            // dem Weg, in der anderen Reihenfolge wäre es beim Ablesen zu.
+            OnboardingPanelController.shared.show(state: .shared)
+            WidgetPanelController.shared.toggle(state: .shared, statusButton: nil)
+            AppState.shared.toggleSettingsPanel()
+            AppState.shared.toggleCreatePanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                var bad = 0
+                print("Fenster sichtbar: \(NSApp.windows.filter(\.isVisible).count)")
+                for w in NSApp.windows where w.isVisible {
+                    let b = w.collectionBehavior
+                    let all = b.contains(.canJoinAllSpaces)
+                    let aux = b.contains(.fullScreenAuxiliary)
+                    let name = w.title.isEmpty ? "(ohne Titel: Widget)" : w.title
+                    if !all { bad += 1 }
+                    print("\(all && aux ? "ok  " : "FEHLT")  \(name): canJoinAllSpaces=\(all) fullScreenAuxiliary=\(aux)")
+                }
+                print(bad == 0
+                      ? "check-panels ok: alle sichtbaren Fenster dürfen auf jeden Schreibtisch"
+                      : "CHECK-PANELS FEHLGESCHLAGEN: \(bad) Fenster bleiben bei Vollbild-Apps unsichtbar")
+                exit(bad == 0 ? 0 : 1)
+            }
+            return
+        }
+
         AppState.shared.start()
+
+        // `meetingblitz://restart` landet hier (siehe URLScheme).
+        NotificationCenter.default.addObserver(self, selector: #selector(restartApp),
+                                               name: .meetingBlitzRestart, object: nil)
 
         // F9: meetingblitz://… entgegennehmen. Wird die App PER URL gestartet,
         // trifft das Ereignis ein, bevor das Statusitem steht — deshalb wird
@@ -371,6 +412,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               action: #selector(saveDiagnostics), keyEquivalent: "")
         diag.target = self
         menu.addItem(diag)
+
+        menu.addItem(.separator())
+        // Die zwei Selbsthilfe-Knöpfe. Sie stehen HIER und nicht in den
+        // Einstellungen: Wer sein Einstellungsfenster nicht findet, kann darin
+        // auch nichts anklicken, und hängt die eigene Oberfläche, geht dieses
+        // Menü trotzdem noch auf (es zeichnet das System).
+        let rescue = NSMenuItem(title: L.t("Fenster zurückholen", "Bring windows back"),
+                                action: #selector(rescuePanels), keyEquivalent: "")
+        rescue.target = self
+        rescue.toolTip = L.t("Holt Widget und Panels auf den Bildschirm, auf dem die Maus steht, und vergisst gemerkte Fensterpositionen.",
+                             "Brings the widget and panels to the screen the mouse is on and forgets remembered window positions.")
+        menu.addItem(rescue)
+        let restart = NSMenuItem(title: L.t("MeetingBlitz neu starten", "Restart MeetingBlitz"),
+                                 action: #selector(restartApp), keyEquivalent: "")
+        restart.target = self
+        menu.addItem(restart)
+
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L.t("MeetingBlitz beenden", "Quit MeetingBlitz"),
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -379,6 +437,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() { AppState.shared.toggleSettingsPanel() }
+
+    /// Widget und Panels zurück auf den Bildschirm holen, auf dem gearbeitet
+    /// wird (Begründung in `PanelRescue`).
+    @objc private func rescuePanels() {
+        PanelRescue.bringBack(state: .shared, statusButton: statusItem?.button)
+    }
+
+    /// App beenden und sofort wieder starten.
+    ///
+    /// **Die Falle dabei:** Diese App lässt absichtlich nur EINE Kopie von sich
+    /// laufen (Runde 46, sonst wirft macOS das Menüleisten-Symbol raus). Eine
+    /// zweite Kopie beendet sich beim Start sofort selbst, solange die erste
+    /// noch lebt. Ein naiver Neustart („starten, dann beenden") würde also
+    /// schlicht die App schließen und nichts wieder öffnen.
+    ///
+    /// Deshalb übernimmt eine kleine Shell den Neustart von außen: Sie wartet,
+    /// bis dieser Prozess wirklich weg ist, und startet erst dann. Sie überlebt
+    /// das Beenden der App, weil ein weiterlaufendes Kindprozess-Skript nicht
+    /// mit dem Elternprozess stirbt.
+    @objc private func restartApp() {
+        let bundle = Bundle.main.bundleURL
+        // Aus der Shell heraus gestartet (nacktes Binary statt .app) gibt es
+        // kein Bundle zum Öffnen; dann lieber gar nicht neu starten als ein
+        // Finder-Fenster aufmachen und die App weg.
+        guard bundle.pathExtension == "app" else {
+            NSLog("Neustart übersprungen: läuft nicht als .app (\(bundle.path))")
+            return
+        }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let script = """
+        while /bin/kill -0 \(pid) 2>/dev/null; do /bin/sleep 0.2; done
+        /bin/sleep 0.4
+        /usr/bin/open -n '\(bundle.path.replacingOccurrences(of: "'", with: "'\\''"))'
+        """
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", script]
+        do {
+            try task.run()
+        } catch {
+            // Lieber weiterlaufen als beenden ohne Wiederkehr.
+            NSLog("Neustart fehlgeschlagen: \(error.localizedDescription)")
+            return
+        }
+        NSApp.terminate(nil)
+    }
 
     /// Schreibt den Statusbericht nach ~/Downloads, legt ihn in die
     /// Zwischenablage und zeigt ihn im Finder.

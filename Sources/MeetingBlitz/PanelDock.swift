@@ -17,6 +17,26 @@ import AppKit
 /// Wachsen.
 enum PanelDock {
 
+    /// Fenster-Verhalten für die Begleit-Panels (Einstellungen, „Neues
+    /// Meeting", Einführung). **Muss dasselbe sein wie beim Widget**
+    /// (`WidgetPanel.swift`), sonst passiert Folgendes:
+    ///
+    /// Ein Fenster ohne `.canJoinAllSpaces` gehört zu genau EINEM Schreibtisch.
+    /// Sitzt der Nutzer gerade in einer Vollbild-App, hat macOS dafür einen
+    /// eigenen Schreibtisch angelegt. Das Widget darf dort hinein (es hat die
+    /// Eigenschaft), die Panels durften es nicht: sie öffneten sich brav, aber
+    /// auf dem Schreibtisch daneben. Auf dem Bildschirm passierte sichtbar
+    /// NICHTS, kein Fehler, kein Absturz, kein Log. Gemeldet wurde das als
+    /// „ich klicke auf Einstellungen und es passiert nichts" (22.08.2026).
+    ///
+    /// `.fullScreenAuxiliary` allein reicht nicht: das erlaubt nur den Auftritt
+    /// über einer Vollbild-App der EIGENEN App, und MeetingBlitz hat keine.
+    ///
+    /// Der Duplizier-Fehler aus Runde 13 (`.canJoinAllSpaces` zeigt ein Panel
+    /// auf JEDEM Bildschirm gleichzeitig) trifft nur WANDERNDE Fenster, also
+    /// die Banner. Für stehende Fenster wie Widget und Panels ist es richtig.
+    static let companionBehavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
     /// Ursprung (unten links, AppKit-Koordinaten) für ein Panel dieser Größe.
     static func origin(panelSize: CGSize, anchor: CGRect?, gap: CGFloat = 10) -> NSPoint {
         guard let a = anchor else {
@@ -91,6 +111,51 @@ enum PanelDock {
     /// nimmt wieder den Automatik-Platz neben dem Widget.
     static func forgetPositions() {
         for id in ["create", "settings"] { UserDefaults.standard.removeObject(forKey: key(id)) }
+    }
+}
+
+/// „Fenster zurückholen": ein Rettungsknopf für den Fall, dass ein Fenster
+/// dieser App zwar offen ist, der Nutzer es aber nicht sieht.
+///
+/// Dafür gibt es drei Wege, und alle drei enden im selben Bild: man klickt, und
+/// scheinbar passiert nichts.
+///   1. Das Fenster liegt auf einem anderen Schreibtisch (Vollbild-App).
+///   2. Die gemerkte Position zeigt auf einen Monitor, der nicht mehr dran ist.
+///   3. Das Widget selbst hängt an einem Bildschirm, auf den keiner schaut.
+///
+/// Deshalb reicht Verschieben hier NICHT: Ein bereits geöffnetes Fenster
+/// wechselt den Schreibtisch nicht, nur weil man seinen Rahmen ändert. Der
+/// einzige verlässliche Weg ist zu, Position vergessen, neu auf.
+///
+/// BEWUSST kein Eintrag in den Einstellungen: Wer sein Einstellungsfenster
+/// nicht sieht, kann dort nichts anklicken. Der Platz dafür ist das Menü am
+/// Menüleisten-Symbol, das kommt vom System und geht immer auf.
+@MainActor
+enum PanelRescue {
+
+    /// Holt alles zurück, was gerade offen sein sollte, auf den Bildschirm, auf
+    /// dem die Maus steht.
+    static func bringBack(state: AppState, statusButton: NSStatusBarButton?) {
+        let hadSettings = SettingsPanelController.shared.isOpen
+        let hadCreate = CreatePanelController.shared.isOpen
+
+        PanelDock.forgetPositions()
+        SettingsPanelController.shared.close()
+        CreatePanelController.shared.close()
+        if WidgetPanelController.shared.isOpen { WidgetPanelController.shared.close() }
+
+        // Zuerst das Widget: die Begleit-Panels docken an seinen Rahmen an.
+        // Läge der noch auf dem abgesteckten Monitor, wären sie sofort wieder
+        // weg. `anchorToMouseScreen` setzt es dorthin, wo gerade gearbeitet wird.
+        WidgetPanelController.shared.toggle(state: state, statusButton: statusButton,
+                                            anchorToMouseScreen: true)
+
+        // Einen Durchlauf später, dann steht der echte Widget-Rahmen (dieselbe
+        // Phantomgrößen-Falle wie bei der Erstplatzierung der Panels, 47i).
+        DispatchQueue.main.async {
+            if hadSettings { state.toggleSettingsPanel() }
+            if hadCreate { state.toggleCreatePanel() }
+        }
     }
 }
 

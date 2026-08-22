@@ -4,7 +4,7 @@
 before something from your Apple Calendar starts, a submarine flies across your
 screens.
 
-### ⬇ [Download MeetingBlitz 1.4](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [Download MeetingBlitz 1.5.1](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Ready-made app · 9.5 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·

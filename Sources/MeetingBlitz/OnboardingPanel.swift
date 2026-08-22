@@ -63,6 +63,10 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
         p.level = .popUpMenu
         p.hidesOnDeactivate = false
         p.becomesKeyOnlyIfNeeded = false
+        // Wie beim Widget: ohne das erscheint der Einstieg bei laufender
+        // Vollbild-App auf dem Schreibtisch daneben, also für den Nutzer gar
+        // nicht (22.08.2026, Begründung in PanelDock).
+        p.collectionBehavior = PanelDock.companionBehavior
         p.contentView = hosting
         p.delegate = self
         self.state = state
