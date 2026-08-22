@@ -14,6 +14,20 @@ import AppKit
 ///   meetingblitz://join-next      laufendes Meeting, sonst das nächste
 ///   meetingblitz://instant        Sofort-Meeting erstellen und beitreten
 ///   meetingblitz://create?text=…  Erstellen-Formular mit Freitext vorbelegen
+///   meetingblitz://settings       Einstellungen öffnen
+///   meetingblitz://rescue         Fenster zurückholen (siehe PanelRescue)
+///
+/// `settings` und `rescue` sind zusätzlich der einzige Weg, das Verhalten von
+/// außen zu PRÜFEN: Ein Klick im Menü lässt sich nicht fernauslösen, ohne der
+/// Shell Bedienungshilfen-Rechte zu geben, ein `open "meetingblitz://settings"`
+/// dagegen schon, auch aus einer Vollbild-App heraus.
+extension Notification.Name {
+    /// `meetingblitz://restart` → der AppDelegate startet neu. Über eine
+    /// Meldung, weil nur er den Neustart kennt und `URLScheme` ihn nicht
+    /// erreicht.
+    static let meetingBlitzRestart = Notification.Name("MeetingBlitzRestart")
+}
+
 @MainActor
 enum URLScheme {
     /// Die letzten Aufrufe, damit die Diagnose zeigen kann, ob etwas ankam.
@@ -48,6 +62,16 @@ enum URLScheme {
                 .queryItems?.first { $0.name == "text" }?.value
             state.pendingQuickAdd = text
             state.openCreatePanel()
+        case "settings", "preferences":
+            state.toggleSettingsPanel()
+        case "rescue", "bring-back":
+            PanelRescue.bringBack(state: state, statusButton: statusButton)
+        case "restart":
+            // Derselbe Weg wie der Menüeintrag. Als URL, weil ein Menüklick von
+            // außen nicht auslösbar ist und der Neustart sonst ungetestet bliebe
+            // (und weil es ein Notausgang aus dem Terminal ist, wenn die
+            // Oberfläche der App hängt).
+            NotificationCenter.default.post(name: .meetingBlitzRestart, object: nil)
         default:
             break   // Unbekanntes still ignorieren, nicht mit Fehlern nerven
         }

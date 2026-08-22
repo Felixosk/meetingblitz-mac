@@ -15,6 +15,10 @@ final class SettingsPanelController {
     /// Widget-Frame vom Öffnen, fürs Nach-Platzieren im ersten resize (47i).
     private var anchorRect: CGRect?
 
+    /// Wie bei den anderen Panels, damit `PanelRescue` weiß, was es nach dem
+    /// Zurückholen wieder öffnen muss.
+    var isOpen: Bool { panel?.isVisible ?? false }
+
     /// Toggle the settings panel, opening it centred underneath the widget
     /// (`anchor`), clamped to the visible screen.
     func toggle(state: AppState, anchor: CGRect?) {
@@ -42,6 +46,10 @@ final class SettingsPanelController {
         // Key from the start: controls only render their active (blue) accent
         // in a key window, otherwise everything sits gray until first clicked.
         p.becomesKeyOnlyIfNeeded = false
+        // Muss dasselbe Verhalten haben wie das Widget, sonst öffnet sich das
+        // Panel bei laufender Vollbild-App auf dem Schreibtisch daneben und der
+        // Klick sieht wirkungslos aus (22.08.2026, Begründung in PanelDock).
+        p.collectionBehavior = PanelDock.companionBehavior
         p.contentView = hosting
 
         // Runde 47g/47h/47i: gemerkte Position gewinnt, sonst neben das Widget.
@@ -555,6 +563,17 @@ struct SettingsPane: View {
                 skinGrid
                 Text(L.t("Doppelklick auf ein Motiv zeigt es groß, mit seiner Geschichte.",
                          "Double-click a motif to see it large, with its story."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+
+            // Gilt für jeden Motiv-Stil, deshalb außerhalb der Fallunterscheidung
+            // oben. Beim klassischen U-Boot gibt es kein Bild-Asset, das
+            // herausragen könnte.
+            if state.skinStyle != .classic {
+                Toggle(L.t("Motiv ragt heraus", "Motif breaks out"), isOn: $state.skinOversize)
+                    .font(.system(size: 12))
+                Text(L.t("Das Objekt wird größer als die Kapsel und steht davor statt darin. Wirkt bei hohen Motiven wie Nessie oder der Ente, bei langen flachen U-Booten kaum.",
+                         "The object grows taller than the capsule and stands in front of it. Works for tall motifs like Nessie or the duck, barely for long flat submarines."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
 

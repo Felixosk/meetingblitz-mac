@@ -16,6 +16,11 @@ final class AppState: ObservableObject {
     /// `currentSkinElement`). UserDefaults-Key bleibt "waterEffect", damit eine
     /// bereits gesetzte Einstellung nicht zurückgesetzt wird.
     @Published var dramaticEntrance: Bool { didSet { d.set(dramaticEntrance, forKey: "waterEffect") } }
+    /// Lässt das Flugobjekt über die Kapsel hinausragen, damit es körperlich
+    /// davor steht statt darin zu sitzen (Runde 71). Standard aus, weil es nur
+    /// hohen Motiven schmeichelt: ein langes flaches U-Boot wird dabei so
+    /// breit, dass die Breitengrenze greift und kaum noch etwas übersteht.
+    @Published var skinOversize: Bool { didSet { d.set(skinOversize, forKey: "skinOversize") } }
     /// Which flying object shows in the banner (20.08.2026 Skin-Feature).
     /// `.classic` keeps the original Canvas-drawn U-Boot; the other styles
     /// pick one of the 27 SVG motifs below by `skinID`.
@@ -346,6 +351,7 @@ final class AppState: ObservableObject {
         leadMinutes = d.object(forKey: "leadMinutes") as? Int ?? 5
         soundEnabled = d.object(forKey: "soundEnabled") as? Bool ?? true
         dramaticEntrance = d.object(forKey: "waterEffect") as? Bool ?? true
+        skinOversize = d.object(forKey: "skinOversize") as? Bool ?? false
         skinStyle = d.string(forKey: "skinStyle").flatMap(SkinStyle.init(rawValue:)) ?? .classic
         skinID = d.string(forKey: "skinID") ?? Skin.all[0].id
         quietMode = d.object(forKey: "quietMode") as? Bool ?? false
