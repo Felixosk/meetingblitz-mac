@@ -18,6 +18,9 @@ final class CreatePanelController {
 
     var isOpen: Bool { panel?.isVisible ?? false }
 
+    /// Für die Diagnose, wie beim Einstellungs-Panel.
+    var frame: CGRect? { panel?.frame }
+
     func toggle(state: AppState, anchor: CGRect?) {
         if let p = panel, p.isVisible { close(); return }
 

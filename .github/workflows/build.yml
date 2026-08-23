@@ -1,0 +1,51 @@
+name: Build
+
+# Proves the one thing that actually breaks for other people: that a clean
+# checkout builds on a Mac that has neither the author's signing certificate
+# nor a `signing.local` file. build.sh falls back to ad-hoc signing in that
+# case, and this job is the only place that path is ever exercised.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version || true
+
+      - name: Build (universal, ad-hoc signed, runs the self-test)
+        # build.sh compiles both architectures, assembles the bundle, signs it
+        # and finishes with `MeetingBlitz --selftest`, which fails the build if
+        # link detection or free-text parsing regress. A timeout keeps a stuck
+        # launch from burning the full job budget: the self-test starts the app,
+        # so it needs a working app environment, and a hang here is a real
+        # finding rather than something to wait out.
+        run: timeout 900 ./build.sh
+
+      - name: Both architectures present
+        # Intel support is not theoretical: a lipo step that silently drops an
+        # arch would only surface on someone else's older Mac.
+        run: |
+          archs="$(lipo -archs dist/MeetingBlitz.app/Contents/MacOS/MeetingBlitz)"
+          echo "archs: $archs"
+          case "$archs" in
+            *arm64*) ;;
+            *) echo "::error::arm64 missing"; exit 1 ;;
+          esac
+          case "$archs" in
+            *x86_64*) ;;
+            *) echo "::error::x86_64 missing"; exit 1 ;;
+          esac
+
+      - name: Bundle is signed and well-formed
+        run: codesign --verify --strict --verbose=2 dist/MeetingBlitz.app

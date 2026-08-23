@@ -10,6 +10,8 @@ Fertige App · 9,5 MB · macOS 14+ · Apple Silicon **und** Intel ·
 [ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·
 oder [selbst bauen](#möglichkeit-b-selbst-bauen) in zwei Minuten
 
+[**Website**](https://felixosk.github.io/meetingblitz-mac/) ·
+[Änderungen](CHANGELOG.md) ·
 [English version](README.md)
 
 ![Zwei Termine um 17:00, jeder mit eigenem fliegendem Banner](docs/demo.gif)
