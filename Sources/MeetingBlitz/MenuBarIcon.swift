@@ -6,7 +6,14 @@ import AppKit
 /// (Runde 28). Shape previewed via design/preview_menubar_icon.swift
 /// (keep the drawing in sync!).
 enum MenuBarIcon {
-    static let submarine: NSImage = {
+    // @MainActor ist hier PFLICHT, auch wenn es lokal ohne baut: Swift 6.2
+    // laesst ein globales NSImage durchgehen, Swift 6.1 (Xcode 16.4) lehnt es
+    // ab, weil NSImage nicht Sendable ist. Ohne die Annotation kann niemand
+    // mit aelterem Xcode das Repo uebersetzen -- und "selbst bauen" ist der
+    // Weg, den die README empfiehlt. Gefunden von der CI, nicht hier am Mac.
+    // Beide Zugriffe stehen im AppDelegate, sind also ohnehin auf dem
+    // Hauptthread.
+    @MainActor static let submarine: NSImage = {
         let img = NSImage(size: NSSize(width: 24, height: 16), flipped: false) { _ in
             let path = NSBezierPath()
 
