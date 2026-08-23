@@ -41,6 +41,57 @@ enum SkinStyle: String, CaseIterable, Identifiable {
 /// cloud (`CloudBurst`), Runde 72. Both share the same jump-arc mechanic, only
 /// the launch-point panel differs (20.08.2026, Rückmeldung: ein Kampfjet/
 /// Helikopter/UFO/Zeppelin/Rakete kommt nicht aus dem Meer).
+/// Ob und wie das Motiv von Banner zu Banner wechselt (23.08.2026).
+///
+/// Rückmeldung eines Nutzers, der die Motivwahl zum ersten Mal sah: „ist normal
+/// dass man nur eins wählen kann und nicht rotiert?" — bei 27 Motiven ist genau
+/// eines auszuwählen und die anderen 26 nie zu sehen tatsächlich die
+/// unwahrscheinlichere Erwartung.
+enum SkinRotation: String, CaseIterable, Identifiable {
+    /// Ein festes Motiv, wie bisher.
+    case off
+    /// Der Reihe nach durch die Auswahl, in der Reihenfolge des Rasters.
+    case sequence
+    /// Zufällig, aber nie zweimal dasselbe hintereinander.
+    case random
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off:      return L.t("Fest", "Fixed")
+        case .sequence: return L.t("Der Reihe nach", "In order")
+        case .random:   return L.t("Zufällig", "Random")
+        }
+    }
+}
+
+/// Die reine Rechenvorschrift hinter dem Motivwechsel.
+///
+/// Bewusst getrennt von `AppState`: dort steckt sie in @Published-Werten, die
+/// beim Anlegen die echten Nutzereinstellungen lesen und schreiben. Ein Test
+/// dagegen würde die Einstellungen des Nutzers verstellen. Hier ist es eine
+/// Funktion mit Eingabe und Ausgabe, die der Selbsttest gefahrlos durchspielt.
+enum SkinRotationEngine {
+
+    /// Nächstes Motiv, oder `nil`, wenn nichts zu wechseln ist (fester Modus,
+    /// leere Auswahl oder nur ein Motiv im Topf).
+    static func next(after current: String, pool: [Skin], mode: SkinRotation) -> String? {
+        guard mode != .off, pool.count > 1 else { return nil }
+        switch mode {
+        case .off:
+            return nil
+        case .sequence:
+            // Unbekannte aktuelle Kennung (Motiv abgewählt oder umbenannt)
+            // ergibt Index -1 und damit den ERSTEN Eintrag, nicht einen Absturz.
+            let i = pool.firstIndex { $0.id == current } ?? -1
+            return pool[(i + 1) % pool.count].id
+        case .random:
+            return pool.filter { $0.id != current }.randomElement()?.id
+        }
+    }
+}
+
 enum SkinElement: Hashable {
     case water, air
 }

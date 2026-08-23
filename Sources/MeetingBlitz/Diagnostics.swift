@@ -126,8 +126,12 @@ enum Diagnostics {
         line("Einstellungen offen", SettingsPanelController.shared.isOpen)
         line("Einstellungen-Frame", SettingsPanelController.shared.frame.map(short) ?? "-")
         line("Einstellungen auf Bildschirm", screenIndex(SettingsPanelController.shared.frame))
+        line("Einstellungen Notplatzierung",
+             SettingsPanelController.shared.lastRescueReason ?? "nicht nötig")
         line("Neues-Meeting offen", CreatePanelController.shared.isOpen)
         line("Neues-Meeting-Frame", CreatePanelController.shared.frame.map(short) ?? "-")
+        line("Neues-Meeting Notplatzierung",
+             CreatePanelController.shared.lastRescueReason ?? "nicht nötig")
         for id in ["create", "settings"] {
             let d = UserDefaults.standard.dictionary(forKey: "panelTopLeft_\(id)")
             let v = d.flatMap { dict -> String? in

@@ -65,6 +65,10 @@ final class SettingsPanelController {
         p.setFrameOrigin(PanelDock.savedOrigin(panelSize: panelSize, id: "settings")
                          ?? PanelDock.origin(panelSize: panelSize, anchor: anchor))
         p.makeKeyAndOrderFront(nil)   // key immediately → blue accents from the start
+        // Prüf-Schalter für die Notbremse: schiebt das Panel absichtlich winzig
+        // ins Nirgendwo, genau der Zustand, den ein Nutzer als „ich klicke und
+        // sehe nichts" meldet. Ohne so einen Schalter liesse sich der Fall nur
+        // durch Warten auf den nächsten kaputten Rechner prüfen.
         // Position protokollieren wie beim Widget: sonst ist das Panel für eine
         // Sichtprüfung praktisch nicht auffindbar, es dockt je nach gemerkter
         // Position irgendwo an.
@@ -85,7 +89,26 @@ final class SettingsPanelController {
         // den ersten Weg: dort hat das Fenster schon echte Breite, bevor
         // resize() je läuft. Ein async-Hop deckt beide ab.
         DispatchQueue.main.async { [weak self] in self?.finishInitialPlacement() }
+        // Notbremse eine halbe Sekunde später, wenn ALLE Platzierungswege durch
+        // sind (Auto-Resize, onSize-Callback, finishInitialPlacement). Vorher
+        // gemessen wäre die Phantomgröße ein Fehlalarm.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, let p = self.panel, p.isVisible else { return }
+            // Den Positions-Merker STUMMSCHALTEN, solange wir selbst schieben.
+            // Sonst meldet `windowDidMove` unsere Notplatzierung als „vom Nutzer
+            // hingezogen", und das Panel öffnet ab dann für immer dort statt
+            // neben dem Widget. Genau das ist am 23.08. passiert (gemerkt
+            // wurde 532|1130, quer über den Bildschirm). Dieselbe Falle wie in
+            // `resize()`, dort steht die Stummschaltung seit Runde 47i.
+            self.moveRecorder?.suspended = true
+            self.lastRescueReason = PanelDock.enforceVisible(p)
+            DispatchQueue.main.async { self.moveRecorder?.suspended = false }
+        }
     }
+
+    /// Warum die Notbremse greifen musste, für den Diagnosebericht. `nil` =
+    /// alles normal platziert.
+    private(set) var lastRescueReason: String?
 
     /// Grow/shrink the panel when the content size changes (Kalender expand),
     /// keeping the top edge fixed and clamping into the visible screen.
@@ -177,6 +200,8 @@ struct SettingsPane: View {
     /// F5: which hotkey row is currently recording, plus its key monitor.
     /// Reiter unter der Maus, für die Hover-Rückmeldung der eigenen Leiste.
     @State private var hoveredTab: Int?
+    /// Motiv unter der Maus, blendet dort den ⓘ-Knopf ein.
+    @State private var hoveredSkin: String?
     /// Rückmeldung des Melde-Tests (P1).
     @State private var noticeTest: String?
     /// Auswertung einmal berechnet (Woche/Monat/Jahr), nicht bei jedem Bildaufbau.
@@ -225,6 +250,8 @@ struct SettingsPane: View {
             case 3 where google.hasConfig: googleTab
             case 4: statsTab
             case 5: widgetTab
+            case 6: skinTab
+            case 7: quietTab
             default: generalTab
             }
 
@@ -417,10 +444,6 @@ struct SettingsPane: View {
 
             Divider()
 
-            skinSection
-
-            Divider()
-
             // F4: war fest auf 2 Minuten verdrahtet. Beschriftung ÜBER dem
             // Picker, in einer Zeile wurde sie zu „Später erin…" gequetscht.
             VStack(alignment: .leading, spacing: 4) {
@@ -431,8 +454,38 @@ struct SettingsPane: View {
                 .labelsHidden().pickerStyle(.segmented)
             }
 
+            // Multi-monitor: only with more than one screen.
+            if NSScreen.screens.count > 1 {
+                Divider()
+                multiScreenRows
+            }
+
             Divider()
 
+            HStack {
+                Button(L.t("Test-Banner", "Test banner")) { state.showTestBanner() }
+                Button(L.t("Test-Blinken", "Test blink")) { state.startMeetingBlink() }
+                    .help(L.t("So blinkt die Menüleiste, wenn ein Meeting startet",
+                              "How the menu bar blinks when a meeting starts"))
+            }
+            .font(.system(size: 12)).buttonStyle(.borderless)
+        }
+    }
+
+    // MARK: - Tab: Flugobjekt (23.08.2026)
+
+    /// Eigener Reiter statt eines Blocks im Banner-Reiter. Mit dem Motivwechsel
+    /// und dem 27er-Raster war der Banner-Reiter höher als der Bildschirm
+    /// („sehe die hälfte nicht"), und Motivwahl ist ohnehin ein eigenes Thema:
+    /// wie das Ding aussieht, nicht wann es fliegt.
+    private var skinTab: some View {
+        skinSection
+    }
+
+    // MARK: - Tab: Ruhe (23.08.2026, aus dem Banner-Reiter ausgezogen)
+
+    private var quietTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
             Toggle(L.t("Ruhe-Modus (keine Banner)", "Quiet mode (no banners)"), isOn: $state.quietMode).font(.system(size: 12))
             // Befristet einschalten: Ruhe „für heute Nachmittag" schaltet man
             // sonst ein und vergisst sie, und wundert sich tagelang über
@@ -504,45 +557,37 @@ struct SettingsPane: View {
             Toggle(L.t("Ruhe bei Bildschirmfreigabe", "Quiet while screen sharing"), isOn: $state.quietDuringScreenShare).font(.system(size: 12))
             Toggle(L.t("Auto-Beitreten (10s vorher)", "Auto-join (10s before)"), isOn: $state.autoJoin).font(.system(size: 12))
             Toggle(L.t("Warnung vor Meeting-Ende", "End-of-meeting warning"), isOn: $state.endWarning).font(.system(size: 12))
+        }
+    }
 
-            // Multi-monitor: only with more than one screen.
-            if NSScreen.screens.count > 1 {
-                Divider()
-                HStack {
-                    Text(L.t("Startbildschirm", "Start screen")).font(.system(size: 12))
-                    Spacer()
-                    // Segmented (NOT .menu): a menu picker opens a modal NSMenu
-                    // that hangs in this nonactivating panel and blocks all clicks.
-                    Picker("", selection: $state.crossScreenStartIndex) {
-                        ForEach(0..<screenLabels().count, id: \.self) { i in
-                            Text("\(i + 1)").tag(i)
-                        }
-                    }
-                    .labelsHidden().pickerStyle(.segmented).fixedSize()
-                }
-                Text(screenLabels().indices.contains(state.crossScreenStartIndex)
-                     ? screenLabels()[state.crossScreenStartIndex] : "")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                HStack {
-                    Text(L.t("Richtung", "Direction")).font(.system(size: 12))
-                    Spacer()
-                    Picker("", selection: $state.crossScreenToRight) {
-                        Text(L.t("→ rechts", "→ right")).tag(true)
-                        Text(L.t("← links", "← left")).tag(false)
-                    }
-                    .labelsHidden().pickerStyle(.segmented).fixedSize()
+    /// Startbildschirm und Flugrichtung, nur bei mehr als einem Monitor.
+    /// Ausgelagert, weil der Banner-Reiter sonst wieder zu lang wird.
+    @ViewBuilder
+    private var multiScreenRows: some View {
+        HStack {
+            Text(L.t("Startbildschirm", "Start screen")).font(.system(size: 12))
+            Spacer()
+            // Segmented (NOT .menu): a menu picker opens a modal NSMenu
+            // that hangs in this nonactivating panel and blocks all clicks.
+            Picker("", selection: $state.crossScreenStartIndex) {
+                ForEach(0..<screenLabels().count, id: \.self) { i in
+                    Text("\(i + 1)").tag(i)
                 }
             }
-
-            Divider()
-
-            HStack {
-                Button(L.t("Test-Banner", "Test banner")) { state.showTestBanner() }
-                Button(L.t("Test-Blinken", "Test blink")) { state.startMeetingBlink() }
-                    .help(L.t("So blinkt die Menüleiste, wenn ein Meeting startet",
-                              "How the menu bar blinks when a meeting starts"))
+            .labelsHidden().pickerStyle(.segmented).fixedSize()
+        }
+        Text(screenLabels().indices.contains(state.crossScreenStartIndex)
+             ? screenLabels()[state.crossScreenStartIndex] : "")
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        HStack {
+            Text(L.t("Richtung", "Direction")).font(.system(size: 12))
+            Spacer()
+            Picker("", selection: $state.crossScreenToRight) {
+                Text(L.t("→ rechts", "→ right")).tag(true)
+                Text(L.t("← links", "← left")).tag(false)
             }
-            .font(.system(size: 12)).buttonStyle(.borderless)
+            .labelsHidden().pickerStyle(.segmented).fixedSize()
         }
     }
 
@@ -552,23 +597,59 @@ struct SettingsPane: View {
     /// lange Banner-Reiter nicht noch unübersichtlicher wird.
     private var skinSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L.t("Flugobjekt", "Flying object")).font(.system(size: 12, weight: .semibold))
+            // Kein eigener Titel mehr: seit 23.08. ist das ein eigener Reiter,
+            // dessen Überschrift schon „Flugobjekt" heißt, und zweimal
+            // dasselbe Wort untereinander sieht nach Versehen aus.
+            Text(L.t("Stil", "Style")).font(.system(size: 12))
             Picker("", selection: $state.skinStyle) {
                 ForEach(SkinStyle.allCases) { Text($0.label).tag($0) }
             }
             .labelsHidden().pickerStyle(.segmented)
 
+            if state.skinStyle != .classic {
+                // Wechsel-Schalter direkt unter der Stil-Wahl: er entscheidet,
+                // was ein Tipp im Raster darunter bedeutet (auswählen oder in
+                // den Wechsel aufnehmen), deshalb steht er davor.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L.t("Motivwechsel", "Motif changes")).font(.system(size: 12))
+                    Picker("", selection: $state.skinRotation) {
+                        ForEach(SkinRotation.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented)
+                }
+                Text(state.skinRotation == .off
+                     ? L.t("Immer dasselbe Motiv. Tippen wählt es aus.",
+                           "Always the same motif. Tap one to pick it.")
+                     : L.t("Jedes Banner nimmt ein anderes Motiv. Tippen nimmt eins in den Wechsel auf oder heraus.",
+                           "Every banner uses a different motif. Tap one to add or remove it from the rotation."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if state.skinRotation != .off {
+                    HStack(spacing: 6) {
+                        Text(L.t("Im Wechsel: \(state.rotationSkins.count) von \(Skin.all.count)",
+                                 "In rotation: \(state.rotationSkins.count) of \(Skin.all.count)"))
+                            .font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                        Spacer(minLength: 0)
+                        Button(L.t("Alle", "All")) { state.skinPool = [] }
+                            .font(.system(size: 10)).buttonStyle(.borderless)
+                            .help(L.t("Alle Motive teilnehmen lassen", "Let every motif take part"))
+                    }
+                }
+            }
+
             if state.skinStyle == .classic {
                 Text(L.t("Das klassische U-Boot, ohne Motivwahl.",
                          "The classic U-Boot, no motif to pick."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else if let skin = detailSkin {
                 skinDetail(skin)
             } else {
                 skinGrid
-                Text(L.t("Doppelklick auf ein Motiv zeigt es groß, mit seiner Geschichte.",
-                         "Double-click a motif to see it large, with its story."))
+                Text(L.t("Das ⓘ am Motiv (oder ein Doppelklick) zeigt es groß, mit seiner Geschichte.",
+                         "The ⓘ on a motif (or a double-click) shows it large, with its story."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // Gilt für jeden Motiv-Stil, deshalb außerhalb der Fallunterscheidung
@@ -580,6 +661,7 @@ struct SettingsPane: View {
                 Text(L.t("Das Objekt wird größer als die Kapsel und steht davor statt darin. Wirkt bei hohen Motiven wie Nessie oder der Ente, bei langen flachen U-Booten kaum.",
                          "The object grows taller than the capsule and stands in front of it. Works for tall motifs like Nessie or the duck, barely for long flat submarines."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Button(L.t("Vorschau fliegen lassen", "Preview it flying")) { state.showTestBanner() }
@@ -607,7 +689,17 @@ struct SettingsPane: View {
                 }
                 .buttonStyle(.borderless)
                 Spacer()
-                if state.skinID != skin.id {
+                // Beim Wechsel gibt es kein „Auswählen", sondern nur ein
+                // Mitfliegen oder nicht: das Motiv, das als Nächstes fliegt,
+                // bestimmt der Wechsel, nicht die Auswahl.
+                if state.skinRotation != .off && state.skinStyle != .classic {
+                    let inPool = state.skinPool.isEmpty || state.skinPool.contains(skin.id)
+                    Button(inPool ? L.t("Nicht mitfliegen", "Sit this one out")
+                                  : L.t("Mitfliegen lassen", "Let it fly")) {
+                        state.toggleSkinInPool(skin.id)
+                    }
+                    .font(.system(size: 11)).buttonStyle(.borderless)
+                } else if state.skinID != skin.id {
                     Button(L.t("Auswählen", "Select")) { state.skinID = skin.id }
                         .font(.system(size: 11)).buttonStyle(.borderless)
                 }
@@ -654,6 +746,7 @@ struct SettingsPane: View {
                 Text(L.t("Zu diesem Motiv ist noch keine Geschichte hinterlegt.",
                          "No story recorded for this motif yet."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(height: 92, alignment: .top)
             }
         }
@@ -679,7 +772,12 @@ struct SettingsPane: View {
     }
 
     private func skinCell(_ skin: Skin) -> some View {
-        let selected = state.skinID == skin.id
+        // Beim Wechsel zeigt die Markierung die TEILNAHME, nicht die Auswahl:
+        // sonst wäre im Raster nur zu sehen, was zufällig zuletzt geflogen ist,
+        // und nicht, worauf man sich festgelegt hat.
+        let rotating = state.skinRotation != .off && state.skinStyle != .classic
+        let inPool = state.skinPool.isEmpty || state.skinPool.contains(skin.id)
+        let selected = rotating ? inPool : state.skinID == skin.id
         let image = Skins.shared.image(for: skin, style: state.skinStyle)
         // Kein Button: der würde den Doppelklick als zwei Einzelklicks
         // schlucken. Stattdessen eine normale View mit beiden Tap-Gesten,
@@ -714,10 +812,32 @@ struct SettingsPane: View {
             .overlay(RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.08),
                               lineWidth: selected ? 1.5 : 1))
+            // Eigener Knopf für die Geschichte (23.08.2026). Beim Motivwechsel
+            // bedeutet ein Tipp „nimmt teil", und wer dann doppelt tippt, um die
+            // Geschichte zu sehen, wirft das Motiv im Zweifel aus dem Wechsel.
+            // Der Doppelklick bleibt, aber es braucht einen Weg, der nichts
+            // umstellt: das ⓘ erscheint beim Darüberfahren.
+            .overlay(alignment: .topTrailing) {
+                if hoveredSkin == skin.id {
+                    Button { detailSkin = skin } label: {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 12))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(Color.white, Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(3)
+                    .help(L.t("Geschichte zu \(skin.name) zeigen", "Show the story behind \(skin.name)"))
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: 9))
+            .onHover { hoveredSkin = $0 ? skin.id : (hoveredSkin == skin.id ? nil : hoveredSkin) }
             .onTapGesture(count: 2) { detailSkin = skin }
-            .onTapGesture { state.skinID = skin.id }
-            .help(skin.name)
+            .onTapGesture { rotating ? state.toggleSkinInPool(skin.id) : (state.skinID = skin.id) }
+            .help(rotating
+                  ? (inPool ? L.t("\(skin.name): fliegt mit", "\(skin.name): takes part")
+                            : L.t("\(skin.name): fliegt nicht mit", "\(skin.name): sits this one out"))
+                  : skin.name)
     }
 
     // MARK: - Tab: Kalender
@@ -734,6 +854,7 @@ struct SettingsPane: View {
                     Text(L.t("Anzeigen · 🔔 Banner · 🎂 Geburtstage",
                              "Show · 🔔 banner · 🎂 birthdays"))
                         .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 // Bis ~20 Kalender OHNE ScrollView: der bräuchte eine feste
                 // Höhe (er hat keine intrinsische, Runde 14), und die war
@@ -1043,8 +1164,8 @@ struct SettingsPane: View {
 
     /// Reihenfolge der Reiter: erst die App, dann was sie zeigt, dann Daten.
     private static let tabs: [(id: Int, icon: String)] = [
-        (0, "gearshape"), (1, "bell"), (5, "macwindow"),
-        (2, "calendar"), (3, "video"), (4, "chart.bar"),
+        (0, "gearshape"), (1, "bell"), (6, "paperplane"), (7, "moon.zzz"),
+        (5, "macwindow"), (2, "calendar"), (3, "video"), (4, "chart.bar"),
     ]
 
     private func title(for id: Int) -> String {
@@ -1054,6 +1175,8 @@ struct SettingsPane: View {
         case 3:  return L.t("Meetings erstellen", "Creating meetings")
         case 4:  return L.t("Auswertung", "Stats")
         case 5:  return L.t("Widget & Menüleiste", "Widget & menu bar")
+        case 6:  return L.t("Flugobjekt", "Flying object")
+        case 7:  return L.t("Ruhe & Stille", "Quiet & silence")
         default: return L.t("Allgemein", "General")
         }
     }
@@ -1065,6 +1188,8 @@ struct SettingsPane: View {
         case 3:  return L.t("Meetings erstellen", "Creating meetings")
         case 4:  return L.t("Auswertung", "Stats")
         case 5:  return L.t("Widget & Menüleiste", "Widget & menu bar")
+        case 6:  return L.t("Flugobjekt", "Flying object")
+        case 7:  return L.t("Ruhe & Stille", "Quiet & silence")
         default: return L.t("Allgemein", "General")
         }
     }

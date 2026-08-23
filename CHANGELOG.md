@@ -2,6 +2,28 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.6 — 2026-08-23
+
+**The flying motif can now rotate.** Picking one of 27 motifs and never seeing
+the other 26 was the odd default. Settings → Flying object offers **Fixed**,
+**In order** and **Random** (random never draws the same motif twice in a row),
+and while rotation is on, tapping a tile adds or removes it from the rotation
+instead of selecting it. The ⓘ on a tile opens its story without changing
+anything.
+
+**Settings split into more tabs.** Banner, Flying object and Quiet & silence are
+now separate, because the alerts tab had grown taller than a laptop screen.
+
+**A panel that ends up invisible now rescues itself.** Half a second after
+opening, Settings and New Meeting check whether they are actually on a screen
+and large enough; if not, they move to the centre of the screen the mouse is on.
+A report was traced to a settings window that was open the whole time, just a
+few pixels tall. The diagnostics report now names the panels, their size and
+which screen they are on.
+
+**Fixes:** the widget hugs its content again instead of reserving four rows of
+empty space; long hint texts in Settings wrap instead of being cut off.
+
 ## 1.5.1 — 2026-08-22
 
 **Settings and other panels now show up over fullscreen apps.**

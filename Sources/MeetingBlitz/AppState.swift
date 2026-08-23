@@ -26,9 +26,44 @@ final class AppState: ObservableObject {
     /// pick one of the 27 SVG motifs below by `skinID`.
     @Published var skinStyle: SkinStyle { didSet { d.set(skinStyle.rawValue, forKey: "skinStyle") } }
     @Published var skinID: String { didSet { d.set(skinID, forKey: "skinID") } }
+    /// Ob das Motiv von Banner zu Banner wechselt (23.08.2026).
+    @Published var skinRotation: SkinRotation { didSet { d.set(skinRotation.rawValue, forKey: "skinRotation") } }
+    /// Welche Motive am Wechsel teilnehmen. **Leer = alle**, dieselbe
+    /// Konvention wie bei den Kalendern: ohne sie müsste beim ersten Start eine
+    /// Liste aller 27 Kennungen in die Einstellungen geschrieben werden, und
+    /// ein später dazukommendes Motiv wäre von Anfang an ausgeschlossen.
+    @Published var skinPool: Set<String> { didSet { d.set(Array(skinPool), forKey: "skinPool") } }
     /// The currently selected motif, falling back to the first one if the
     /// stored id is stale (e.g. after an asset rename).
     var currentSkin: Skin { Skin.byID[skinID] ?? Skin.all[0] }
+
+    /// Motive, die am Wechsel teilnehmen, in Rasterreihenfolge.
+    var rotationSkins: [Skin] {
+        skinPool.isEmpty ? Skin.all : Skin.all.filter { skinPool.contains($0.id) }
+    }
+
+    /// Ein Motiv in den Wechsel aufnehmen oder herausnehmen.
+    func toggleSkinInPool(_ id: String) {
+        // Erste Abwahl schreibt „alle" aus (sonst hiesse leer weiterhin alle und
+        // das Abwählen bliebe wirkungslos).
+        if skinPool.isEmpty { skinPool = Set(Skin.all.map(\.id)) }
+        if skinPool.contains(id) { skinPool.remove(id) } else { skinPool.insert(id) }
+        // Gar kein Motiv ist kein sinnvoller Zustand, das Banner braucht eines.
+        if skinPool.isEmpty { skinPool = [id] }
+    }
+
+    /// Vor jedem Flug das nächste Motiv setzen.
+    ///
+    /// Bewusst über `skinID` selbst statt über einen zweiten „aktuell
+    /// fliegenden"-Wert: Bild, Element (Wasser oder Luft) und Übergröße hängen
+    /// alle schon an dieser einen Kennung, und im Einstellungsraster ist danach
+    /// zu sehen, was zuletzt geflogen ist.
+    func advanceSkinIfRotating() {
+        guard skinStyle != .classic else { return }
+        if let next = SkinRotationEngine.next(after: skinID, pool: rotationSkins, mode: skinRotation) {
+            skinID = next
+        }
+    }
     /// Whether the CURRENT selection is a water or air motif (Rückmeldung
     /// 20.08.: ein Jet springt nicht aus dem Meer). The classic U-Boot always
     /// counts as water, it has no `Skin` entry of its own.
@@ -362,6 +397,8 @@ final class AppState: ObservableObject {
         skinOversize = d.object(forKey: "skinOversize") as? Bool ?? false
         skinStyle = d.string(forKey: "skinStyle").flatMap(SkinStyle.init(rawValue:)) ?? .classic
         skinID = d.string(forKey: "skinID") ?? Skin.all[0].id
+        skinRotation = d.string(forKey: "skinRotation").flatMap(SkinRotation.init(rawValue:)) ?? .off
+        skinPool = Set(d.stringArray(forKey: "skinPool") ?? [])
         quietMode = d.object(forKey: "quietMode") as? Bool ?? false
         let qu = d.double(forKey: "quietUntil")
         quietUntil = qu > 0 ? Date(timeIntervalSince1970: qu) : nil
@@ -649,6 +686,10 @@ final class AppState: ObservableObject {
     }
 
     func announce(_ meeting: Meeting, pinnedDocked: Bool = false) {
+        // Vor dem Aufbau, nicht danach: `currentSkinElement` unten entscheidet
+        // über Sprung und Startpanel und muss zum neuen Motiv passen. Beim
+        // angedockten Wiederzeigen NICHT wechseln, das ist derselbe Termin.
+        if !pinnedDocked { advanceSkinIfRotating() }
         // Runde 72: "Dramatischer Auftritt" wirkt jetzt für BEIDE Elemente —
         // diese eine Stelle steuert sowohl die Sprung-Phase als auch welches
         // Panel BannerPresenter an der Startstelle aufsetzt (SeaSplash für

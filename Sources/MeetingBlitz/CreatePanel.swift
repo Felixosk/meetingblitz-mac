@@ -79,7 +79,19 @@ final class CreatePanelController {
         // den ersten Weg: dort hat das Fenster schon echte Breite, bevor
         // resize() je läuft. Ein async-Hop deckt beide ab.
         DispatchQueue.main.async { [weak self] in self?.finishInitialPlacement() }
+        // Notbremse wie beim Einstellungs-Panel (Begründung in PanelDock).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, let p = self.panel, p.isVisible else { return }
+            // Merker stummschalten, sonst gilt unsere Notplatzierung als
+            // gezogene Position (Begründung im Einstellungs-Panel).
+            self.moveRecorder?.suspended = true
+            self.lastRescueReason = PanelDock.enforceVisible(p)
+            DispatchQueue.main.async { self.moveRecorder?.suspended = false }
+        }
     }
+
+    /// Warum die Notbremse greifen musste, für den Diagnosebericht.
+    private(set) var lastRescueReason: String?
 
     func resize(to contentSize: CGSize) {
         guard let p = panel, p.isVisible, contentSize.width > 1 else { return }

@@ -12,6 +12,53 @@ BUNDLE_ID="app.meetingblitz.MeetingBlitz"
 DIST="dist"
 APP="$DIST/$APP_NAME.app"
 
+# ---------------------------------------------------------------------------
+# Lint: Hinweistexte muessen umbrechen duerfen (23.08.2026).
+#
+# In diesen selbstvermessenden Panels bekommt ein `Text` ohne
+# `.fixedSize(horizontal: false, vertical: true)` seine EINZEILIGE Wunschbreite
+# vorgeschlagen und wird bei 300pt Panelbreite hinten abgeschnitten, statt
+# umzubrechen. Das faellt im Code nicht auf und im Screenshot erst, wenn man
+# genau hinsieht: gemeldet wurde „der Text ist da abgeschnitten" fuer eine
+# Erklaerung, die seit Runde 72 stumm gekuerzt war.
+# ---------------------------------------------------------------------------
+echo "==> Hinweistexte pruefen (Umbruch statt Abschneiden)"
+python3 - "$@" <<'LINT' || exit 1
+import re, sys, glob
+bad = []
+for path in glob.glob("Sources/MeetingBlitz/*.swift"):
+    lines = open(path).read().split("\n")
+    for i, line in enumerate(lines):
+        if "foregroundStyle(.secondary)" not in line:
+            continue
+        if not ("size: 10" in line or "size: 11" in line or "size: 10" in lines[i-1]):
+            continue
+        # Text-Literal davor einsammeln (bis zu 3 Zeilen zurueck)
+        # Nur echte Beschriftungen zaehlen: Kommentarzeilen (dort steht die
+        # Begruendung, oft mit Zitaten) und SF-Symbolnamen sind kein Fliesstext.
+        block_lines = [l for l in lines[max(0, i-3):i+1]
+                       if not l.strip().startswith("//") and "systemName" not in l]
+        block = "\n".join(block_lines)
+        literals = re.findall(r'"([^"]{2,})"', block)
+        # Eingesetzte Werte (\(...)) sind zur Bauzeit unbekannt lang und meist
+        # einzeilige Kopfzeilen wie „Berlin 19:52" — die sollen NICHT umbrechen.
+        literals = [t for t in literals if "\\(" not in t]
+        longest = max((len(t) for t in literals), default=0)
+        if longest < 45:            # kurze Beschriftungen brechen nie
+            continue
+        window = "\n".join(lines[i:i+3])
+        if "fixedSize" in window or "lineLimit" in window:
+            continue
+        bad.append(f"{path}:{i+1}  {literals[0][:60]}...")
+if bad:
+    print("!! ABBRUCH: Hinweistexte ohne Umbruch, sie werden abgeschnitten:")
+    for b in bad:
+        print("   " + b)
+    print("   Fix: .fixedSize(horizontal: false, vertical: true) hinter den Text haengen.")
+    sys.exit(1)
+print("    alle langen Hinweistexte duerfen umbrechen")
+LINT
+
 echo "==> Compiling ($APP_NAME, universal arm64 + x86_64)"
 # Universal Binary, damit die App auch auf aelteren Intel-Macs laeuft.
 # Command Line Tools can't do multi-arch in one go (needs Xcode's xcbuild),
@@ -43,8 +90,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>      <string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key>      <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>1.5.2</string>
-    <key>CFBundleVersion</key>         <string>8</string>
+    <key>CFBundleShortVersionString</key> <string>1.6</string>
+    <key>CFBundleVersion</key>         <string>9</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>LSUIElement</key>             <true/>

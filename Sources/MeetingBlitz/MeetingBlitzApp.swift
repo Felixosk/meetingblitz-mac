@@ -38,9 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // nur reine Rechnerei, deshalb ganz nach vorn.
         if CommandLine.arguments.contains("--selftest") {
             let fails = JoinLinkTests.failures() + CalendarStageTests.failures()
-                + QuickAddTests.failures()
+                + QuickAddTests.failures() + SkinRotationTests.failures()
             if fails.isEmpty {
-                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext")
+                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel")
                 exit(0)
             }
             print("SELFTEST FEHLGESCHLAGEN (\(fails.count)):")
@@ -121,9 +121,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                           + String(format: "frame=(%.0f | %.0f) %.0f×%.0f", f.minX, f.minY, f.width, f.height)
                           + " \(onScreen ? "auf einem Bildschirm" : "AUSSERHALB aller Bildschirme")")
                 }
+                // Zweiter Teil: die Notbremse (PanelDock.enforceVisible) an
+                // einem Wegwerf-Fenster, ISOLIERT. Am echten Einstellungs-Panel
+                // gemessen taugt der Test nichts: dessen eigene
+                // Platzierungslogik läuft über mehrere Runloops und zieht ein
+                // absichtlich verschobenes Fenster selbst wieder gerade, das
+                // Ergebnis sagt dann nichts über die Notbremse aus (23.08.2026).
+                let probe = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 300, height: 400),
+                                    styleMask: [.titled], backing: .buffered, defer: false)
+                probe.alphaValue = 0        // darf beim Prüfen nicht aufblitzen
+                probe.orderFrontRegardless()
+
+                probe.setFrame(CGRect(x: -9000, y: -4000, width: 300, height: 400), display: false)
+                let reasonLost = PanelDock.enforceVisible(probe)
+                let backOnScreen = NSScreen.screens.contains { $0.visibleFrame.intersects(probe.frame) }
+
+                probe.setFrame(CGRect(x: 120, y: 120, width: 10, height: 24), display: false)
+                let reasonTiny = PanelDock.enforceVisible(probe)
+                let grown = probe.frame.width >= 300 && probe.frame.height >= 420
+
+                probe.orderOut(nil)
+                // Ehrlich beschriften: Der Fall „ganz außerhalb" ist mit einem
+                // getitelten Fenster gar nicht herstellbar, AppKit schiebt es
+                // beim Anzeigen von sich aus zurück, damit die Titelleiste
+                // greifbar bleibt. Die Notbremse hatte deshalb nichts zu tun.
+                // Das ist KEIN bestandener Test, sondern ein nicht prüfbarer
+                // Fall, und nebenbei der Hinweis, dass ein unsichtbares Panel in
+                // der Praxis eher an der Größe liegt als an der Position.
+                print("Notbremse verlorenes Fenster: \(reasonLost.map { "griff: \($0)" } ?? "nicht prüfbar (AppKit hält getitelte Fenster selbst auf dem Bildschirm, Fenster liegt \(backOnScreen ? "sichtbar" : "NICHT sichtbar"))")")
+                print("Notbremse Phantomgröße:      \(grown ? "ok" : "FEHLT") (\(reasonTiny ?? "griff nicht"))")
+                if !grown { bad += 1 }
+
                 print(bad == 0
-                      ? "check-panels ok: alle sichtbaren Fenster dürfen auf jeden Schreibtisch"
-                      : "CHECK-PANELS FEHLGESCHLAGEN: \(bad) Fenster bleiben bei Vollbild-Apps unsichtbar")
+                      ? "check-panels ok: alle sichtbaren Fenster dürfen auf jeden Schreibtisch, Notbremse greift"
+                      : "CHECK-PANELS FEHLGESCHLAGEN: \(bad) Punkte offen")
                 exit(bad == 0 ? 0 : 1)
             }
             return

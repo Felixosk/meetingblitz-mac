@@ -107,6 +107,47 @@ enum PanelDock {
         return NSPoint(x: clampedX.rounded(), y: y.rounded())
     }
 
+    /// Letzte Instanz kurz nach dem Öffnen: Liegt das Panel trotz aller
+    /// Platzierungslogik nirgends Sichtbares, wird es mittig auf den Bildschirm
+    /// der Maus gezwungen.
+    ///
+    /// **Warum das sein muss (23.08.2026):** Ein Nutzer sah sein
+    /// Einstellungsfenster auf KEINEM seiner zwei Bildschirme, obwohl die App
+    /// aktuell war und das Widget reagierte. Ein Fenster kann aus zwei Gründen
+    /// offen und trotzdem unsichtbar sein: es liegt außerhalb aller Bildschirme,
+    /// oder es ist in seiner Phantomgröße steckengeblieben (`fittingSize` meldet
+    /// beim Erstellen gern ~0×24, siehe Runde 47i/56c) und nie gewachsen. Beide
+    /// Fälle sehen für den Nutzer gleich aus: er klickt, nichts passiert.
+    ///
+    /// Rückgabe = Grund, falls eingegriffen wurde. Der landet im Diagnosebericht,
+    /// damit aus der Notbremse eine Messung wird und nicht bloß ein Pflaster,
+    /// das die Ursache zudeckt.
+    @MainActor
+    @discardableResult
+    static func enforceVisible(_ p: NSPanel, minSize: CGSize = CGSize(width: 300, height: 420)) -> String? {
+        let f = p.frame
+        let onScreen = NSScreen.screens.contains { $0.visibleFrame.intersects(f) }
+        let bigEnough = f.width >= 80 && f.height >= 80
+        if onScreen && bigEnough { return nil }
+
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+        guard let vf = screen?.visibleFrame else { return nil }
+        let size = CGSize(width: max(f.width, minSize.width), height: max(f.height, minSize.height))
+        let origin = NSPoint(x: (vf.midX - size.width / 2).rounded(),
+                             y: (vf.midY - size.height / 2).rounded())
+        p.setFrame(CGRect(origin: origin, size: size), display: true)
+        p.orderFrontRegardless()
+
+        let reason = !onScreen && !bigEnough ? "außerhalb aller Bildschirme UND zu klein"
+                   : !onScreen ? "außerhalb aller Bildschirme"
+                   : "zu klein (Phantomgröße)"
+        let before = String(format: "(%.0f | %.0f) %.0f×%.0f", f.minX, f.minY, f.width, f.height)
+        HintWindow.log("enforceVisible: \(reason), vorher \(before)")
+        return "\(reason), vorher \(before)"
+    }
+
     /// Notausgang, falls ein Panel doch mal unerreichbar liegt: nächstes Öffnen
     /// nimmt wieder den Automatik-Platz neben dem Widget.
     static func forgetPositions() {
