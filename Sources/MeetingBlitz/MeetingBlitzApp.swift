@@ -112,7 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let aux = b.contains(.fullScreenAuxiliary)
                     let name = w.title.isEmpty ? "(ohne Titel: Widget)" : w.title
                     if !all { bad += 1 }
-                    print("\(all && aux ? "ok  " : "FEHLT")  \(name): canJoinAllSpaces=\(all) fullScreenAuxiliary=\(aux)")
+                    // Rahmen mitschreiben: derselbe Wert, den die Diagnose beim
+                    // Nutzer meldet, damit hier auffällt, wenn ein Fenster zwar
+                    // offen ist, aber 0 Punkte groß oder außerhalb der Schirme.
+                    let f = w.frame
+                    let onScreen = NSScreen.screens.contains { $0.frame.intersects(f) }
+                    print("\(all && aux ? "ok  " : "FEHLT")  \(name): canJoinAllSpaces=\(all) fullScreenAuxiliary=\(aux) "
+                          + String(format: "frame=(%.0f | %.0f) %.0f×%.0f", f.minX, f.minY, f.width, f.height)
+                          + " \(onScreen ? "auf einem Bildschirm" : "AUSSERHALB aller Bildschirme")")
                 }
                 print(bad == 0
                       ? "check-panels ok: alle sichtbaren Fenster dürfen auf jeden Schreibtisch"

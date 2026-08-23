@@ -118,7 +118,16 @@ enum Diagnostics {
         section("Fenster")
         line("Widget offen", WidgetPanelController.shared.isOpen)
         line("Widget-Frame", WidgetPanelController.shared.frame.map(short) ?? "-")
+        // Die Panels selbst standen bis 23.08.2026 NICHT im Bericht, obwohl er
+        // genau für Panel-Layoutfehler gebaut wurde. Bei einem Fall „ich klicke
+        // Einstellungen und sehe nichts" fehlte damit die einzige Zahl, die die
+        // Frage beantwortet: Ist das Fenster zu, ist es 0 Punkte groß, oder
+        // steht es außerhalb aller Bildschirme?
+        line("Einstellungen offen", SettingsPanelController.shared.isOpen)
+        line("Einstellungen-Frame", SettingsPanelController.shared.frame.map(short) ?? "-")
+        line("Einstellungen auf Bildschirm", screenIndex(SettingsPanelController.shared.frame))
         line("Neues-Meeting offen", CreatePanelController.shared.isOpen)
+        line("Neues-Meeting-Frame", CreatePanelController.shared.frame.map(short) ?? "-")
         for id in ["create", "settings"] {
             let d = UserDefaults.standard.dictionary(forKey: "panelTopLeft_\(id)")
             let v = d.flatMap { dict -> String? in
@@ -203,6 +212,17 @@ enum Diagnostics {
 
     private static func bundleValue(_ key: String) -> String {
         Bundle.main.infoDictionary?[key] as? String ?? "?"
+    }
+
+    /// Auf welchem Bildschirm ein Fenster liegt, in derselben Zählung wie der
+    /// Abschnitt „Bildschirme" oben. „außerhalb" ist die Antwort, auf die es
+    /// ankommt: dann ist das Fenster offen und trotzdem nirgends zu sehen.
+    private static func screenIndex(_ rect: CGRect?) -> String {
+        guard let r = rect else { return "-" }
+        for (i, sc) in NSScreen.screens.enumerated() where sc.frame.intersects(r) {
+            return "Screen \(i + 1)"
+        }
+        return "außerhalb aller Bildschirme"
     }
 
     private static func short(_ r: CGRect) -> String {

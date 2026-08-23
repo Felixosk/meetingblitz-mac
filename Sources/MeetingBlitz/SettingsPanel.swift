@@ -19,6 +19,11 @@ final class SettingsPanelController {
     /// Zurückholen wieder öffnen muss.
     var isOpen: Bool { panel?.isVisible ?? false }
 
+    /// Für die Diagnose: wo das Fenster steht und wie groß es ist. Beides sind
+    /// die Zahlen, die „ich sehe nichts" beantworten (außerhalb der Schirme?
+    /// Phantomgröße?), und aus einem Screenshot sind sie nicht zu bekommen.
+    var frame: CGRect? { panel?.frame }
+
     /// Toggle the settings panel, opening it centred underneath the widget
     /// (`anchor`), clamped to the visible screen.
     func toggle(state: AppState, anchor: CGRect?) {

@@ -10,6 +10,8 @@ Ready-made app · 9.5 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
 or [build it yourself](#option-b-build-it-yourself) in two minutes
 
+[**Website**](https://felixosk.github.io/meetingblitz-mac/) ·
+[Changelog](CHANGELOG.md) ·
 [Deutsche Version](README.de.md)
 
 ![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)

@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeetingBlitz — free macOS meeting reminder &amp; menu bar calendar app (open source)</title>
+<meta name="description" content="Free, open-source macOS menu bar app that flies a banner across every monitor before each calendar event. Overlapping meetings each get their own warning — no notification to miss, nothing lost to Do Not Disturb. Native Swift, 9.5 MB, no account, no server.">
+<link rel="canonical" href="https://felixosk.github.io/meetingblitz-mac/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MeetingBlitz">
+<meta property="og:title" content="MeetingBlitz — never miss the second meeting">
+<meta property="og:description" content="A macOS menu bar app that flies a banner across all your screens before every calendar event. Overlapping events each get their own warning.">
+<meta property="og:url" content="https://felixosk.github.io/meetingblitz-mac/">
+<meta property="og:image" content="https://felixosk.github.io/meetingblitz-mac/hero.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="620">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MeetingBlitz — never miss the second meeting">
+<meta name="twitter:description" content="Free open-source macOS menu bar app. A banner flies across every screen before each calendar event — and overlapping events each get their own warning.">
+<meta name="twitter:image" content="https://felixosk.github.io/meetingblitz-mac/hero.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MeetingBlitz",
+  "operatingSystem": "macOS 14.0 or later",
+  "applicationCategory": "BusinessApplication",
+  "applicationSubCategory": "Calendar / meeting reminder",
+  "description": "A macOS menu bar app that flies a banner across every screen before each calendar event. Overlapping events each get their own warning.",
+  "url": "https://felixosk.github.io/meetingblitz-mac/",
+  "image": "https://felixosk.github.io/meetingblitz-mac/hero.png",
+  "downloadUrl": "https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip",
+  "softwareRequirements": "macOS 14+, Apple Silicon or Intel",
+  "fileSize": "9.5 MB",
+  "license": "https://opensource.org/license/mit/",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+
+<style>
+  /* Palette taken 1:1 from the app source:
+     capsule 0x18A9B4 -> 0x0A4E58, hull 0x2EC7A0, glow 0x8EE6C8,
+     porthole 0xF0A93B, fin 0x1D9E79, widget accent 0x4a9eff. */
+  :root {
+    --bg-a: #16233d; --bg-b: #223c59; --bg-c: #2c5570;
+    --teal: #18A9B4; --deep: #0A4E58; --glow: #8EE6C8; --hull: #2EC7A0;
+    --amber: #F0A93B; --fin: #1D9E79; --blue: #4a9eff;
+    --ink: #f2f7fc; --muted: #c9d6e6; --dim: #9aa8ba;
+    --line: rgba(255,255,255,.11);
+    --panel: rgba(7,14,27,.45);
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: linear-gradient(170deg, var(--bg-a) 0%, var(--bg-b) 52%, var(--bg-c) 100%);
+    background-attachment: fixed;
+    font: 400 16px/1.62 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img { max-width: 100%; }
+  a { color: var(--glow); text-underline-offset: 2px; }
+  a:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 4px;
+  }
+  code { font: 400 .92em var(--mono); color: var(--glow); }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- top bar ---------- */
+  .top { display: flex; align-items: center; gap: 10px; padding-top: 18px; }
+  .top .name { font-weight: 700; font-size: 16px; letter-spacing: -.2px; }
+  .top .sub-mini { width: 30px; height: 22px; flex: none; }
+  .top nav { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+  .top nav a { color: var(--muted); text-decoration: none; }
+  .top nav a:hover { color: var(--glow); }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: 64px 0 26px; text-align: center; }
+  .kicker {
+    font: 600 12.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--hull); margin-bottom: 18px;
+  }
+  h1 {
+    font-size: clamp(34px, 6vw, 56px); line-height: 1.06;
+    letter-spacing: -1.4px; font-weight: 800; max-width: 760px; margin: 0 auto;
+  }
+  h1 .accent { color: var(--glow); white-space: nowrap; }
+  .tag {
+    font-size: clamp(16px, 2.4vw, 19px); color: var(--muted);
+    margin: 18px auto 0; max-width: 640px;
+  }
+  .tag b { color: var(--ink); font-weight: 600; }
+
+  .cta-row { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 13px 26px; border-radius: 12px;
+    font-weight: 600; font-size: 16px; text-decoration: none; color: #fff;
+    background: linear-gradient(180deg, var(--teal), var(--deep));
+    border: 1px solid rgba(142,230,200,.4);
+    box-shadow: 0 8px 28px rgba(10,78,88,.5), inset 0 1px 0 rgba(255,255,255,.22);
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost {
+    background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.2);
+    box-shadow: none; color: var(--ink);
+  }
+  .meta { margin-top: 15px; font-size: 13.5px; color: var(--dim); }
+  .meta span { white-space: nowrap; }
+
+  /* ---------- signature: two live banner lanes ---------- */
+  .lanes {
+    margin: 44px auto 0; max-width: 100vw; overflow: hidden;
+    padding: 14px 0 18px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background:
+      linear-gradient(90deg, rgba(7,14,27,.55), rgba(7,14,27,0) 18%, rgba(7,14,27,0) 82%, rgba(7,14,27,.55));
+  }
+  .lane { position: relative; height: 56px; }
+  .lane + .lane { margin-top: 10px; }
+  .banner {
+    position: absolute; top: 4px; left: 0;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 9px 20px 9px 12px; border-radius: 999px; white-space: nowrap;
+    background: linear-gradient(180deg, var(--teal), var(--deep));
+    border: 1px solid rgba(142,230,200,.5);
+    box-shadow: 0 10px 30px rgba(4,20,30,.55), 0 0 22px rgba(142,230,200,.28);
+    will-change: transform;
+    animation: fly 13s linear infinite;
+    animation-delay: -4.5s; /* negative: mid-screen from the very first frame */
+  }
+  .lane:nth-child(2) .banner { animation-duration: 13.6s; animation-delay: -3.4s; }
+  .banner .sub { width: 46px; height: 32px; flex: none; animation: bob 2.6s ease-in-out infinite alternate; }
+  .banner .txt { text-align: left; line-height: 1.25; }
+  .banner .txt b { display: block; font-size: 14.5px; font-weight: 700; color: #fff; }
+  .banner .txt small { font-size: 12px; color: #d7f3ec; }
+  @keyframes fly { from { transform: translateX(105vw); } to { transform: translateX(-460px); } }
+  @keyframes bob { from { transform: translateY(-1.5px); } to { transform: translateY(1.5px); } }
+  .lanes-cap {
+    text-align: center; font-size: 13px; color: var(--dim); margin-top: 12px;
+    font-family: var(--mono);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner, .banner .sub { animation: none; }
+    .lane { text-align: center; }
+    .banner { position: static; transform: none !important; }
+  }
+
+  /* ---------- shared section chrome ---------- */
+  section { padding: 56px 0; }
+  .eyebrow {
+    font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--hull); margin-bottom: 12px;
+  }
+  h2 { font-size: clamp(24px, 3.4vw, 31px); letter-spacing: -.5px; margin-bottom: 12px; font-weight: 750; }
+  .lede { color: var(--muted); max-width: 700px; }
+  figure { margin: 28px 0 0; }
+  figure img {
+    width: 100%; height: auto; display: block; border-radius: 12px;
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 64px rgba(0,0,0,.45);
+  }
+  figcaption { font-size: 13.5px; color: var(--dim); margin-top: 12px; text-align: center; }
+
+  /* mac window frame around the demo gif */
+  .macwin {
+    margin: 0 auto; max-width: 860px;
+    background: rgba(10,18,33,.75); border: 1px solid var(--line);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.5);
+  }
+  .macwin .bar { display: flex; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .macwin .dot { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.16); }
+  .macwin .dot:first-child { background: #e0655f; }
+  .macwin .dot:nth-child(2) { background: #e0a63f; }
+  .macwin .dot:nth-child(3) { background: #63bf58; }
+  .macwin img { display: block; width: 100%; height: auto; }
+
+  /* ---------- the two reasons ---------- */
+  .reasons { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 28px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 26px 24px;
+  }
+  .card .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%; margin-bottom: 14px;
+    background: rgba(46,199,160,.14); border: 1px solid rgba(46,199,160,.4);
+    color: var(--hull); font: 700 14px/1 var(--mono);
+  }
+  .card h3 { font-size: 18.5px; margin-bottom: 10px; letter-spacing: -.2px; }
+  .card p { font-size: 15.2px; color: var(--muted); }
+  .card p + p { margin-top: 10px; }
+  .card .ref { font-size: 13.5px; color: var(--dim); margin-top: 12px; }
+
+  /* ---------- split sections (widget / skins) ---------- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; margin-top: 8px; }
+  .split figure { margin: 0; }
+  .split .copy .lede { margin-bottom: 0; }
+  .split ul { margin: 16px 0 0 0; list-style: none; }
+  .split ul li { padding-left: 24px; position: relative; color: var(--muted); font-size: 15.2px; margin-top: 8px; }
+  .split ul li::before {
+    content: ""; position: absolute; left: 2px; top: 9px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--hull);
+  }
+
+  /* ---------- skins gallery ---------- */
+  .skin-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 12px; margin-top: 28px;
+  }
+  .skin {
+    margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    /* lighter than the page so dark motifs (Ohio, Typhoon) stay visible,
+       same idea as the tile backing in the app's own picker */
+    background: linear-gradient(180deg, #46505e, #2a3442);
+    box-shadow: 0 10px 26px rgba(0,0,0,.35);
+  }
+  .skin .ph {
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 5 / 2; /* letterbox: source photos differ in aspect */
+    padding: 9px 12px;
+  }
+  .skin .ph img {
+    width: 100%; height: 100%; object-fit: contain; display: block;
+    filter: drop-shadow(0 5px 9px rgba(0,0,0,.35));
+  }
+  .skin figcaption {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    padding: 7px 11px 8px; border-top: 1px solid rgba(255,255,255,.09);
+    background: rgba(7,14,27,.5);
+    font-size: 12px; font-weight: 600; color: var(--ink);
+    letter-spacing: -.1px; white-space: nowrap;
+  }
+  .skin figcaption b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .skin figcaption i {
+    font: 600 9.5px/1 var(--mono); font-style: normal; letter-spacing: .12em;
+    text-transform: uppercase; flex: none; color: var(--hull); opacity: .85;
+  }
+  .skin figcaption i.air { color: var(--amber); }
+  .skin-note {
+    margin-top: 20px; font-size: 14.8px; color: var(--muted);
+    border-left: 3px solid var(--hull); padding: 4px 0 4px 16px; max-width: 720px;
+  }
+  @media (max-width: 640px) {
+    .skin-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .skin .ph { padding: 7px 9px; }
+    .skin figcaption { font-size: 11px; padding: 6px 9px 7px; }
+  }
+
+  /* ---------- features ---------- */
+  ul.feat { list-style: none; margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  ul.feat li {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14.6px; color: var(--muted);
+  }
+  ul.feat b { display: block; color: var(--ink); font-weight: 650; margin-bottom: 4px; font-size: 15px; }
+  .feat-more { margin-top: 18px; font-size: 14px; color: var(--dim); }
+
+  /* ---------- compare ---------- */
+  .scroller { overflow-x: auto; margin-top: 24px; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 14.6px; background: var(--panel); }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  tr:last-child th, tr:last-child td { border-bottom: none; }
+  thead th { color: var(--dim); font-weight: 600; font-size: 13.5px; }
+  thead th.mine { color: var(--glow); }
+  tbody th { font-weight: 500; color: var(--muted); }
+  td.yes { color: var(--hull); font-weight: 650; }
+  td.no { color: var(--dim); }
+  .honesty {
+    margin-top: 18px; font-size: 14.8px; color: var(--muted);
+    border-left: 3px solid var(--hull); padding: 4px 0 4px 16px; max-width: 720px;
+  }
+
+  /* ---------- install ---------- */
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 26px; align-items: start; }
+  .path { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; min-width: 0; }
+  .path h3 { font-size: 17.5px; margin-bottom: 6px; }
+  .path .rec {
+    display: inline-block; font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--hull); border: 1px solid rgba(46,199,160,.4); border-radius: 999px;
+    padding: 4px 9px; margin-bottom: 12px;
+  }
+  .path p { font-size: 14.6px; color: var(--muted); }
+  pre {
+    background: rgba(4,9,18,.7); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 14px 0 0;
+    font: 400 13.2px/1.6 var(--mono); color: #d8e6f5;
+  }
+  .warn {
+    margin-top: 14px; padding: 14px 16px; border-radius: 10px;
+    background: rgba(240,169,59,.08); border: 1px solid rgba(240,169,59,.35);
+    font-size: 13.8px; color: var(--muted);
+  }
+  .warn b { color: var(--amber); }
+  .menubar-note { margin-top: 22px; font-size: 14.6px; color: var(--muted); }
+
+  footer {
+    margin-top: 24px; padding: 34px 0 60px; text-align: center;
+    font-size: 14px; color: var(--dim); border-top: 1px solid var(--line);
+  }
+  footer a { color: var(--muted); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 860px) {
+    ul.feat { grid-template-columns: 1fr 1fr; }
+    .split { grid-template-columns: 1fr; gap: 24px; }
+  }
+  @media (max-width: 640px) {
+    header.hero { padding: 44px 0 20px; }
+    section { padding: 40px 0; }
+    .reasons, ul.feat, .install-grid { grid-template-columns: 1fr; }
+    .top nav a.hide-sm { display: none; }
+    .top nav { gap: 13px; font-size: 13.5px; }
+    .banner .txt small { display: none; }
+    .banner .sub { width: 38px; }
+    .lane { height: 48px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap top">
+  <!-- submarine mark, shape following SubmarineView.swift -->
+  <svg class="sub-mini" viewBox="0 0 100 70" aria-hidden="true">
+    <ellipse cx="52" cy="42" rx="36" ry="16" fill="#2EC7A0"/>
+    <path d="M16 42 L3 31 L3 53 Z" fill="#1D9E79"/>
+    <rect x="44" y="18" width="16" height="13" rx="4" fill="#2EC7A0"/>
+    <rect x="50" y="6" width="3" height="13" rx="1.5" fill="#1D9E79"/>
+    <circle cx="62" cy="42" r="6" fill="#F0A93B"/>
+    <circle cx="77" cy="42" r="4" fill="#8EE6C8"/>
+  </svg>
+  <span class="name">MeetingBlitz</span>
+  <nav aria-label="Page sections">
+    <a href="#why" class="hide-sm">Why</a>
+    <a href="#features" class="hide-sm">Features</a>
+    <a href="#compare">Compare</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/Felixosk/meetingblitz-mac">GitHub</a>
+  </nav>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Free · open source · macOS menu bar</p>
+    <h1>Never miss <span class="accent">the second meeting</span></h1>
+    <p class="tag">
+      Shortly before a calendar event starts, a submarine flies across
+      <b>all your screens</b>. When two events overlap, <b>each one</b> gets its
+      own banner, in its own lane.
+    </p>
+    <div class="cta-row">
+      <a class="btn" href="https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip">
+        Download for macOS
+      </a>
+      <a class="btn ghost" href="https://github.com/Felixosk/meetingblitz-mac">View source on GitHub</a>
+    </div>
+    <p class="meta">
+      <span>MIT licensed</span> · <span>9.5 MB</span> · <span>macOS 14+</span> ·
+      <span>Apple Silicon &amp; Intel</span> · <span>no account, no server</span>
+    </p>
+  </div>
+
+  <div class="lanes" aria-hidden="true">
+    <div class="lane">
+      <div class="banner">
+        <svg class="sub" viewBox="0 0 100 70">
+          <ellipse cx="52" cy="42" rx="36" ry="16" fill="#2EC7A0"/>
+          <path d="M16 42 L3 31 L3 53 Z" fill="#1D9E79"/>
+          <rect x="44" y="18" width="16" height="13" rx="4" fill="#2EC7A0"/>
+          <rect x="50" y="6" width="3" height="13" rx="1.5" fill="#1D9E79"/>
+          <circle cx="62" cy="42" r="6" fill="#F0A93B"/>
+          <circle cx="77" cy="42" r="4" fill="#8EE6C8"/>
+          <circle cx="24" cy="16" r="3.4" fill="#8EE6C8" opacity=".5"/>
+        </svg>
+        <span class="txt"><b>Design review</b><small>starts in 2 minutes · Meet</small></span>
+      </div>
+    </div>
+    <div class="lane">
+      <div class="banner">
+        <svg class="sub" viewBox="0 0 100 70">
+          <ellipse cx="52" cy="42" rx="36" ry="16" fill="#2EC7A0"/>
+          <path d="M16 42 L3 31 L3 53 Z" fill="#1D9E79"/>
+          <rect x="44" y="18" width="16" height="13" rx="4" fill="#2EC7A0"/>
+          <rect x="50" y="6" width="3" height="13" rx="1.5" fill="#1D9E79"/>
+          <circle cx="62" cy="42" r="6" fill="#F0A93B"/>
+          <circle cx="77" cy="42" r="4" fill="#8EE6C8"/>
+          <circle cx="24" cy="16" r="3.4" fill="#8EE6C8" opacity=".5"/>
+        </svg>
+        <span class="txt"><b>1:1 with your manager</b><small>starts in 2 minutes · Zoom</small></span>
+      </div>
+    </div>
+  </div>
+  <p class="lanes-cap wrap">two events, same start time → two banners, two lanes</p>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="macwin">
+      <div class="bar" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <img src="demo.gif" width="760" height="321"
+           alt="Screen recording: two meetings starting at 17:00, each announced by its own banner flying across the screen in a separate lane">
+    </div>
+    <figcaption style="font-size:13.5px;color:var(--dim);margin-top:12px;text-align:center;">
+      The real thing: two events at 17:00, two banners, two lanes. Nothing gets swallowed.
+    </figcaption>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <p class="eyebrow">Why this exists</p>
+    <h2>Two reasons, and they are the whole app</h2>
+    <div class="reasons">
+      <div class="card">
+        <span class="n">1</span>
+        <h3>Every overlapping event gets its own warning</h3>
+        <p>
+          Other tools show <em>the</em> next meeting: one line in the menu bar,
+          one notification. A call nested inside a focus block collapses into a
+          single reminder — and you miss the other one. Here each event fires
+          its own banner, and overlapping banners stack into separate lanes.
+        </p>
+        <p class="ref">
+          MeetingBar has had this exact request
+          <a href="https://github.com/leits/MeetingBar/issues/271">open since 2021</a>.
+        </p>
+      </div>
+      <div class="card">
+        <span class="n">2</span>
+        <h3>A visual warning, not a notification</h3>
+        <p>
+          Notifications are built to be ignorable: they slide in at the edge and
+          file themselves into a list you check later. A submarine flying across
+          every monitor is not something you scroll past — and it never lands in
+          Do Not Disturb.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="widget">
+  <div class="wrap">
+    <p class="eyebrow">The menu bar widget</p>
+    <h2>Your whole day, one click away</h2>
+    <div class="split">
+      <div class="copy">
+        <p class="lede">
+          Click the submarine in the menu bar and the day unfolds: a timeline of
+          what's ahead, and actions on every event.
+        </p>
+        <ul>
+          <li><b>One-click join</b> for 53 services — Meet, Zoom, Teams, Webex, Jitsi, Discord, Slack huddles and more</li>
+          <li><b>Type an event in one line</b>: <code>fri 4pm to 5pm call with chris</code></li>
+          <li><b>Conflict warning while creating</b> — it tells you about the clash before you double-book</li>
+          <li>Apple Reminders due today, right next to your events</li>
+          <li>Copy link, export as .ics, instant meeting, meeting stats</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="widget.png" width="900" height="700"
+             alt="MeetingBlitz menu bar widget: a day timeline with meeting rows and per-event actions like join and copy link">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="skins">
+  <div class="wrap">
+    <p class="eyebrow">27 skins, 4 styles</p>
+    <h2>Not a submarine person? Fine.</h2>
+    <p class="lede">
+      Swap the submarine for a whale, a jet, a UFO — 27 skins across four visual
+      styles. These are the real photos the <b>photo style</b> flies across your
+      screen: everything that belongs in the water leaps out of the sea,
+      everything that belongs in the sky bursts out of a cloud.
+    </p>
+    <div class="skin-grid">
+      <figure class="skin"><span class="ph"><img src="skins/01-narco-sub.png" alt="Narco Sub" loading="lazy" decoding="async"></span><figcaption><b>Narco Sub</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/02-typhoon.png" alt="Typhoon Class" loading="lazy" decoding="async"></span><figcaption><b>Typhoon Class</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/03-u96.png" alt="U-96" loading="lazy" decoding="async"></span><figcaption><b>U-96</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/04-yellow-submarine.png" alt="Yellow Submarine" loading="lazy" decoding="async"></span><figcaption><b>Yellow Submarine</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/05-nautilus.png" alt="Nautilus" loading="lazy" decoding="async"></span><figcaption><b>Nautilus</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/06-alvin.png" alt="Alvin" loading="lazy" decoding="async"></span><figcaption><b>Alvin</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/07-triton.png" alt="Triton" loading="lazy" decoding="async"></span><figcaption><b>Triton</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/08-ente.png" alt="Duck" loading="lazy" decoding="async"></span><figcaption><b>Duck</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/09-pottwal.png" alt="Sperm Whale" loading="lazy" decoding="async"></span><figcaption><b>Sperm Whale</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/10-hai.png" alt="Shark" loading="lazy" decoding="async"></span><figcaption><b>Shark</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/11-orca.png" alt="Orca" loading="lazy" decoding="async"></span><figcaption><b>Orca</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/12-oktopus.png" alt="Octopus" loading="lazy" decoding="async"></span><figcaption><b>Octopus</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/13-delfin.png" alt="Dolphin" loading="lazy" decoding="async"></span><figcaption><b>Dolphin</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/14-schildkroete.png" alt="Turtle" loading="lazy" decoding="async"></span><figcaption><b>Turtle</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/15-kugelfisch.png" alt="Pufferfish" loading="lazy" decoding="async"></span><figcaption><b>Pufferfish</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/16-papierboot.png" alt="Paper Boat" loading="lazy" decoding="async"></span><figcaption><b>Paper Boat</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/17-rakete.png" alt="Rocket" loading="lazy" decoding="async"></span><figcaption><b>Rocket</b><i class="air">air</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/18-ufo.png" alt="UFO" loading="lazy" decoding="async"></span><figcaption><b>UFO</b><i class="air">air</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/19-zeppelin.png" alt="Zeppelin" loading="lazy" decoding="async"></span><figcaption><b>Zeppelin</b><i class="air">air</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/20-nessie.png" alt="Nessie" loading="lazy" decoding="async"></span><figcaption><b>Nessie</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/21-finnwal.png" alt="Fin Whale" loading="lazy" decoding="async"></span><figcaption><b>Fin Whale</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/22-ohio.png" alt="Ohio Class" loading="lazy" decoding="async"></span><figcaption><b>Ohio Class</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/23-u48.png" alt="U-48" loading="lazy" decoding="async"></span><figcaption><b>U-48</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/24-klasse-212a.png" alt="Class 212A" loading="lazy" decoding="async"></span><figcaption><b>Class 212A</b><i>water</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/25-f22-raptor.png" alt="F-22 Raptor" loading="lazy" decoding="async"></span><figcaption><b>F-22 Raptor</b><i class="air">air</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/26-eurofighter.png" alt="Eurofighter" loading="lazy" decoding="async"></span><figcaption><b>Eurofighter</b><i class="air">air</i></figcaption></figure>
+      <figure class="skin"><span class="ph"><img src="skins/27-uh60-blackhawk.png" alt="UH-60 Black Hawk" loading="lazy" decoding="async"></span><figcaption><b>UH-60 Black Hawk</b><i class="air">air</i></figcaption></figure>
+    </div>
+    <p class="skin-note">
+      Every photo motif is a real thing — a real boat, a real animal, a real
+      aircraft. Double-click one in the app and its actual story opens,
+      fact-checked and with a source, not written from memory.
+    </p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <p class="eyebrow">Everything else</p>
+    <h2>Small app, sharp edges</h2>
+    <ul class="feat">
+      <li><b>All monitors</b>A banner before every meeting on every screen, with configurable lead time</li>
+      <li><b>Instant meeting</b>One click mints a room and opens the call</li>
+      <li><b>Meeting stats</b>How much of your week, month and year goes to meetings</li>
+      <li><b>Quiet mode</b>Timed, and automatic while screen sharing</li>
+      <li><b>Global shortcuts</b>Two of them, both rebindable</li>
+      <li><b>Automation</b>Scriptable via the <code>meetingblitz://</code> URL scheme</li>
+    </ul>
+    <p class="feat-more">
+      Also: export any event as .ics · Apple Reminders due today shown next to
+      events · English and German, switchable live.
+    </p>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <p class="eyebrow">Honest comparison</p>
+    <h2>How it compares</h2>
+    <p class="lede">
+      The macOS menu bar already has good calendar apps. Here is where this one
+      is genuinely different — and where it isn't.
+    </p>
+    <div class="scroller" tabindex="0">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col"></th>
+            <th scope="col" class="mine">MeetingBlitz</th>
+            <th scope="col"><a href="https://github.com/leits/MeetingBar">MeetingBar</a></th>
+            <th scope="col"><a href="https://github.com/sfsam/Itsycal">Itsycal</a></th>
+            <th scope="col"><a href="https://github.com/pakerwreah/Calendr">Calendr</a></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Overlapping events warn individually</th>
+            <td class="yes">yes</td>
+            <td class="no">no <a href="https://github.com/leits/MeetingBar/issues/271">(open since 2021)</a></td>
+            <td class="no">n/a</td>
+            <td class="no">n/a</td>
+          </tr>
+          <tr>
+            <th scope="row">Warning style</th>
+            <td class="yes">banner on all screens</td>
+            <td class="no">menu bar title, notification</td>
+            <td class="no">none</td>
+            <td class="no">none</td>
+          </tr>
+          <tr>
+            <th scope="row">Conflict warning while creating</th>
+            <td class="yes">yes</td>
+            <td class="no">no</td>
+            <td class="no">no</td>
+            <td class="no">no</td>
+          </tr>
+          <tr>
+            <th scope="row">Natural-language input</th>
+            <td class="yes">yes</td>
+            <td class="no">no</td>
+            <td class="no">no</td>
+            <td class="yes">yes</td>
+          </tr>
+          <tr>
+            <th scope="row">Maturity</th>
+            <td class="no">hobby project</td>
+            <td class="no">5.3k stars</td>
+            <td class="no">4.0k stars</td>
+            <td class="no">2.3k stars</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="honesty">
+      If you want the most mature, best-supported option with the widest service
+      coverage, install <a href="https://github.com/leits/MeetingBar">MeetingBar</a>
+      — it is excellent, and this project started as a fan of it.
+    </p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <p class="eyebrow">Get it</p>
+    <h2>Install in two minutes</h2>
+    <div class="install-grid">
+      <div class="path">
+        <span class="rec">Recommended</span>
+        <h3>Build it yourself</h3>
+        <p>
+          Two minutes, one script — and locally compiled software is not
+          quarantined, so there is no Gatekeeper dance at all.
+        </p>
+<pre>git clone https://github.com/Felixosk/meetingblitz-mac.git
+cd meetingblitz-mac
+./build.sh &amp;&amp; open dist/MeetingBlitz.app</pre>
+      </div>
+      <div class="path">
+        <span class="rec" style="color:var(--dim);border-color:rgba(255,255,255,.2)">Or</span>
+        <h3>Download the ready-made app</h3>
+        <p>
+          Grab <a href="https://github.com/Felixosk/meetingblitz-mac/releases/latest">the latest release</a>,
+          unzip, move to Applications. It is signed with a self-made certificate,
+          not a paid Apple developer account, so macOS quarantines it on
+          download. This clears the flag:
+        </p>
+<pre>xattr -dr com.apple.quarantine /Applications/MeetingBlitz.app</pre>
+        <div class="warn">
+          <b>Understand what that command does.</b> It tells macOS you vouch for
+          the app yourself and skips the Gatekeeper check. Only do that for
+          software you trust. Every line of this app's source is readable — or
+          build it yourself and the question does not arise.
+        </div>
+      </div>
+    </div>
+    <p class="menubar-note">
+      The app has no window and no dock icon — after launch, look for the
+      submarine in the menu bar, top right. First launch walks you through
+      calendar access and the settings:
+    </p>
+    <figure>
+      <img src="tour.png" width="1280" height="560"
+           alt="MeetingBlitz first-launch walkthrough and settings window">
+    </figure>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    MIT licensed · native Swift &amp; SwiftUI, no Electron, no server, no account ·
+    <a href="https://github.com/Felixosk/meetingblitz-mac">source</a> ·
+    <a href="https://github.com/Felixosk/meetingblitz-mac/issues">report a problem</a>
+  </div>
+</footer>
+
+</body>
+</html>
