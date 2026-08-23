@@ -391,13 +391,24 @@ struct MenuPanel: View {
                         .transition(.opacity)
                     }
                 }
-                // Runde 56: Mindesthöhe für vier Zeilen. Ohne sie schrumpft das
-                // Widget an einem Tag mit wenigen Terminen sichtbar zusammen und
-                // wächst beim Zurückblättern wieder, was bei jedem Tageswechsel
-                // wie ein Sprung wirkt (Rückmeldung: „es sollte alles gleich bleiben,
-                // nur keine Infos drinnen"). Nach oben wächst es weiterhin frei,
-                // alle Termine bleiben sichtbar (Runde 33).
-                .frame(minHeight: 108, alignment: .top)
+                // Runde 74b: Mindesthöhe nur noch für den LEEREN Tag.
+                //
+                // Vorgeschichte: Runde 56 setzte hier fest 108pt (vier Zeilen),
+                // damit das Widget beim Durchblättern der Tage nicht springt
+                // („es sollte alles gleich bleiben, nur keine Infos drinnen").
+                // An einem normalen Tag mit ein bis zwei Terminen steht dadurch
+                // dauerhaft ein Loch von ~90pt zwischen Agenda und Knöpfen, und
+                // genau das wurde am 23.08. als Fehler gemeldet: „warum ist da
+                // so viel freier Raum, das sollte sich doch dynamisch an den
+                // Inhalt anpassen".
+                //
+                // Beide Wünsche sind nicht gleichzeitig zu haben: entweder das
+                // Fenster hat immer dieselbe Höhe, oder es passt sich an. Der
+                // Ausschlag ging zur Anpassung, weil man den Leerraum JEDEN Tag
+                // sieht, den Höhensprung dagegen nur beim Blättern. Der kleine
+                // Rest hält den leeren Tag davon ab, auf eine Textzeile
+                // zusammenzufallen.
+                .frame(minHeight: state.agenda.isEmpty ? 56 : 0, alignment: .top)
             }
         }
     }
