@@ -14,6 +14,8 @@ oder [selbst bauen](#möglichkeit-b-selbst-bauen) in zwei Minuten
 [Änderungen](CHANGELOG.md) ·
 [English version](README.md)
 
+[![Build](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml/badge.svg)](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml)
+
 ![Zwei Termine um 17:00, jeder mit eigenem fliegendem Banner](docs/demo.gif)
 
 <img src="docs/widget.png" width="470" alt="Das Menüleisten-Widget: Zeitachse, Geburtstage und Aktionen pro Termin">

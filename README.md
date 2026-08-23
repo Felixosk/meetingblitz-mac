@@ -14,6 +14,8 @@ or [build it yourself](#option-b-build-it-yourself) in two minutes
 [Changelog](CHANGELOG.md) ·
 [Deutsche Version](README.de.md)
 
+[![Build](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml/badge.svg)](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml)
+
 ![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)
 
 <img src="docs/widget.png" width="470" alt="The menu bar widget: timeline, birthdays, and per-event actions">
