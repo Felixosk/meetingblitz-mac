@@ -12,14 +12,25 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Toolchain
+        # Pick the newest Xcode present on the runner rather than its default.
+        # This matters: the app is written against Swift 6.2, and Swift 6.1
+        # (Xcode 16.4, the macos-15 default) rejects several AppKit globals as
+        # non-Sendable. Building on the older compiler tests a toolchain nobody
+        # actually ships with, and turns the job into a permanent red cross.
+        # The version is printed so a failure here is never a mystery.
         run: |
+          latest="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then
+            echo "selecting $latest"
+            sudo xcode-select -s "$latest"
+          fi
           swift --version
           xcodebuild -version || true
 
