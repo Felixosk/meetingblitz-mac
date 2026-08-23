@@ -26,11 +26,16 @@ jobs:
       - name: Build (universal, ad-hoc signed, runs the self-test)
         # build.sh compiles both architectures, assembles the bundle, signs it
         # and finishes with `MeetingBlitz --selftest`, which fails the build if
-        # link detection or free-text parsing regress. A timeout keeps a stuck
+        # link detection or free-text parsing regress. The timeout keeps a stuck
         # launch from burning the full job budget: the self-test starts the app,
         # so it needs a working app environment, and a hang here is a real
         # finding rather than something to wait out.
-        run: timeout 900 ./build.sh
+        #
+        # Use the runner's own timeout-minutes, NOT the `timeout` command:
+        # that is GNU coreutils and does not exist on a macOS runner
+        # ("timeout: command not found", exit 127, first attempt died on it).
+        timeout-minutes: 15
+        run: ./build.sh
 
       - name: Both architectures present
         # Intel support is not theoretical: a lipo step that silently drops an
