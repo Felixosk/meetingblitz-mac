@@ -335,6 +335,14 @@ final class AppState: ObservableObject {
     @Published var blinkOn = false
     @Published var blinkText = L.t("Meeting jetzt", "Meeting now")   // Runde 5: also "ending"
     private var blinkTimer: Timer?
+    /// Zaehler fuer startMeetingBlink. Steht hier und NICHT als lokale `var` in
+    /// der Methode, weil das Timer-Closure sonst eine lose veraenderliche
+    /// Variable ueber die Isolationsgrenze in `Task { @MainActor }` reicht:
+    /// Swift 6.3 lehnt das ab ("sending 'ticks' risks causing data races"),
+    /// Swift 6.2 laesst es noch durch. Als Property von AppState (ohnehin
+    /// @MainActor) wandert stattdessen `self` hinein, was erlaubt ist.
+    /// Der Ablauf ist unveraendert: gleiche Zaehlung, gleiche Abbruchbedingung.
+    private var blinkTicks = 0
 
     let calendar = CalendarService()
     let presenter = BannerPresenter()
@@ -856,13 +864,13 @@ final class AppState: ObservableObject {
         blinkText = text
         blinkActive = true
         blinkOn = true
-        var ticks = 0
+        blinkTicks = 0
         let t = Timer(timeInterval: 0.45, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                ticks += 1
+                self.blinkTicks += 1
                 self.blinkOn.toggle()
-                if ticks >= ticksTotal {
+                if self.blinkTicks >= ticksTotal {
                     self.blinkTimer?.invalidate()
                     self.blinkTimer = nil
                     self.blinkActive = false
