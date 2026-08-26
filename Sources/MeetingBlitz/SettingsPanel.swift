@@ -24,6 +24,49 @@ final class SettingsPanelController {
     /// Phantomgröße?), und aus einem Screenshot sind sie nicht zu bekommen.
     var frame: CGRect? { panel?.frame }
 
+    /// Ist-Höhe des Inhaltsbereichs. Ist sie kleiner als die Höhe, die der
+    /// Inhalt meldet, schneidet das Fenster oben UND unten etwas ab: ein
+    /// VStack, der nicht in sein Fenster passt, steht an beiden Enden über.
+    /// Genau das meldete ein Nutzer am 26.08.2026 („sehe nur das").
+    ///
+    /// Als Soll-Wert NICHT `fittingSize` nehmen: die liefert bei diesem
+    /// Hosting-View 0 (Phantomgröße, Runde 56c). Verlässlich ist nur, was der
+    /// Inhalt selbst über `onSize` meldet.
+    var contentHeight: CGFloat? { panel?.contentView?.frame.height }
+
+    /// Alle drei Größenquellen nebeneinander, für `--squeeze-settings`.
+    var sizeSources: String {
+        guard let v = panel?.contentView else { return "kein Inhalt" }
+        return String(format: "frame %.0f, fittingSize %.0f, intrinsic %.0f, gemeldet %@",
+                      v.frame.height, v.fittingSize.height, v.intrinsicContentSize.height,
+                      lastReportedSize.map { String(format: "%.0f", $0.height) } ?? "nie")
+    }
+
+    /// Zuletzt vom Inhalt gemeldete Größe, siehe `contentHeight`. Nur noch
+    /// Rückfallebene: dieser Rückkanal feuert bei diesem Panel nicht (gemessen
+    /// 26.08.2026), Maßstab ist `neededHeight`.
+    private(set) var lastReportedSize: CGSize?
+
+    /// Höhe, die der Inhalt braucht. Unabhängig davon, wie groß das Fenster
+    /// gerade ist, siehe `fitToContent()`.
+    var neededHeight: CGFloat? {
+        guard let v = panel?.contentView else { return nil }
+        return v.fittingSize.height > 1 ? v.fittingSize.height : lastReportedSize?.height
+    }
+
+    /// NUR für `--squeeze-settings`: klemmt das Panel absichtlich auf die
+    /// Notbremsen-Höhe. Das ist der Zustand, den ein zu kleines
+    /// Einstellungsfenster beim Nutzer hat, und ohne diesen Schalter wäre er
+    /// auf einem gesunden Rechner gar nicht herstellbar (dasselbe Muster wie
+    /// `--demo-hint` und `--demo-skin-detail=`).
+    func squeezeForTest(height: CGFloat) {
+        guard let p = panel else { return }
+        moveRecorder?.suspended = true
+        p.setFrame(CGRect(x: p.frame.minX, y: p.frame.maxY - height,
+                          width: p.frame.width, height: height), display: true)
+        DispatchQueue.main.async { self.moveRecorder?.suspended = false }
+    }
+
     /// Toggle the settings panel, opening it centred underneath the widget
     /// (`anchor`), clamped to the visible screen.
     func toggle(state: AppState, anchor: CGRect?) {
@@ -37,7 +80,23 @@ final class SettingsPanelController {
             onSize: { size in
                 Task { @MainActor in SettingsPanelController.shared.resize(to: size) }
             }))
-        hosting.sizingOptions = [.preferredContentSize]   // grow when Kalender expands
+        // BEIDE Optionen, und das ist der Kern der Sache (26.08.2026).
+        //
+        // Mit `.preferredContentSize` allein bekommt der Hosting-View KEINE
+        // eigene Größe, die man abfragen könnte: `fittingSize` meldet 0,
+        // `intrinsicContentSize` meldet -1, und der SwiftUI-Rückkanal unten
+        // (`onSize`) feuert genau einmal mit (0,0) und danach nie wieder. Die
+        // Fensterhöhe entsteht dann allein aus AppKits eigener Verrechnung, und
+        // die fällt nicht auf jedem Rechner gleich aus: hier zieht sie ein zu
+        // klein gesetztes Fenster von selbst wieder gerade, bei einem Nutzer
+        // (Intel-MacBook) blieb es auf der Notbremsen-Höhe stehen und schnitt
+        // den Reiter oben und unten ab.
+        //
+        // `.intrinsicContentSize` macht daraus eine echte Auto-Layout-Größe:
+        // gemessen meldet der View danach 633 statt 0, auch während das Fenster
+        // geklemmt ist. Erst damit hat `fitToContent()` unten überhaupt einen
+        // Maßstab, auf den es das Fenster ziehen kann.
+        hosting.sizingOptions = [.preferredContentSize, .intrinsicContentSize]
         hosting.layoutSubtreeIfNeeded()
         let size = hosting.fittingSize
 
@@ -102,6 +161,13 @@ final class SettingsPanelController {
             // `resize()`, dort steht die Stummschaltung seit Runde 47i.
             self.moveRecorder?.suspended = true
             self.lastRescueReason = PanelDock.enforceVisible(p)
+            // Die Notbremse kennt nur eine Mindestgröße (300×420), nicht den
+            // Inhalt. Bleibt das Fenster darunter, steht der Reiter oben UND
+            // unten über und der Nutzer sieht nur einen Streifen aus der Mitte.
+            // Auf diesem Rechner zieht AppKit die Höhe von sich aus nach, das
+            // ist aber nicht überall so (Meldung vom 26.08.2026). Also hier
+            // verbindlich nachziehen, statt darauf zu bauen.
+            self.fitToContent()
             DispatchQueue.main.async { self.moveRecorder?.suspended = false }
         }
     }
@@ -113,7 +179,14 @@ final class SettingsPanelController {
     /// Grow/shrink the panel when the content size changes (Kalender expand),
     /// keeping the top edge fixed and clamping into the visible screen.
     func resize(to contentSize: CGSize) {
-        guard let p = panel, p.isVisible, contentSize.width > 1 else { return }
+        // Die Meldung ZUERST festhalten, erst danach prüfen, ob das Panel schon
+        // steht. Die erste und oft einzige Meldung kommt aus dem
+        // `layoutSubtreeIfNeeded()` beim Aufbau, also bevor es ein Fenster gibt.
+        // Sie hinter die guard-Zeile zu schreiben hieß: die einzige verlässliche
+        // Größenangabe wandert in den Papierkorb (gefunden 26.08.2026).
+        guard contentSize.width > 1 else { return }
+        lastReportedSize = contentSize
+        guard let p = panel, p.isVisible else { return }
         let frameSize = p.frameRect(forContentRect: CGRect(origin: .zero, size: contentSize)).size
         let old = p.frame
         // Erstplatzierung noch offen (Recorder suspendiert)? Dann mit der
@@ -139,6 +212,39 @@ final class SettingsPanelController {
         moveRecorder?.suspended = false
     }
 
+    /// Zieht das Fenster auf die Höhe, die der Inhalt braucht, falls es kleiner
+    /// ist. Oberkante bleibt stehen, das Ergebnis wird in den sichtbaren
+    /// Bildschirm geklemmt.
+    ///
+    /// Der Maßstab ist `fittingSize` des Hosting-Views, und der ist NUR
+    /// belastbar, weil oben `.intrinsicContentSize` gesetzt ist. Der
+    /// SwiftUI-Rückkanal dient nur noch als Rückfallebene.
+    ///
+    /// Passt der Inhalt nicht auf den Bildschirm, gewinnt der Bildschirm: ein
+    /// Fenster, das unten aus dem Bild läuft, ist auch unschön, aber die
+    /// Titelleiste bleibt greifbar und die Reiterleiste sichtbar. Beides ist
+    /// besser als ein Streifen aus der Mitte, in dem der Nutzer die Reiter gar
+    /// nicht erst findet.
+    func fitToContent() {
+        guard let p = panel, p.isVisible, let v = p.contentView else { return }
+        let want = v.fittingSize.height > 1 ? v.fittingSize : (lastReportedSize ?? .zero)
+        guard want.height > 1 else { return }
+        let old = p.frame
+        var size = p.frameRect(forContentRect: CGRect(origin: .zero, size: want)).size
+        size.width = max(size.width, old.width)
+        guard size.height > old.height + 1 else { return }
+        if let vf = PanelDock.visibleFrame(containing: old) {
+            size.height = min(size.height, vf.height - 16)
+        }
+        var y = old.maxY - size.height
+        if let vf = PanelDock.visibleFrame(containing: old) {
+            y = PanelDock.clampY(y, height: size.height, vf: vf)
+        }
+        p.setFrame(CGRect(x: old.minX, y: y.rounded(), width: size.width, height: size.height),
+                   display: true)
+        HintWindow.log(String(format: "settings fitToContent %.0f→%.0f", old.height, size.height))
+    }
+
     /// Endgültige Erstplatzierung, sobald das Panel seine echte Größe hat
     /// (Runde 47i(2)). Läuft einen Runloop nach dem Öffnen; falls resize()
     /// schneller war (suspended schon false), tut sie nichts.
@@ -148,6 +254,9 @@ final class SettingsPanelController {
         guard size.width > 50 else { return }   // immer noch Phantom → resize() übernimmt
         p.setFrameOrigin(PanelDock.savedOrigin(panelSize: size, id: "settings")
                          ?? PanelDock.origin(panelSize: size, anchor: anchorRect))
+        // Sofort auf Inhaltshöhe, nicht erst mit der Notbremse eine halbe
+        // Sekunde später: sonst blitzt das Fenster in falscher Größe auf.
+        fitToContent()
         moveRecorder?.suspended = false
     }
 
@@ -428,6 +537,25 @@ struct SettingsPane: View {
                 }
                 .labelsHidden().pickerStyle(.segmented).fixedSize()
             }
+            // 24.08.: Der Balken war seit dem 20.08. fest 1.35-fach, weil ein
+            // Faktor Balken UND Tier zugleich vergrößert hat. Gemeint war nur
+            // das Tier. Hier steht jetzt NUR die Balkengröße; das Flugobjekt
+            // behält seine Wucht unabhängig davon (BannerContentView.motifScale).
+            HStack {
+                Text(L.t("Balkengröße", "Bar size")).font(.system(size: 12))
+                Spacer()
+                Picker("", selection: $state.bannerScale) {
+                    Text(L.t("Klein", "Small")).tag(1.0)
+                    Text(L.t("Mittel", "Medium")).tag(1.18)
+                    Text(L.t("Groß", "Large")).tag(1.35)
+                }
+                .labelsHidden().pickerStyle(.segmented).fixedSize()
+            }
+            Text(L.t("Betrifft nur den Balken mit Titel und Knöpfen. Das Flugobjekt bleibt gleich groß.",
+                     "Affects only the bar with the title and buttons. The flying object keeps its size."))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             Toggle(L.t("Ton abspielen", "Play sound"), isOn: $state.soundEnabled).font(.system(size: 12))
             // Runde 72: wirkt jetzt für BEIDE Elemente gleichwertig — Wasser
             // springt aus dem Meer, Luft bricht aus einer Wolke hervor — daher
