@@ -74,28 +74,42 @@ struct BannerContentView: View {
     let bandOriginX: CGFloat
     let bandTopY: CGFloat
 
-    /// Gesamtskalierung des Banners (20.08.2026, Rückmeldung "das ganze Banner
-    /// ist zu klein"). EIN Faktor statt zwanzig Einzelzahlen: multipliziert die
-    /// komplette Kapsel (Icon, Schrift, Buttons, Innenabstände) UND die
-    /// Flugbahn-Geometrie unten, die von der Kapselgröße abhängt (Panelbox,
-    /// Splash-Ansatzpunkt, reservierte Docking-Breite). Ändert NUR die Größe,
-    /// nicht das Timing/Gefühl des Fluges (Sprungdauer/-höhe bleiben unten in
-    /// BannerPresenter unangetastet).
-    static let scale: CGFloat = 1.35
+    /// 🚨 DREI MASSSTÄBE, BEWUSST GETRENNT (24.08.2026). Vorher war es einer.
+    ///
+    /// Am 20.08. kam die Rückmeldung „das Banner ist zu klein", und daraufhin
+    /// vergrößerte EIN Faktor 1.35 alles zugleich. Gemeint war aber nur das
+    /// TIER — der Balken wirkte danach fett („es ging da eher ums Tier, nicht
+    /// den Balken", 24.08.). Wer hier wieder zusammenlegt, baut genau diesen
+    /// Fehler nach.
+    ///
+    /// `capsuleScale` — nur der Balken: Schrift, Knöpfe, Innenabstände, Radius.
+    /// Steht in den Einstellungen, Standard 1.0 = Stand vor dem 20.08.
+    @MainActor static var capsuleScale: CGFloat { CGFloat(AppState.shared.bannerScale) }
+
+    /// `motifScale` — nur das Flugobjekt. Fix, damit das Tier seine Wucht
+    /// behält, egal wie schlank der Balken eingestellt ist. Entspricht dem
+    /// bisherigen Gesamtfaktor, das Motiv sieht also aus wie gewohnt.
+    static let motifScale: CGFloat = 1.35
+
+    /// `geometryScale` — die Fensterbox und die Flugbahn. Nimmt das MAXIMUM
+    /// beider Maßstäbe: die Box muss das größere von beiden fassen. Nähme sie
+    /// nur `capsuleScale`, würde ein großes Motiv bei schlankem Balken oben
+    /// abgeschnitten, weil das Panel der Fensterrahmen ist und nicht mitwächst.
+    @MainActor static var geometryScale: CGFloat { max(capsuleScale, motifScale) }
 
     // Virtual banner-box geometry (the moving region the capsule lives in).
     // Wide/tall enough for the DOCKED capsule (buttons) + the raised sub + ×.
-    static let panelW: CGFloat = 640 * scale
-    static let panelH: CGFloat = 132 * scale
-    static let capsuleLeading: CGFloat = 18 * scale
-    static let capsuleTop: CGFloat = 42 * scale
+    @MainActor static var panelW: CGFloat { 640 * geometryScale }
+    @MainActor static var panelH: CGFloat { 132 * geometryScale }
+    @MainActor static var capsuleLeading: CGFloat { 18 * geometryScale }
+    @MainActor static var capsuleTop: CGFloat { 42 * geometryScale }
     /// Capsule strip used for hover-docking + the detail popover.
-    static let capsuleZone: CGFloat = 118 * scale
+    @MainActor static var capsuleZone: CGFloat { 118 * geometryScale }
     /// Reserved width for the DOCKED capsule (buttons out) so it never clamps
     /// off-screen — used both for the hover-dock clamp and the detail popover
     /// clamp (Runde 9/19). Was a bare "560" in two places; now one constant
     /// that scales with everything else.
-    static let dockedWidthEstimate: CGFloat = 560 * scale
+    @MainActor static var dockedWidthEstimate: CGFloat { 560 * geometryScale }
 
     var body: some View {
         TimelineView(.animation) { context in
@@ -121,25 +135,47 @@ private struct CapsuleView: View {
     let bubble: Double
     let now: Double
 
-    /// Kurzname für den globalen Banner-Maßstab (Rückmeldung 20.08.: "das
-    /// ganze Banner ist zu klein"). JEDE Größe hier unten geht durch `s`, damit
-    /// Icon, Schrift, Buttons und Abstände gemeinsam wachsen statt nur die
-    /// Hülle — sonst sieht es aus wie eine leere Kapsel mit kleinem Inhalt.
-    private var s: CGFloat { BannerContentView.scale }
+    /// Kurzname für den Maßstab des BALKENS. Schrift, Knöpfe und Abstände hier
+    /// unten gehen alle durch `s`, damit sie gemeinsam wachsen statt nur die
+    /// Hülle. Das Flugobjekt hängt bewusst NICHT daran, sondern an
+    /// `motifScale` — siehe die Erklärung oben bei den drei Maßstäben.
+    private var s: CGFloat { BannerContentView.capsuleScale }
+
+    /// Maßstab des Flugobjekts, unabhängig vom Balken.
+    private var m: CGFloat { BannerContentView.motifScale }
+
+    /// Maße des Flugobjekts. Wird an ZWEI Stellen gebraucht und muss dort
+    /// denselben Wert liefern: für den Platzhalter im Balken (reserviert die
+    /// Breite) und für das Objekt selbst im Overlay darüber. Liefe das
+    /// auseinander, säße das Tier neben seiner Lücke statt darin.
+    private var motifSize: CGSize {
+        let state = AppState.shared
+        if state.skinStyle != .classic,
+           let image = Skins.shared.image(for: state.currentSkin, style: state.skinStyle) {
+            return skinFrameSize(for: image)
+        }
+        return CGSize(width: 62 * m, height: 54 * m)   // klassisches U-Boot
+    }
 
     var body: some View {
         HStack(spacing: 12 * s) {
-            flyingObject
-                .shadow(color: Color(hex: 0x2EC7A0).opacity(0.6), radius: 9 * s)
-                .offset(y: -6 * s)
-                // Nose follows the jump arc's tangent (nose-up climbing, nose-down
-                // on the way down); flips sign when mirrored. Small idle bob on top.
-                .rotationEffect(.degrees((vm.facingLeft ? 1 : -1) * vm.tilt + sin(now * 2.2) * 2))
-                // Overlapping Action (Runde 70): das Objekt zieht voraus, alles
-                // dahinter bleibt beim Beschleunigen kurz zurück. Deshalb wandert
-                // NUR das Objekt um die Rücklage nach vorn, der Rest der Kapsel
-                // bleibt stehen. Die Feder rechnet der Presenter (capsuleLag).
-                .offset(x: (vm.facingLeft ? -1 : 1) * -vm.capsuleLag)
+            // 🚨 NUR EIN PLATZHALTER, das Objekt selbst liegt als Overlay darüber
+            // (24.08.2026). Vorher stand `flyingObject` hier im HStack — und weil
+            // in einer Zeile das höchste Element die Höhe vorgibt, zog ein hohes
+            // Motiv den ganzen BALKEN mit hoch: Nessie ist 105 pt hoch, der Text
+            // nur 35, der Balken wurde also fast doppelt so dick und verlor seine
+            // längliche Form („der Balken war eher ein bisschen länglich", 24.08.).
+            //
+            // Der Schalter „Motiv ragt heraus" versprach schon immer das
+            // Gegenteil — herausragen statt aufblasen — konnte es im HStack aber
+            // gar nicht halten. Als Overlay stimmt es jetzt wirklich.
+            //
+            // Nebeneffekt, der ein echtes Wackeln behebt: seit dem Motivwechsel
+            // (1.6) rotieren die Motive, und da jedes anders hoch ist, änderte
+            // sich die Balkenhöhe von Banner zu Banner. Jetzt bestimmt nur noch
+            // der Text die Höhe, sie ist bei allen 27 Motiven gleich.
+            Color.clear
+                .frame(width: motifSize.width, height: 1)
             VStack(alignment: .leading, spacing: 2 * s) {
                 Text(vm.title)
                     .font(.system(size: 15 * s, weight: .semibold))
@@ -188,6 +224,28 @@ private struct CapsuleView: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 19 * s, style: .continuous))
         .onTapGesture { vm.onDetails() }
+        // Das Flugobjekt liegt ÜBER der Kapsel statt in ihr, damit es die
+        // Balkenhöhe nicht mehr diktiert (Begründung oben am Platzhalter).
+        // Vertikal zentriert, ragt also oben und unten gleich weit hinaus; den
+        // Kopfraum dafür hält `capsuleTop` im Panel frei.
+        .overlay(alignment: .leading) {
+            flyingObject
+                .shadow(color: Color(hex: 0x2EC7A0).opacity(0.6), radius: 9 * s)
+                .offset(y: -6 * s)
+                // Nose follows the jump arc's tangent (nose-up climbing, nose-down
+                // on the way down); flips sign when mirrored. Small idle bob on top.
+                .rotationEffect(.degrees((vm.facingLeft ? 1 : -1) * vm.tilt + sin(now * 2.2) * 2))
+                // Overlapping Action (Runde 70): das Objekt zieht voraus, alles
+                // dahinter bleibt beim Beschleunigen kurz zurück. Deshalb wandert
+                // NUR das Objekt um die Rücklage nach vorn, der Rest der Kapsel
+                // bleibt stehen. Die Feder rechnet der Presenter (capsuleLag).
+                .offset(x: (vm.facingLeft ? -1 : 1) * -vm.capsuleLag)
+                // Gleicht das linke Innenpolster aus, damit das Objekt genau auf
+                // seinem Platzhalter sitzt: das Overlay beginnt an der Außenkante
+                // der Kapsel, der Platzhalter erst hinter dem Polster.
+                .padding(.leading, 12 * s)
+                .allowsHitTesting(false)
+        }
         .overlay(alignment: .topTrailing) { closeButton }
         // No drop shadow, it read as a black bar/cut under the pill (mehrfach gemeldet).
         // The saturated teal fill carries enough contrast on its own.
@@ -219,8 +277,8 @@ private struct CapsuleView: View {
                 .scaleEffect(x: vm.facingLeft ? -1 : 1, y: 1)   // mirror when flying left
         } else {
             SubmarineView(bubblePhase: bubble)
-                .scaleEffect(x: vm.facingLeft ? -1.32 * s : 1.32 * s, y: 1.32 * s)   // mirror when flying left
-                .frame(width: 62 * s, height: 54 * s)
+                .scaleEffect(x: vm.facingLeft ? -1.32 * m : 1.32 * m, y: 1.32 * m)   // mirror when flying left
+                .frame(width: 62 * m, height: 54 * m)
         }
     }
 
@@ -236,13 +294,13 @@ private struct CapsuleView: View {
         // Ente gut aussieht. Die 42 pt Kopfraum über der Kapsel (`capsuleTop`)
         // fassen den Überstand, deshalb ist der Faktor gedeckelt.
         let oversize = AppState.shared.skinOversize
-        let targetHeight = (oversize ? 78 : 54) * s
+        let targetHeight = (oversize ? 78 : 54) * m
         // Die Breitengrenze muss mitwachsen, sonst greift sie ZUERST und drückt
         // die Höhe wieder herunter: Nessie kam so auf 71 statt der gewollten 78
         // Punkte, und vom Überstand blieb kaum etwas übrig (gemessen 21.08.).
         // Mehr Breite verdeckt dabei nichts, sie schiebt den Text nur nach
         // rechts, die Kapsel wird also breiter statt enger.
-        let maxWidth = (oversize ? 210 : 160) * s
+        let maxWidth = (oversize ? 210 : 160) * m
         let w = image.size.width, h = image.size.height
         guard w > 0, h > 0 else { return CGSize(width: targetHeight, height: targetHeight) }
         let aspect = w / h

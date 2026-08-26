@@ -75,7 +75,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Die ältere Instanz gewinnt, die neue beendet sich sofort.
         // Diese Prüf-Aufrufe brauchen den Kalender, aber keine Menüleiste, und
         // laufen deshalb absichtlich neben der App.
-        let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels"]
+        let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels",
+                              "--squeeze-settings"]
         if !CommandLine.arguments.contains(where: readOnlyChecks.contains),
            let bid = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bid)
@@ -85,6 +86,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)   // menu-bar only, no dock icon
+
+        // Klemmt das Einstellungsfenster absichtlich auf die Notbremsen-Höhe und
+        // schaut nach, ob es sich davon erholt (26.08.2026, gemeldet wurde: „sehe
+        // nur das, auch nach Fenster zurückholen"). Ohne diesen Schalter ist der
+        // Zustand auf einem gesunden Rechner nicht herstellbar, und ein Test,
+        // der ihn nicht herstellen kann, prüft nichts.
+        if CommandLine.arguments.contains("--squeeze-settings") {
+            AppState.shared.toggleSettingsPanel()
+            // Geklemmt wird VOR der Notbremse (die läuft 0,5 s nach dem Öffnen),
+            // denn genau so kommt der Fall beim Nutzer an: das Fenster ist von
+            // Anfang an zu klein, nicht irgendwann später.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                let c = SettingsPanelController.shared
+                guard c.contentHeight != nil else {
+                    print("SQUEEZE FEHLGESCHLAGEN: kein Einstellungsfenster offen")
+                    exit(1)
+                }
+                print("vor dem Klemmen:  " + c.sizeSources)
+                c.squeezeForTest(height: 420)
+                print("nach dem Klemmen: " + c.sizeSources)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+                let c = SettingsPanelController.shared
+                // Maßstab ist, was der Inhalt selbst gemeldet hat. Fehlt die
+                // Meldung, ist der Test nicht bestanden, sondern blind.
+                guard let soll = c.neededHeight, let ist = c.contentHeight else {
+                    print("SQUEEZE-SETTINGS FEHLGESCHLAGEN: der Inhalt nennt keine nötige Höhe, "
+                          + "damit hat die App keinen Maßstab, auf den sie das Fenster ziehen könnte")
+                    exit(1)
+                }
+                let ok = ist >= soll - 1
+                print("am Ende:          " + c.sizeSources)
+                print(String(format: "Reiter %d: Inhalt %.0f von nötigen %.0f",
+                             UserDefaults.standard.integer(forKey: "settingsTab"), ist, soll))
+                print(ok ? "squeeze-settings ok: Fenster holt sich seine Höhe zurück"
+                         : "SQUEEZE-SETTINGS FEHLGESCHLAGEN: Fenster bleibt geklemmt, Inhalt wird oben und unten abgeschnitten")
+                exit(ok ? 0 : 1)
+            }
+            return
+        }
 
         // Selbsttest für die Schreibtisch-Falle (22.08.2026).
         //

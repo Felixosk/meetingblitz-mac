@@ -150,7 +150,7 @@ final class Flight {
             // 272 was half of an assumed ~544pt docked width; scales with the
             // banner (Runde 20.08.) so the pinned/docked debug pose (--demo-dock)
             // still centres the now-bigger capsule instead of drifting off-centre.
-            let centerX = sf.midX - 272 * BannerContentView.scale
+            let centerX = sf.midX - 272 * BannerContentView.geometryScale
             vm.facingLeft = !toRight
 
             // Initial global position of the virtual box.
@@ -319,8 +319,8 @@ final class Flight {
         // The 31/27 offsets estimate the classic sub's rendered centre inside
         // its icon frame; scale with the banner (Runde 20.08.) so the splash
         // still lines up with the (now bigger) nose instead of drifting.
-        let subScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.scale
-        let subMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.scale
+        let subScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.motifScale
+        let subMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.motifScale
         let originX = subScreenX - 0.50 * splashW
         let originY = subMidScreenY - 0.333 * splashH
         let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: splashW, height: splashH),
@@ -356,8 +356,8 @@ final class Flight {
         // flying object's nose inside the capsule, close enough across every
         // skin (water or air) without per-skin tuning.
         let cloudW: CGFloat = 720, cloudH: CGFloat = 600
-        let objScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.scale
-        let objMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.scale
+        let objScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.motifScale
+        let objMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.motifScale
         let originX = objScreenX - 0.50 * cloudW
         let originY = objMidScreenY - 0.333 * cloudH
         let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: cloudW, height: cloudH),

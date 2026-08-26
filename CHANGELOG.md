@@ -2,6 +2,16 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.6.1 — 2026-08-26
+
+**The settings window could open smaller than its own content.** On some Macs it
+stayed at the minimum size the panel rescue falls back to, and a page that does
+not fit its window overflows at the top *and* the bottom: you saw a strip from
+the middle, without the tab bar and without the style switcher, so the
+photoreal and photo motifs were out of reach. The window now measures what its
+content needs and grows to it, both when it opens and after the rescue. The
+diagnostics report gained a line naming the actual and the needed height.
+
 ## 1.6 — 2026-08-23
 
 **The flying motif can now rotate.** Picking one of 27 motifs and never seeing

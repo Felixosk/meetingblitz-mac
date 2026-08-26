@@ -128,6 +128,16 @@ enum Diagnostics {
         line("Einstellungen auf Bildschirm", screenIndex(SettingsPanelController.shared.frame))
         line("Einstellungen Notplatzierung",
              SettingsPanelController.shared.lastRescueReason ?? "nicht nötig")
+        // Ist-Höhe gegen nötige Höhe (26.08.2026). Ein Fenster, das kleiner ist
+        // als sein Inhalt, zeigt nur einen Streifen aus der Mitte: oben fehlt
+        // die Reiterleiste, unten der Rest. Aus einem Screenshot ist das nicht
+        // sicher abzulesen, aus diesen zwei Zahlen schon.
+        line("Einstellungen Inhaltshöhe", {
+            let c = SettingsPanelController.shared
+            guard let ist = c.contentHeight, let soll = c.neededHeight else { return "-" }
+            return String(format: "%.0f von nötigen %.0f%@", ist, soll,
+                          ist >= soll - 1 ? "" : "  ← SCHNEIDET OBEN UND UNTEN AB")
+        }())
         line("Neues-Meeting offen", CreatePanelController.shared.isOpen)
         line("Neues-Meeting-Frame", CreatePanelController.shared.frame.map(short) ?? "-")
         line("Neues-Meeting Notplatzierung",

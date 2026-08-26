@@ -21,6 +21,16 @@ final class AppState: ObservableObject {
     /// hohen Motiven schmeichelt: ein langes flaches U-Boot wird dabei so
     /// breit, dass die Breitengrenze greift und kaum noch etwas übersteht.
     @Published var skinOversize: Bool { didSet { d.set(skinOversize, forKey: "skinOversize") } }
+    /// Größe der Banner-KAPSEL (Balken mit Titel und Knöpfen), 24.08.2026.
+    ///
+    /// WARUM getrennt vom Motiv: Am 20.08. wurde auf die Rückmeldung „das Banner
+    /// ist zu klein" EIN Faktor 1.35 eingeführt, der beides zugleich vergrößert
+    /// hat. Gemeint war aber nur das TIER, nicht der Balken — der wirkte danach
+    /// fett. Seitdem hängen Kapsel und Motiv an zwei Werten: dieser hier regelt
+    /// nur die Kapsel, `BannerContentView.motifScale` bleibt davon unberührt,
+    /// das Motiv behält also seine Wucht, egal wie schlank der Balken steht.
+    /// 1.0 = der Stand vor dem 20.08.
+    @Published var bannerScale: Double { didSet { d.set(bannerScale, forKey: "bannerScale") } }
     /// Which flying object shows in the banner (20.08.2026 Skin-Feature).
     /// `.classic` keeps the original Canvas-drawn U-Boot; the other styles
     /// pick one of the 27 SVG motifs below by `skinID`.
@@ -395,6 +405,9 @@ final class AppState: ObservableObject {
         soundEnabled = d.object(forKey: "soundEnabled") as? Bool ?? true
         dramaticEntrance = d.object(forKey: "waterEffect") as? Bool ?? true
         skinOversize = d.object(forKey: "skinOversize") as? Bool ?? false
+        // Standard 1.0 = schlanker Balken. Wer die fette Variante vom 20.08.
+        // mochte, stellt in den Einstellungen auf Groß.
+        bannerScale = d.object(forKey: "bannerScale") as? Double ?? 1.0
         skinStyle = d.string(forKey: "skinStyle").flatMap(SkinStyle.init(rawValue:)) ?? .classic
         skinID = d.string(forKey: "skinID") ?? Skin.all[0].id
         skinRotation = d.string(forKey: "skinRotation").flatMap(SkinRotation.init(rawValue:)) ?? .off
