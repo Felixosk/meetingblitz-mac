@@ -4,7 +4,7 @@
 etwas aus deinem Apple Kalender beginnt, fliegt ein U-Boot über deine
 Bildschirme.
 
-### ⬇ [MeetingBlitz 1.6.1 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [MeetingBlitz 1.6.2 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Fertige App · 9,6 MB · macOS 14+ · Apple Silicon **und** Intel ·
 [ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·

@@ -185,9 +185,13 @@ struct CreatePane: View {
     /// this nonactivating panel (Runde-13-Gotcha).
     @AppStorage("createCalendarID") private var chosenCalendarID = ""
     @State private var calendarListOpen = false
-    /// F11: true sobald in DIESEM Panel ein Kalender angeklickt wurde, dann
-    /// gewinnt die Handwahl über die Google-Ziel-Vorauswahl.
-    @State private var calendarPickedHere = false
+    /// F11b: true sobald im Formular je ein Kalender von Hand gewählt wurde,
+    /// dann gewinnt diese Wahl über das Ziel aus den Einstellungen.
+    /// Gehört in die Voreinstellungen und NICHT in @State: als @State starb das
+    /// Flag mit dem Panel, und das nächste „Neues Meeting" fiel wieder auf den
+    /// Google-Zielkalender zurück, obwohl die Wahl längst gespeichert war.
+    /// Zurückgesetzt wird es nur, wenn in den Einstellungen ein Ziel gewählt wird.
+    @AppStorage("createCalendarPickedByHand") private var calendarPickedHere = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -524,7 +528,7 @@ struct CreatePane: View {
                 // Target calendar: current choice as a row, tap → inline list of
                 // writable calendars (expands the panel; remembered via defaults).
                 let writable = state.calendar.writableCalendars()
-                let currentID = currentCalendarID
+                let currentID = currentCalendarID(in: writable)
                 let current = writable.first { $0.id == currentID }
                 Button {
                     withAnimation(.easeInOut(duration: 0.16)) { calendarListOpen.toggle() }
@@ -647,22 +651,32 @@ struct CreatePane: View {
         .disabled(google.busy)
     }
 
-    /// Zielkalender für die ANZEIGE in der Formularzeile. Bei „Beide" ohne
-    /// Handwahl steht hier der Google-Kalender, die zweite Ablage verrät der
-    /// Zusatz in der Zeile.
-    private var currentCalendarID: String? {
-        if !calendarPickedHere, let first = state.effectiveCreateCalendarIDs.first ?? nil {
-            return first
-        }
+    /// F11b: Zeigt die gemerkte Handwahl noch auf einen Kalender, den es gibt?
+    /// Konto entfernt oder Kalender gelöscht → zurück auf die Einstellung,
+    /// statt still in den Systemstandard zu kippen.
+    private func handPickedID(in writable: [CalendarInfo]) -> String? {
+        guard calendarPickedHere, !chosenCalendarID.isEmpty,
+              writable.contains(where: { $0.id == chosenCalendarID }) else { return nil }
+        return chosenCalendarID
+    }
+
+    /// Zielkalender für die ANZEIGE in der Formularzeile. Zuerst die gemerkte
+    /// Handwahl, sonst das Ziel aus den Einstellungen. ACHTUNG: bei „Beide" ohne
+    /// Handwahl steht hier nur der Google-Kalender, geschrieben wird aber in
+    /// zwei — die Zeile verschweigt die zweite Ablage bis heute. Nimmt die schon
+    /// geladene Liste entgegen, damit die Zeile nicht bei jedem Neuzeichnen
+    /// erneut den Kalenderspeicher befragt.
+    private func currentCalendarID(in writable: [CalendarInfo]) -> String? {
+        if let picked = handPickedID(in: writable) { return picked }
+        if let first = state.effectiveCreateCalendarIDs.first ?? nil { return first }
         return chosenCalendarID.isEmpty ? state.calendar.defaultCalendarID : chosenCalendarID
     }
 
     /// Wohin tatsächlich geschrieben wird: eine Handwahl im Formular schlägt
     /// die Einstellung und schreibt dann in GENAU diesen einen Kalender.
     private var targetCalendarIDs: [String?] {
-        calendarPickedHere
-            ? [chosenCalendarID.isEmpty ? state.calendar.defaultCalendarID : chosenCalendarID]
-            : state.effectiveCreateCalendarIDs
+        if let picked = handPickedID(in: state.calendar.writableCalendars()) { return [picked] }
+        return state.effectiveCreateCalendarIDs
     }
 
     /// Custom recurrence editor (Runde 43b): "every N days/weeks/months", plus

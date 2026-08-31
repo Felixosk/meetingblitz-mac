@@ -2,6 +2,18 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.6.2 — 2026-08-31
+
+**The calendar you picked for a new meeting did not stick.** "New meeting" kept
+showing the target calendar from Settings, even right after you had picked a
+different one in the form. That was not only the label: the meeting was filed
+there too, so a pick in the form held for exactly one meeting and was then
+forgotten. Your choice now survives closing the window and quitting the app. If
+the calendar behind it disappears, because the account was removed, the form
+falls back to the target from Settings instead of quietly using the system
+default calendar — and picking a target in Settings overrides an earlier choice
+from the form, so that page works again.
+
 ## 1.6.1 — 2026-08-26
 
 **The settings window could open smaller than its own content.** On some Macs it
