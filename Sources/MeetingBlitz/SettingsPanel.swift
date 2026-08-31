@@ -1409,6 +1409,11 @@ struct SettingsPane: View {
                             Button {
                                 if isGoogle { state.googleTargetCalendarID = c.id }
                                 else { state.appleTargetCalendarID = c.id }
+                                // F11b: Wer hier ein Ziel wählt, meint es auch.
+                                // Ohne dieses Zurücksetzen bliebe eine alte
+                                // Handwahl aus dem Formular für immer davor
+                                // stehen und die Einstellung wirkte nie.
+                                UserDefaults.standard.set(false, forKey: "createCalendarPickedByHand")
                                 withAnimation(.easeInOut(duration: 0.16)) {
                                     if isGoogle { gcalListOpen = false } else { acalListOpen = false }
                                 }
