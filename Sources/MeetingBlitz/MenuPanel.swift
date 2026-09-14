@@ -22,6 +22,8 @@ struct MenuPanel: View {
     @State private var lastHidden: Meeting?
     @State private var createHovered = false
     @State private var instantHovered = false
+    /// Gemessene Höhe je Terminzeile, für die Scroll-Grenze (Runde 77).
+    @State private var rowHeights: [String: CGFloat] = [:]
     /// F2: month grid folded out under the header (lives in AppState so the
     /// demo flag can open it and the widget resets it on open).
     private var monthOpen: Bool { state.monthGridOpen }
@@ -99,6 +101,29 @@ struct MenuPanel: View {
         .onPreferenceChange(PanelSizeKey.self) { size in
             if size != .zero { onSize?(size) }
         }
+        // Runde 77: Tag gewechselt oder Termine dazugekommen → Fenster neu
+        // vermessen. Der GeometryReader oben kann das NICHT melden, die
+        // Inhaltsansicht klebt per autoresizingMask an der Panelhöhe und meldet
+        // immer die alte Höhe. Nachgemessen wurde bisher nur beim Kalender-
+        // Aufklappen, also blieb das Widget auf der Höhe von HEUTE stehen und
+        // die Knöpfe lagen über den letzten Terminen von morgen (Meldung 14.09.:
+        // „ich kann die morgen alle gar nicht sehen"). Einen Runloop später,
+        // vorher ist der neue Inhalt noch nicht gelayoutet.
+        .onChange(of: layoutSignature) {
+            DispatchQueue.main.async { WidgetPanelController.shared.refreshSize() }
+        }
+    }
+
+    /// Alles, was die Höhe des Widgets verändert, außer dem Kalender-Raster
+    /// (das misst beim Klappen selbst und animiert dabei).
+    private var layoutSignature: String {
+        let rows = state.agenda.map { "\($0.id)@\($0.start.timeIntervalSince1970)" }
+        let rems = state.showReminders ? state.reminders.map(\.id) : []
+        return [state.selectedDay.description, rows.joined(separator: ","),
+                rems.joined(separator: ","), lastHidden?.id ?? "",
+                state.instantError ?? "", state.calendarAuthorized ? "a" : "-",
+                agendaScrolls ? "s\(state.agendaMaxRows):\(Int(cappedAgendaHeight))" : ""]
+            .joined(separator: "|")
     }
 
     // MARK: - Sections
@@ -357,21 +382,7 @@ struct MenuPanel: View {
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                             .padding(.vertical, 4)
                     } else {
-                        ForEach(state.agenda) { m in
-                            AgendaRow(meeting: m,
-                                      isNext: m.id == state.nextMeeting?.id && m.start == state.nextMeeting?.start,
-                                      birthdayCalled: m.isBirthday ? state.isBirthdayCalled(m) : false,
-                                      onOpen: { state.openInCalendar(m) },
-                                      onCopy: { url in state.copyLink(url) },
-                                      onICS: { state.exportICS(m) != nil },
-                                      onJoin: { _ in state.join(m) },
-                                      onToggleCalled: { state.toggleBirthdayCalled(m) },
-                                      onCallContact: { state.openBirthdayContact(m) },
-                                      onHide: {
-                                          state.hideMeeting(m)
-                                          withAnimation(.easeInOut(duration: 0.16)) { lastHidden = m }
-                                      })
-                        }
+                        agendaRows
                     }
                     if let h = lastHidden {
                         HStack(spacing: 6) {
@@ -411,6 +422,59 @@ struct MenuPanel: View {
                 .frame(minHeight: state.agenda.isEmpty ? 56 : 0, alignment: .top)
             }
         }
+    }
+
+    /// Runde 77: Alle Termine auf einer Seite, bis zur eingestellten Zahl
+    /// (Standard 10). Erst darüber wird die Liste scrollbar, sonst liefe das
+    /// Widget an einem vollen Tag unten aus dem Bildschirm. Rückmeldung 14.09.:
+    /// „auf einer Page sieht die ganzen Dinger … mehr als 10 Einträge sollte es
+    /// nicht sein und dann muss man scrollen".
+    ///
+    /// ScrollView hat KEINE eigene Höhe (Gotcha Runde 14), deshalb bekommt sie
+    /// die Summe der gemessenen Höhen der ersten N Zeilen. Zeilen sind nicht
+    /// gleich hoch (zweizeiliger Countdown), eine feste Zeilenhöhe würde die
+    /// letzte sichtbare Zeile anschneiden.
+    @ViewBuilder private var agendaRows: some View {
+        let rows = VStack(alignment: .leading, spacing: 2) {
+            ForEach(state.agenda) { m in
+                AgendaRow(meeting: m,
+                          isNext: m.id == state.nextMeeting?.id && m.start == state.nextMeeting?.start,
+                          birthdayCalled: m.isBirthday ? state.isBirthdayCalled(m) : false,
+                          onOpen: { state.openInCalendar(m) },
+                          onCopy: { url in state.copyLink(url) },
+                          onICS: { state.exportICS(m) != nil },
+                          onJoin: { _ in state.join(m) },
+                          onToggleCalled: { state.toggleBirthdayCalled(m) },
+                          onCallContact: { state.openBirthdayContact(m) },
+                          onHide: {
+                              state.hideMeeting(m)
+                              withAnimation(.easeInOut(duration: 0.16)) { lastHidden = m }
+                          })
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+                    rowHeights[Self.rowKey(m)] = h
+                }
+            }
+        }
+        if agendaScrolls {
+            ScrollView(.vertical) { rows }
+                .frame(height: cappedAgendaHeight)
+        } else {
+            rows
+        }
+    }
+
+    private var agendaScrolls: Bool {
+        state.agendaMaxRows > 0 && state.agenda.count > state.agendaMaxRows
+    }
+
+    private var cappedAgendaHeight: CGFloat {
+        let visible = state.agenda.prefix(state.agendaMaxRows)
+        let sum = visible.reduce(CGFloat(0)) { $0 + (rowHeights[Self.rowKey($1)] ?? 40) }
+        return (sum + CGFloat(max(visible.count - 1, 0)) * 2).rounded(.up)
+    }
+
+    private static func rowKey(_ m: Meeting) -> String {
+        "\(m.id)@\(m.start.timeIntervalSince1970)"
     }
 
     /// Apple Reminders due today / overdue (Runde 43). A separate block under the

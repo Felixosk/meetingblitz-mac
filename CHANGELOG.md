@@ -2,6 +2,22 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.6.3 — 2026-09-14
+
+**Calendars you switched off came back after every restart.** On launch the app
+treated every calendar as newly added, and new calendars are switched on by
+default. Unticked calendars under Show, Banner and Birthdays were quietly ticked
+again. The app now remembers which calendars it has already seen, so only a
+calendar that really is new starts out switched on.
+
+**The widget did not grow when you changed the day.** It kept the height of
+today, so on a busier day the buttons covered the last events. It now measures
+itself again whenever the day or the list changes.
+
+**Long days scroll instead of running off the screen.** Up to 10 events show on
+one page; beyond that the list scrolls. Settings → Widget & menu bar → Events
+before scrolling offers 6, 8, 10, 15 or All.
+
 ## 1.6.2 — 2026-08-31
 
 **The calendar you picked for a new meeting did not stick.** "New meeting" kept

@@ -8,6 +8,9 @@ final class AppState: ObservableObject {
 
     // Settings (persisted)
     @Published var leadMinutes: Int { didSet { d.set(leadMinutes, forKey: "leadMinutes") } }
+    /// Runde 77: So viele Termine zeigt das Widget auf einer Seite, erst
+    /// darüber wird die Liste scrollbar. 0 = alle, nie scrollen.
+    @Published var agendaMaxRows: Int { didSet { d.set(agendaMaxRows, forKey: "agendaMaxRows") } }
     @Published var soundEnabled: Bool { didSet { d.set(soundEnabled, forKey: "soundEnabled") } }
     @Published var animationSeconds: Double { didSet { d.set(animationSeconds, forKey: "animationSeconds") } }
     /// Dramatic entrance when the banner flies in (Runde 6, toggleable; Runde 72:
@@ -459,6 +462,7 @@ final class AppState: ObservableObject {
         calendarViewMode = d.string(forKey: "calendarViewMode")
             .flatMap(CalendarViewMode.init(rawValue:)) ?? .stepped
         hideDeclined = d.object(forKey: "hideDeclined") as? Bool ?? false
+        agendaMaxRows = d.object(forKey: "agendaMaxRows") as? Int ?? 10
         snoozeMinutes = d.object(forKey: "snoozeMinutes") as? Int ?? 2
         menuBarStyle = d.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:)) ?? .titleAndCountdown
         onlyWithLink = d.object(forKey: "onlyWithLink") as? Bool ?? false
@@ -624,8 +628,17 @@ final class AppState: ObservableObject {
     func requestCalendarAccess() async {
         calendarAuthorized = await calendar.requestAccess()
         if calendarAuthorized {
-            let known = Set(availableCalendars.map(\.id))
+            // Runde 77: „bekannt" kommt aus UserDefaults, NICHT aus
+            // `availableCalendars`. Die Liste ist beim App-Start leer, damit galt
+            // bei JEDEM Start jeder Kalender als neu und wurde per formUnion
+            // wieder eingeschaltet. Abgewählte Kalender (Meldung 14.09.: die
+            // Alex-Kalender) kamen so nach jedem Neustart zurück. Fehlt der
+            // Eintrag noch (erster Start nach dem Update), gilt die aktuelle
+            // Liste als bekannt, sonst würde genau dieser Start es noch einmal tun.
             availableCalendars = calendar.allCalendars()
+            let current = Set(availableCalendars.map(\.id))
+            let known = (d.object(forKey: "knownCalendarIDs") as? [String]).map(Set.init) ?? current
+            d.set(Array(current.union(known)), forKey: "knownCalendarIDs")
             // First run: include every calendar; the user prunes (e.g. a shared one) in settings.
             if !d.bool(forKey: "calendarsInitialized") {
                 selectedCalendarIDs = Set(availableCalendars.map(\.id))

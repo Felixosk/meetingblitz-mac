@@ -439,6 +439,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        // Verification aid (Runde 77): wie --demo-day, aber OHNE das Raster
+        // aufzuklappen. --demo-day klappt es auf, und genau das Aufklappen hat
+        // früher nachgemessen, der Bug „Widget wächst beim Tageswechsel nicht
+        // mit" war damit im Test unsichtbar.
+        if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-step=") }),
+           let day = Int(arg.dropFirst("--demo-step=".count)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self else { return }
+                WidgetPanelController.shared.toggle(state: .shared, statusButton: self.statusItem?.button)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    AppState.shared.stepDay(day)
+                }
+            }
+        }
         // Verification aid (Runde 56): show the hint box programmatically at a
         // registered spot, no mouse needed. Pairs with --demo-widget.
         if CommandLine.arguments.contains("--demo-hint") {

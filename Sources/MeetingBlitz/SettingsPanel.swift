@@ -498,6 +498,18 @@ struct SettingsPane: View {
                    isOn: $state.hidePastEvents).font(.system(size: 12))
             Toggle(L.t("Abgesagte Termine ausblenden", "Hide declined events"),
                    isOn: $state.hideDeclined).font(.system(size: 12))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Termine ohne Scrollen", "Events before scrolling")).font(.system(size: 12))
+                Picker("", selection: $state.agendaMaxRows) {
+                    ForEach([6, 8, 10, 15], id: \.self) { Text("\($0)").tag($0) }
+                    Text(L.t("Alle", "All")).tag(0)
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            Text(L.t("Hat ein Tag mehr Termine, lässt sich die Liste im Widget scrollen.",
+                     "If a day has more events, the list in the widget scrolls."))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
