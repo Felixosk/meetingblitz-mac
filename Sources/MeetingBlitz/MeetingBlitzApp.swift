@@ -30,7 +30,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         URLScheme.handle(url, statusButton: statusItem?.button)
     }
 
+    /// Laeuft unter dieser PID nur ein Hilfsaufruf desselben Binaries (`--mcp`
+    /// oder eine der Einmalpruefungen)? Der MCP-Prozess lebt so lange wie die
+    /// Claude-Sitzung und traegt dieselbe Bundle-ID. Ohne diese Ausnahme hielt
+    /// die Einzelinstanz-Sperre ihn fuer die App, und die echte App liess sich
+    /// nicht mehr starten, solange irgendwo ein Claude offen war (21.09.2026).
+    private static func isHelperProcess(_ pid: pid_t) -> Bool {
+        let ps = Process()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-o", "args=", "-p", String(pid)]
+        let pipe = Pipe()
+        ps.standardOutput = pipe
+        guard (try? ps.run()) != nil else { return false }
+        ps.waitUntilExit()
+        let args = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return ["--mcp", "--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels",
+                "--squeeze-settings", "--selftest", "--parse"].contains { args.contains(" " + $0) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Runde 78: `--mcp` zweigt GANZ ZUERST ab, noch vor dem Selbsttest.
+        // Dieser Modus ist der stdio-MCP-Server fuer Claude (siehe
+        // MCPServer.swift), er baut nie ein Menueleisten-Icon auf und reicht
+        // jede Anfrage nur per HTTP an eine ANDERE, bereits laufende Kopie
+        // weiter. `run()` blockiert dauerhaft (liest stdin) und beendet den
+        // Prozess selbst.
+        if CommandLine.arguments.contains("--mcp") {
+            MCPServer.run()
+        }
         // F7: Selbsttest der Link-Erkennung. MUSS vor dem Einzelinstanz-Schutz
         // stehen — sonst beendet sich der Testlauf neben der laufenden App
         // sofort und meldet Erfolg, ohne einen einzigen Fall geprüft zu haben.
@@ -39,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest") {
             let fails = JoinLinkTests.failures() + CalendarStageTests.failures()
                 + QuickAddTests.failures() + SkinRotationTests.failures()
+                + MCPTests.failures()
             if fails.isEmpty {
                 print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel")
                 exit(0)
@@ -80,7 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !CommandLine.arguments.contains(where: readOnlyChecks.contains),
            let bid = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bid)
-               .contains(where: { $0.processIdentifier != NSRunningApplication.current.processIdentifier }) {
+               .contains(where: { $0.processIdentifier != NSRunningApplication.current.processIdentifier
+                                  && !Self.isHelperProcess($0.processIdentifier) }) {
             NSLog("MeetingBlitz läuft bereits, diese Instanz beendet sich (Status-Item-Kollision).")
             exit(0)
         }
@@ -314,6 +343,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
         refreshStatusTitle()
+
+        // Runde 78: die MCP-Bruecke ab hier, NICHT in `AppState.start()` (siehe
+        // Begruendung dort). Dieser Punkt wird nur vom echten, dauerhaft
+        // laufenden App-Start erreicht, keine der einmaligen Kommandozeilen-
+        // Pruefungen kommt hierher.
+        MCPBridge.shared.setEnabled(AppState.shared.mcpEnabled)
 
         // Re-render the status title whenever relevant state changes.
         cancellable = AppState.shared.objectWillChange.sink { [weak self] _ in

@@ -274,14 +274,23 @@ final class CalendarService {
     /// live in the Apple calendar; Google only mints the Meet link, which rides
     /// along as the event URL + note). `calendarID` picks the target (Runde 28);
     /// nil or stale falls back to the system default calendar.
+    ///
+    /// Runde 78 (MCP): `timeZone`, `location` und `notes` sind zusaetzliche,
+    /// optionale Felder fuer per Claude angelegte Termine. Gibt die
+    /// `eventIdentifier` zurueck, damit der Aufrufer (z. B. `delete_event`)
+    /// spaeter genau DIESEN Termin wiederfindet.
+    @discardableResult
     func createEvent(title: String, start: Date, end: Date, url: URL?, calendarID: String?,
-                     recurrence: RepeatRule = .none, custom: CustomRecurrence? = nil) throws {
+                     recurrence: RepeatRule = .none, custom: CustomRecurrence? = nil,
+                     timeZone: TimeZone? = nil, location: String? = nil, notes: String? = nil) throws -> String {
         guard isAuthorized else { throw NSError(domain: "MeetingBlitz", code: 1,
             userInfo: [NSLocalizedDescriptionKey: L.t("Kein Kalender-Zugriff.", "No calendar access.")]) }
         let event = EKEvent(eventStore: store)
         event.title = title
         event.startDate = start
         event.endDate = end
+        if let timeZone { event.timeZone = timeZone }
+        if let location, !location.isEmpty { event.location = location }
         // URL only, mirroring it into the notes showed the link twice in
         // Apple Calendar (Runde 29).
         event.url = url
@@ -299,12 +308,122 @@ final class CalendarService {
         // F11: Google's CalDAV tends to drop the URL property on the way up, so
         // for a CalDAV target the link additionally rides in the notes. iCloud
         // is CalDAV too but keeps URLs, and doubling it there would bring back
-        // the Runde-29 duplicate.
+        // the Runde-29 duplicate. Runde 78: eine mitgegebene eigene Notiz wird
+        // dazugehaengt, nicht ueberschrieben, sonst waere ein MCP-Termin mit
+        // Meet-Link und eigenem Notiztext eines der beiden los.
+        var noteParts: [String] = []
+        if let notes, !notes.isEmpty { noteParts.append(notes) }
         if let u = url, cal.source?.sourceType == .calDAV,
            cal.source?.title.localizedCaseInsensitiveContains("icloud") != true {
-            event.notes = u.absoluteString
+            noteParts.append(u.absoluteString)
         }
+        if !noteParts.isEmpty { event.notes = noteParts.joined(separator: "\n\n") }
         try store.save(event, span: .thisEvent)
+        return event.eventIdentifier ?? ""
+    }
+
+    /// Termine ueber ALLE Kalender im Zeitraum, ungefiltert von der Anzeige-
+    /// Auswahl (Runde 78, MCP `list_events`): Claude soll sehen koennen, was
+    /// wirklich im Kalender steht, nicht nur, was das Widget gerade zeigt.
+    /// Zusatzfelder (Nachtrag 21.09.) gegenueber dem normalen `Meeting`:
+    /// `isRecurring`, `calendarWritable`, `hasAttendees`, `iAmOrganizer`: die
+    /// braucht Claude, um VOR einem `move_event`-Versuch schon zu wissen, ob
+    /// er ueberhaupt klappen kann.
+    func mcpEventsInRange(from: Date, to: Date) -> [MCPEventInfo] {
+        guard isAuthorized, to > from else { return [] }
+        store.refreshSourcesIfNecessary()
+        let pred = store.predicateForEvents(withStart: from, end: to, calendars: nil)
+        return store.events(matching: pred)
+            .filter { $0.status != .canceled }
+            .sorted { $0.startDate < $1.startDate }
+            .map { e in
+                MCPEventInfo(
+                    id: e.eventIdentifier ?? "",
+                    title: (e.title?.isEmpty == false) ? e.title! : L.t("Termin", "Event"),
+                    start: e.startDate, end: e.endDate ?? e.startDate,
+                    calendarTitle: e.calendar?.title ?? "",
+                    joinURL: Self.findJoinURL(e),
+                    isRecurring: e.hasRecurrenceRules,
+                    calendarWritable: e.calendar?.allowsContentModifications ?? false,
+                    hasAttendees: !(e.attendees?.isEmpty ?? true),
+                    iAmOrganizer: e.organizer?.isCurrentUser ?? true)
+            }
+    }
+
+    /// Loescht EINEN Termin per Kennung (Runde 78, MCP `delete_event`). Der
+    /// Aufrufer prueft VORHER, ob dieser Termin ueberhaupt ueber Claude
+    /// angelegt wurde (siehe `MCPCreatedStore`): diese Funktion selbst kennt
+    /// diese Regel nicht, sie loescht, was man ihr gibt.
+    func deleteEvent(id: String) throws {
+        guard isAuthorized else { throw NSError(domain: "MeetingBlitz", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: L.t("Kein Kalender-Zugriff.", "No calendar access.")]) }
+        guard let event = store.event(withIdentifier: id) else {
+            throw NSError(domain: "MeetingBlitz", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: L.t("Termin nicht gefunden.", "Event not found.")])
+        }
+        try store.remove(event, span: .thisEvent)
+    }
+
+    /// Verschiebt EIN Vorkommen eines Termins (Nachtrag 21.09., MCP
+    /// `move_event`). Gilt fuer ALLE Termine in beschreibbaren Kalendern, nicht
+    /// nur fuer per MCP angelegte. Das ist Absicht laut Plan, anders als bei
+    /// `delete_event`. `occurrenceStart` grenzt bei Serien auf GENAU das Vorkommen
+    /// ein, das `list_events` gemeldet hat (EventKit teilt sich die
+    /// `eventIdentifier` ueber alle Vorkommen einer Serie).
+    /// Immer `span: .thisEvent`, die Serie selbst wird nie verschoben.
+    /// `newEnd` nil bedeutet „dieselbe Dauer wie bisher", der Aufrufer muss
+    /// die alte Dauer dafuer nicht selbst vorher abfragen.
+    @discardableResult
+    func moveEvent(id: String, occurrenceStart: Date?, newStart: Date, newEnd: Date?,
+                   timeZone: TimeZone?) throws -> (title: String, calendarTitle: String, oldStart: Date, oldEnd: Date, newEnd: Date) {
+        guard isAuthorized else { throw NSError(domain: "MeetingBlitz", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: L.t("Kein Kalender-Zugriff.", "No calendar access.")]) }
+        let event: EKEvent
+        if let occurrenceStart {
+            // Enges Fenster um das gemeldete Vorkommen, +/- 1 Tag reicht fuer
+            // jede Zeitzonen-Differenz aus, die hier vorkommen kann.
+            let cal = Calendar.current
+            let windowStart = cal.date(byAdding: .day, value: -1, to: occurrenceStart) ?? occurrenceStart
+            let windowEnd = cal.date(byAdding: .day, value: 1, to: occurrenceStart) ?? occurrenceStart
+            let pred = store.predicateForEvents(withStart: windowStart, end: windowEnd, calendars: nil)
+            guard let found = store.events(matching: pred).first(where: {
+                $0.eventIdentifier == id && abs($0.startDate.timeIntervalSince(occurrenceStart)) < 60
+            }) else {
+                throw NSError(domain: "MeetingBlitz", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                    L.t("Dieses Vorkommen wurde nicht gefunden.", "This occurrence was not found.")])
+            }
+            event = found
+        } else {
+            guard let e = store.event(withIdentifier: id) else {
+                throw NSError(domain: "MeetingBlitz", code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: L.t("Termin nicht gefunden.", "Event not found.")])
+            }
+            event = e
+        }
+        guard event.calendar?.allowsContentModifications == true else {
+            throw NSError(domain: "MeetingBlitz", code: 5, userInfo: [NSLocalizedDescriptionKey:
+                L.t("Dieser Kalender ist nicht beschreibbar.", "This calendar is not writable.")])
+        }
+        // Nicht-Organisator + Teilnehmer: eine Verschiebung kaeme bei den
+        // anderen gar nicht an, lieber vorher klar sagen als still ins Leere
+        // schreiben.
+        if let attendees = event.attendees, !attendees.isEmpty, event.organizer?.isCurrentUser == false {
+            throw NSError(domain: "MeetingBlitz", code: 6, userInfo: [NSLocalizedDescriptionKey:
+                L.t("Du bist nicht Organisator dieses Termins, eine Verschiebung würde die anderen Teilnehmer nicht erreichen.",
+                    "You are not the organizer of this event, moving it would not reach the other attendees.")])
+        }
+        let oldStart = event.startDate ?? newStart
+        let oldEnd = event.endDate ?? newStart
+        let title = (event.title?.isEmpty == false) ? event.title! : L.t("Termin", "Event")
+        let calTitle = event.calendar?.title ?? ""
+        // Dauer erhalten, wenn der Aufrufer keine neue mitgibt.
+        let duration = oldEnd.timeIntervalSince(oldStart)
+        let resolvedEnd = newEnd ?? newStart.addingTimeInterval(max(0, duration))
+        event.startDate = newStart
+        event.endDate = resolvedEnd
+        if let timeZone { event.timeZone = timeZone }
+        try store.save(event, span: .thisEvent)
+        return (title, calTitle, oldStart, oldEnd, resolvedEnd)
     }
 
     /// Build an EKRecurrenceRule for the create form's repeat choice. Weekly and

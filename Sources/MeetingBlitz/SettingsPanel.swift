@@ -291,6 +291,7 @@ private struct SettingsSizeKey: PreferenceKey {
 struct SettingsPane: View {
     @ObservedObject var state: AppState
     @ObservedObject var google = GoogleService.shared
+    @ObservedObject var mcp = MCPBridge.shared
     /// Ersetzt den weggefallenen Schließen-Knopf der Titelleiste (Runde 47j).
     var onClose: (@Sendable () -> Void)? = nil
     var onSize: (@Sendable (CGSize) -> Void)? = nil
@@ -438,6 +439,44 @@ struct SettingsPane: View {
                     OnboardingPanelController.shared.show(state: state)
                 }
                 .font(.system(size: 12)).buttonStyle(.borderless)
+            }
+
+            Divider()
+            mcpSection
+        }
+    }
+
+    // MARK: - Claude-Zugang (MCP, Runde 78)
+
+    /// Eigener kleiner Abschnitt: Schalter, ein Satz Erklärung, Status, und
+    /// der Knopf, der den fertigen `claude mcp add …`-Befehl in die
+    /// Zwischenablage legt. Standard AUS (siehe `AppState.mcpEnabled`), eine
+    /// lokale Bruecke, die ohne Klick Termine anlegen kann, ist bewusster Opt-in.
+    private var mcpSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L.t("Claude-Zugang (MCP)", "Claude access (MCP)")).font(.system(size: 12, weight: .semibold))
+            Toggle(L.t("Claude darf Termine über MeetingBlitz verwalten", "Claude may manage events through MeetingBlitz"),
+                   isOn: $state.mcpEnabled).font(.system(size: 12))
+            Text(L.t("Öffnet eine lokale, mit einem Zugangscode geschützte Bruecke auf diesem Rechner (127.0.0.1). Nur Claude auf diesem Mac kann sie erreichen, kein Fernzugriff.",
+                     "Opens a local, token-protected bridge on this Mac (127.0.0.1). Only Claude on this machine can reach it, no remote access."))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if state.mcpEnabled {
+                Text(mcp.isRunning
+                     ? L.t("Läuft auf Port \(mcp.port)", "Running on port \(mcp.port)")
+                     : L.t("Wird gestartet …", "Starting …"))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Button(L.t("Befehl kopieren", "Copy command")) {
+                    let path = Bundle.main.executablePath ?? Bundle.main.bundlePath
+                    let cmd = "claude mcp add -s user meetingblitz -- \"\(path)\" --mcp"
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(cmd, forType: .string)
+                }
+                .font(.system(size: 12)).buttonStyle(.borderless)
+                Text(L.t("Fügt MeetingBlitz einmalig in Claude Code als MCP-Server ein. In ein Terminal einfügen und ausführen.",
+                         "Adds MeetingBlitz to Claude Code as an MCP server, once. Paste into a terminal and run it."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -1104,6 +1143,19 @@ struct SettingsPane: View {
                      "Applies to the text block copied to the clipboard when creating a meeting. The interface is unaffected."))
                 .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            // Einladungstext in die Zwischenablage (Runde 78). Direkt ÜBER dem
+            // .ics-Schalter, dieselbe Zeile im Plan.
+            Toggle(L.t("Einladungstext in die Zwischenablage kopieren", "Copy invite text to the clipboard"),
+                   isOn: $state.copyInviteOnCreate).font(.system(size: 12))
+            if !state.copyInviteOnCreate {
+                Text(L.t("Der Kopier-Knopf in der Ergebnisansicht bleibt nutzbar, nur beim Erstellen selbst passiert nichts mit der Zwischenablage.",
+                         "The copy button in the result view still works, only the clipboard stays untouched on create itself."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider()
 

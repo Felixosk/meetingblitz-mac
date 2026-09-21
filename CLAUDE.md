@@ -167,7 +167,20 @@ both. The step-by-step version is in the README under "Optional: create meetings
 with a Google Meet link". No credentials are included in this repository on
 purpose, and none are needed unless you want this one feature.
 
-## 8. It is done when
+## 8. Claude access (MCP)
+
+`MCPBridge` is a token-protected HTTP bridge on `127.0.0.1`, started only when
+`AppState.mcpEnabled` is on. `MeetingBlitz --mcp` is the stdio process Claude
+starts. It forwards to the bridge and launches the app itself if it is not
+running.
+
+**Trap:** the `--mcp` process has the same bundle ID as the app. The single
+instance guard and `open -b` took it for the app, and the real app would not
+start while any Claude chat was open. `isHelperProcess` in `MeetingBlitzApp.swift`
+lists the command line switches that mark a helper, and the app is started with
+`open -n <path>`. Add every new CLI switch to that list.
+
+## 9. It is done when
 
 - `./build.sh` completes without errors
 - the app launches and **exactly one** instance is running

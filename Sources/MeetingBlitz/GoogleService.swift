@@ -38,6 +38,10 @@ final class GoogleService: ObservableObject {
     /// verbunden werden (Runde 48). Steuert den Hinweis im UI, damit statt einer
     /// rohen Google-Fehlermeldung ein Knopf dasteht, der das Problem löst.
     @Published private(set) var needsReconnect = false
+    /// Kennungen der zuletzt per `createAppleMeeting` angelegten Termine
+    /// (Runde 78, MCP): ein Aufruf legt bei „Beide" zwei Termine an, deshalb
+    /// eine Liste statt einer einzelnen Kennung.
+    @Published private(set) var lastCreatedEventIDs: [String] = []
 
     // openid+email only to show "verbunden als …"; calendar.events is the real
     // ask. meetings.space.settings (Runde 43) is a NON-sensitive scope that lets
@@ -145,7 +149,7 @@ final class GoogleService: ObservableObject {
     /// Reset the create-form feedback (called when the form opens).
     func resetCreateFeedback() {
         lastMeetLink = nil; lastShareText = nil; lastArtifactNote = nil; lastError = nil
-        lastICSURL = nil
+        lastICSURL = nil; lastCreatedEventIDs = []
     }
 
     /// Der Ablauf (Runde 27): the REAL event lives in the Apple calendar, not
@@ -155,13 +159,19 @@ final class GoogleService: ObservableObject {
     /// event carrying that link into the default Apple calendar. MeetingBlitz
     /// reads EventKit, so the new meeting immediately gets banner/timeline/join.
     /// Returns true on success (the link is also copied to the clipboard).
+    /// `copyInvite` (Runde 78): steuert NUR die Zwischenablage. `lastShareText`
+    /// wird immer gesetzt (der Kopier-Knopf in der Ergebnisansicht bleibt),
+    /// aber ohne diesen Schalter fasst die Funktion die Zwischenablage selbst
+    /// nicht an. Wichtig für den Schalter „Einladungstext kopieren" UND für
+    /// MCP-Aufrufe mit `copyInvite: false`.
     @discardableResult
     func createAppleMeeting(title: String, start: Date, minutes: Int, calendarIDs: [String?],
                             recurrence: RepeatRule = .none, custom: CustomRecurrence? = nil,
-                            autoTranscribe: Bool = false, makeICS: Bool = false,
+                            autoTranscribe: Bool = false, makeICS: Bool = false, copyInvite: Bool = true,
                             calendarService: CalendarService) async -> Bool {
         guard !busy else { return false }
         busy = true; lastError = nil; lastMeetLink = nil; lastArtifactNote = nil; lastICSURL = nil
+        lastCreatedEventIDs = []
         defer { busy = false }
         do {
             let link = try await mintMeetLink()
@@ -171,12 +181,15 @@ final class GoogleService: ObservableObject {
             // One Meet link, one event per chosen calendar ("beide" writes two).
             // The first failure aborts: a half-written state is worse than a
             // clear error, and the link is already minted either way.
+            var createdIDs: [String] = []
             for cid in (calendarIDs.isEmpty ? [nil] : calendarIDs) {
-                try calendarService.createEvent(title: finalTitle, start: start, end: end,
-                                                url: URL(string: link),
-                                                calendarID: cid,
-                                                recurrence: recurrence, custom: custom)
+                let newID = try calendarService.createEvent(title: finalTitle, start: start, end: end,
+                                                             url: URL(string: link),
+                                                             calendarID: cid,
+                                                             recurrence: recurrence, custom: custom)
+                if !newID.isEmpty { createdIDs.append(newID) }
             }
+            lastCreatedEventIDs = createdIDs
             // Best effort, never blocks creation: switch the Meet space to
             // auto-transcribe (Runde 43). Fails softly (licence/scope) into a note.
             if autoTranscribe { await enableAutoTranscription(meetLink: link) }
@@ -185,8 +198,10 @@ final class GoogleService: ObservableObject {
             // paste it into a chat and the receiver has everything.
             let share = Self.shareText(title: finalTitle, start: start, end: end, link: link)
             lastShareText = share
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(share, forType: .string)
+            if copyInvite {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(share, forType: .string)
+            }
             // Zusätzlich eine .ics zum Mitschicken (Runde 47). Best effort: eine
             // fehlgeschlagene Datei darf den erstellten Termin nie kaputtmachen,
             // deshalb nur eine Notiz statt eines Fehlers.
@@ -230,7 +245,11 @@ final class GoogleService: ObservableObject {
     ///
     /// DE: "Affen call\nDi, 22.07.\n18:30–19:00 Nikosia · 17:30–18:00 Berlin\n<link>"
     /// Sprache folgt der Einladungssprache (Runde 50), nicht der Oberfläche.
-    static func shareText(title: String, start: Date, end: Date, link: String) -> String {
+    ///
+    /// `link` optional seit Runde 78 (MCP): ein per Claude ohne Meet-Link
+    /// angelegter Termin bekommt denselben Einladungsblock, nur ohne die
+    /// letzte Zeile.
+    static func shareText(title: String, start: Date, end: Date, link: String?) -> String {
         let de = L.inviteIsDE
         let local = TimeZone.current
         let day = DateFormatter()
@@ -243,7 +262,9 @@ final class GoogleService: ObservableObject {
            second.secondsFromGMT(for: start) != local.secondsFromGMT(for: start) {
             times += " · \(timeRange(start, end, tz: second, de: de)) \(zoneLabel(second))"
         }
-        return "\(title)\n\(day.string(from: start))\n\(times)\n\(link)"
+        var block = "\(title)\n\(day.string(from: start))\n\(times)"
+        if let link, !link.isEmpty { block += "\n\(link)" }
+        return block
     }
 
     /// „18:30–19:00" (DE, 24h) oder „6:30–7:00 PM" (EN, 12h) in der Zone.

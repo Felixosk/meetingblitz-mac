@@ -4,7 +4,7 @@
 etwas aus deinem Apple Kalender beginnt, fliegt ein U-Boot über deine
 Bildschirme.
 
-### ⬇ [MeetingBlitz 1.6.3 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [MeetingBlitz 1.7.0 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Fertige App · 9,6 MB · macOS 14+ · Apple Silicon **und** Intel ·
 [ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·
@@ -269,6 +269,34 @@ Google die Refresh-Tokens nach einer Woche und man muss sich neu verbinden. Der
 Knopf **Veröffentlichen** im Zustimmungsbildschirm (oder eine interne
 Workspace-Zielgruppe) beendet das dauerhaft.
 
+## Optional: Claude verwaltet deinen Kalender
+
+MeetingBlitz kann als MCP-Server für [Claude Code](https://claude.com/claude-code)
+und Claude Desktop arbeiten. Du sagst "schieb den 14-Uhr-Termin auf 16 Uhr" oder
+"leg Donnerstag um 10 Uhr Berliner Zeit einen Call mit Anna an", und Claude
+erledigt das über die App.
+
+Standardmäßig ist das aus. So schaltest du es ein:
+
+1. **Einstellungen → Claude-Zugang (MCP)**: einschalten.
+2. **Befehl kopieren** klicken, in ein Terminal einfügen und einmal ausführen.
+   Der Befehl ist `claude mcp add` mit dem Pfad zu deiner App.
+3. Einen neuen Claude-Chat öffnen. Die Werkzeuge sind da.
+
+Was Claude damit kann:
+
+- `get_context`: Zeitzone und Uhrzeit deines Macs. Uhrzeiten ohne Zone gelten in
+  dieser Zone. Es gibt keine IP-Abfrage, ein VPN täuscht sie also nicht.
+- `list_calendars`, `list_events`: Kalender und Termine lesen.
+- `create_event`: neuer Termin mit Zeitzone. Einen Meet-Link nur auf Wunsch.
+- `move_event`: verschiebt einen Termin und lässt die Länge gleich. Bei einer
+  Serie wandert nur dieser eine Tag. Hat dich jemand anderes eingeladen, kommt
+  ein Fehler, weil die Änderung bei den anderen nie ankäme.
+- `delete_event`: nur Termine, die Claude selbst angelegt hat.
+
+Die App öffnet eine Brücke auf `127.0.0.1`. Jede Anfrage braucht dafür ein
+Token, ohne Token kommt ein 401. Von außerhalb deines Macs ist nichts erreichbar.
+
 ## Berechtigungen und Datenschutz
 
 Die App fragt beim ersten Start nach **Kalenderzugriff**, optional nach
@@ -277,6 +305,10 @@ keine Telemetrie und keinen Account. Der Quellcode liegt hier vollständig offen
 
 Der Google-Teil ist optional und kommt nur zum Zug, wenn du selbst eine
 OAuth-Konfiguration hinterlegst. Im Repository sind keine Zugangsdaten enthalten.
+
+Der Claude-Zugang ist aus, bis du ihn einschaltest. Ist er an, hört die App nur
+auf `127.0.0.1` und beantwortet Anfragen mit dem Token aus deiner eigenen
+`mcp.json`.
 
 ## Wenn etwas klemmt
 

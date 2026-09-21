@@ -219,6 +219,21 @@ final class AppState: ObservableObject {
     /// Beim Erstellen eines Meetings zusätzlich eine .ics-Datei nach ~/Downloads
     /// schreiben (Runde 47). Der Textblock geht wie gehabt in die Zwischenablage.
     @Published var createICSFile: Bool { didSet { d.set(createICSFile, forKey: "createICSFile") } }
+    /// Beim Erstellen den Einladungstext in die Zwischenablage kopieren
+    /// (Runde 78). Standard AN, damit sich für bestehende Nutzer nichts
+    /// ändert. Aus geschaltet fasst `createAppleMeeting` die Zwischenablage gar
+    /// nicht erst an, `lastShareText` bleibt trotzdem gesetzt, der Kopier-
+    /// Knopf in der Ergebnisansicht bleibt also nutzbar.
+    @Published var copyInviteOnCreate: Bool { didSet { d.set(copyInviteOnCreate, forKey: "copyInviteOnCreate") } }
+    /// Claude-Zugang per MCP (Runde 78). Standard AUS: eine lokale Bruecke,
+    /// die Termine ohne Klick anlegen kann, ist ein bewusster Opt-in, kein
+    /// automatisches Verhalten.
+    @Published var mcpEnabled: Bool {
+        didSet {
+            d.set(mcpEnabled, forKey: "mcpEnabled")
+            MCPBridge.shared.setEnabled(mcpEnabled)
+        }
+    }
 
     /// Whether the first-run walkthrough has been completed (Runde 56). This app
     /// is an accessory: no dock icon, no window. Without a walkthrough a new user
@@ -455,6 +470,8 @@ final class AppState: ObservableObject {
         showReminders = d.object(forKey: "showReminders") as? Bool ?? true
         compactMenuBarInMeeting = d.object(forKey: "compactMenuBarInMeeting") as? Bool ?? true
         createICSFile = d.object(forKey: "createICSFile") as? Bool ?? true
+        copyInviteOnCreate = d.object(forKey: "copyInviteOnCreate") as? Bool ?? true
+        mcpEnabled = d.object(forKey: "mcpEnabled") as? Bool ?? false
         inviteLanguage = d.string(forKey: "inviteLanguage") ?? "en"
         secondZoneEnabled = d.object(forKey: "secondZoneEnabled") as? Bool ?? true
         secondZoneID = d.string(forKey: "secondZoneID") ?? "Europe/Berlin"
@@ -522,6 +539,15 @@ final class AppState: ObservableObject {
             if showReminders { Task { await requestRemindersAccess() } }
         }
         monitor.start()
+        // Runde 78: die MCP-Bruecke wird ABSICHTLICH NICHT hier gestartet.
+        // `start()` laeuft auch fuer die einmaligen Kommandozeilen-Pruefungen
+        // (`--diagnose`, `--stats`, `--conflicts`, `--test-notice`), die sich
+        // per `exit()` sofort wieder beenden. Ein dort gestarteter Listener
+        // wuerde `mcp.json` auf einen Port schreiben, der Sekunden spaeter tot
+        // ist, und der echten laufenden App ihre eigene Bruecke unter dem
+        // Teppich wegziehen (in der Praxis beim Testen genau so passiert).
+        // Der echte GUI-Start ruft `MCPBridge.shared.setEnabled` deshalb selbst
+        // auf, siehe `AppDelegate.applicationDidFinishLaunching`.
     }
 
     /// Nach dem Einstieg: holt nach, was `start()` beim Erstlauf ausgelassen hat.
@@ -574,7 +600,7 @@ final class AppState: ObservableObject {
             let ok = await GoogleService.shared.createAppleMeeting(
                 title: title, start: start, minutes: 30,
                 calendarIDs: calendarIDs(for: instantTarget),
-                autoTranscribe: autoTranscribe, makeICS: false,
+                autoTranscribe: autoTranscribe, makeICS: false, copyInvite: copyInviteOnCreate,
                 calendarService: calendar)
             if ok {
                 monitor.tickNow()   // agenda/timeline pick it up immediately

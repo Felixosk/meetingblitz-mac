@@ -171,6 +171,18 @@ enum Diagnostics {
         line("Meet-Routing", s.meetRoutingEnabled ? s.effectiveMeetAccount : "aus")
         line("Letzter Fehler", g.lastError ?? "-")
 
+        section("MCP")
+        let mcp = MCPBridge.shared
+        line("Claude-Zugang", s.mcpEnabled ? "an" : "aus")
+        line("Bruecke laeuft", mcp.isRunning ? "ja, Port \(mcp.port)" : "nein")
+        line("Einladungstext kopieren", s.copyInviteOnCreate)
+        if mcp.recentCalls.isEmpty {
+            line("Letzte Aufrufe", "keine")
+        } else {
+            out.append("   Letzte Aufrufe:")
+            for c in mcp.recentCalls { out.append("     \(c)") }
+        }
+
         section("Banner")
         line("Ruhe-Modus", s.quietMode)
         line("Ruhe bei Bildschirmfreigabe", s.quietDuringScreenShare)

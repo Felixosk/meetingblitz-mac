@@ -187,6 +187,23 @@ enum MyStatus {
     case none, accepted, declined, tentative
 }
 
+/// Termin-Zeile fuer den MCP-Zugang (Runde 78, Nachtrag 21.09.). Eigenes,
+/// schlankes Modell statt `Meeting` wiederzuverwenden: `move_event` braucht
+/// Felder (Serie? beschreibbar? Organisator?), die im UI-Modell nirgends
+/// gebraucht werden und dort nur Ballast waeren.
+struct MCPEventInfo {
+    let id: String
+    let title: String
+    let start: Date
+    let end: Date
+    let calendarTitle: String
+    let joinURL: URL?
+    let isRecurring: Bool
+    let calendarWritable: Bool
+    let hasAttendees: Bool
+    let iAmOrganizer: Bool
+}
+
 struct Meeting: Identifiable, Equatable {
     let id: String
     let title: String

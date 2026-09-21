@@ -2,6 +2,23 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.7.0 — 2026-09-21
+
+**Claude can manage your calendar.** MeetingBlitz now works as an MCP server.
+Six tools: `get_context`, `list_calendars`, `list_events`, `create_event`,
+`move_event` and `delete_event`. It is off by default. Settings → Claude access
+(MCP) switches it on and copies the setup command. See the README for details.
+
+**Times without a time zone use the Mac's zone.** `get_context` returns the
+zone and the current time, so "10 am" means 10 am where you are. No IP lookup.
+
+**Moving is safe.** In a recurring series only that one day moves. Events you
+were invited to are refused with an explanation. Delete only works on events
+Claude created.
+
+**New switch: Copy invite text.** Settings → Creating meetings has a switch for
+the invite text that lands on the clipboard, right above the `.ics` switch.
+
 ## 1.6.3 — 2026-09-14
 
 **Calendars you switched off came back after every restart.** On launch the app

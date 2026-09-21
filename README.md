@@ -4,7 +4,7 @@
 before something from your Apple Calendar starts, a submarine flies across your
 screens.
 
-### ⬇ [Download MeetingBlitz 1.6.3](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [Download MeetingBlitz 1.7.0](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Ready-made app · 9.6 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
@@ -258,6 +258,35 @@ Google invalidates refresh tokens after a week and you have to reconnect. The
 consent screen's **Publish** button (or an Internal Workspace audience) ends
 that for good.
 
+## Optional: let Claude manage your calendar
+
+MeetingBlitz can act as an MCP server for [Claude Code](https://claude.com/claude-code)
+and Claude Desktop. Then you say "move my 2 pm call to 4 pm" or "put a call with
+Anna on Thursday at 10 Berlin time" and Claude does it through the app.
+
+It is off by default. To use it:
+
+1. **Settings → Claude access (MCP)**: switch it on.
+2. Click **Copy command**, paste it into a terminal and run it once. It runs
+   `claude mcp add` with the path to your copy of the app.
+3. Open a new Claude chat. The tools are there.
+
+What Claude can do:
+
+- `get_context`: your Mac's time zone and the current time. Times you name
+  without a zone count in that zone. There is no IP lookup, so a VPN cannot
+  fool it.
+- `list_calendars`, `list_events`: read your calendars and events.
+- `create_event`: new event with a time zone. A Meet link only if you ask for it.
+- `move_event`: moves one event and keeps its length. In a recurring series only
+  that one day moves. If someone else invited you, you get an error, because the
+  change would never reach the others.
+- `delete_event`: only events Claude created itself.
+
+The app opens a bridge on `127.0.0.1` that every request must authenticate to
+with a token. Without the token you get a 401. Nothing is reachable from
+outside your Mac.
+
 ## Permissions and privacy
 
 The app asks for **calendar access** on first launch, optionally for
@@ -266,6 +295,10 @@ no account. The source is right here.
 
 The Google part is optional and only kicks in if you supply your own OAuth
 config. No credentials are included in this repository.
+
+The Claude access is off until you switch it on. When it is on, the app listens
+on `127.0.0.1` only and answers requests that carry the token from your own
+`mcp.json`.
 
 ## Troubleshooting
 

@@ -294,11 +294,7 @@ struct CreatePane: View {
 
                 Divider()
                 createButton
-                Text(state.createICSFile
-                     ? L.t("Meet-Link hängt am Termin · .ics landet in ~/Downloads",
-                           "Meet link attached · .ics saved to ~/Downloads")
-                     : L.t("Meet-Link hängt automatisch am Termin",
-                           "Meet link is attached automatically"))
+                Text(createHintText)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -607,6 +603,27 @@ struct CreatePane: View {
 
     // MARK: - Fuß (steht immer sichtbar unter dem Formular)
 
+    /// Ehrliche Zeile unter dem Erstellen-Knopf, für alle vier Kombinationen
+    /// aus Einladungstext (an/aus) und .ics-Datei (an/aus, Runde 78). Der
+    /// Meet-Link hängt in JEDEM Fall automatisch am Termin selbst, das ist
+    /// keine Einstellung, nur ob Text und Datei ZUSÄTZLICH entstehen, ist wählbar.
+    private var createHintText: String {
+        switch (state.copyInviteOnCreate, state.createICSFile) {
+        case (true, true):
+            return L.t("Meet-Link hängt am Termin · Einladungstext kopiert · .ics landet in ~/Downloads",
+                       "Meet link attached · invite text copied · .ics saved to ~/Downloads")
+        case (true, false):
+            return L.t("Meet-Link hängt am Termin · Einladungstext kopiert",
+                       "Meet link attached · invite text copied")
+        case (false, true):
+            return L.t("Meet-Link hängt am Termin · .ics landet in ~/Downloads · Zwischenablage bleibt unberührt",
+                       "Meet link attached · .ics saved to ~/Downloads · clipboard untouched")
+        case (false, false):
+            return L.t("Meet-Link hängt automatisch am Termin · Zwischenablage bleibt unberührt",
+                       "Meet link is attached automatically · clipboard untouched")
+        }
+    }
+
     private var createButton: some View {
         Button {
             // F8: Ein Freitext, der noch nicht übernommen wurde, gilt trotzdem.
@@ -634,6 +651,7 @@ struct CreatePane: View {
                                                    custom: newRepeat == .custom ? customRec : nil,
                                                    autoTranscribe: state.autoTranscribe,
                                                    makeICS: state.createICSFile,
+                                                   copyInvite: state.copyInviteOnCreate,
                                                    calendarService: state.calendar) {
                     state.monitor.tickNow()   // show it in agenda/timeline right away
                 }
@@ -642,7 +660,9 @@ struct CreatePane: View {
             HStack(spacing: 6) {
                 if google.busy { ProgressView().controlSize(.small) }
                 Text(google.busy ? L.t("Erstelle…", "Creating…")
-                                 : L.t("Erstellen & Link kopieren", "Create & copy link"))
+                                 : (state.copyInviteOnCreate
+                                    ? L.t("Erstellen & Link kopieren", "Create & copy link")
+                                    : L.t("Erstellen", "Create")))
                     .font(.system(size: 12, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
