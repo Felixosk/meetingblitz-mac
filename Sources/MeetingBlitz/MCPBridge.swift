@@ -293,21 +293,32 @@ final class MCPBridge: ObservableObject {
         return (["events": events, "timezone": tz.identifier], nil)
     }
 
-    /// Kalender-Argument (id ODER Titel, ohne Gross/Klein) in eine echte
-    /// Kennung aufloesen. `nil`/leer/unbekannt faellt auf den Formular-
-    /// Standard zurueck (`effectiveCreateCalendarIDs`), NICHT auf den System-
-    /// standard: das ist dieselbe Regel wie im „Neues Meeting"-Formular.
-    private func resolveCalendarID(_ raw: String?, state: AppState) -> String? {
-        guard let raw, !raw.isEmpty else { return state.effectiveCreateCalendarIDs.first ?? nil }
+    /// Kalender-Argument (id ODER Titel, ohne Gross/Klein) in echte Kennungen
+    /// aufloesen. `nil`/leer/unbekannt faellt auf den Formular-Standard
+    /// zurueck (`effectiveCreateCalendarIDs`), NICHT auf den Systemstandard:
+    /// das ist dieselbe Regel wie im „Neues Meeting"-Formular.
+    ///
+    /// Runde 80: gibt eine LISTE zurueck. Steht das Ziel auf „beide", liefert
+    /// `effectiveCreateCalendarIDs` zwei Eintraege (Google + Apple), und der
+    /// Termin gehoert in beide. Vorher schnitt ein `.first` den zweiten still
+    /// ab, dadurch fehlte jeder ueber Claude angelegte Termin im Apple-
+    /// Kalender, obwohl das Formular ihn dort anlegt.
+    /// Ein ausdruecklich genannter Kalender bleibt genau EIN Ziel.
+    private func resolveCalendarIDs(_ raw: String?, state: AppState) -> [String?] {
+        guard let raw, !raw.isEmpty else { return state.effectiveCreateCalendarIDs }
         let writable = state.calendar.writableCalendars()
-        if let byID = writable.first(where: { $0.id == raw }) { return byID.id }
-        if let byTitle = writable.first(where: { $0.title.caseInsensitiveCompare(raw) == .orderedSame }) { return byTitle.id }
-        return state.effectiveCreateCalendarIDs.first ?? nil
+        if let byID = writable.first(where: { $0.id == raw }) { return [byID.id] }
+        if let byTitle = writable.first(where: { $0.title.caseInsensitiveCompare(raw) == .orderedSame }) { return [byTitle.id] }
+        return state.effectiveCreateCalendarIDs
     }
 
     private func calendarTitle(for id: String?, state: AppState) -> String {
         let target = id ?? state.calendar.defaultCalendarID
         return state.calendar.writableCalendars().first { $0.id == target }?.title ?? ""
+    }
+
+    private func calendarTitles(for ids: [String?], state: AppState) -> [String] {
+        ids.map { calendarTitle(for: $0, state: state) }.filter { !$0.isEmpty }
     }
 
     private func createEvent(state: AppState, arguments: [String: Any]) async -> (result: Any?, error: String?) {
@@ -334,7 +345,7 @@ final class MCPBridge: ObservableObject {
         }
         guard end > start else { return (nil, L.t("Ende muss nach dem Start liegen.", "End must be after start.")) }
 
-        let calendarID = resolveCalendarID(arguments["calendar"] as? String, state: state)
+        let calendarIDs = resolveCalendarIDs(arguments["calendar"] as? String, state: state)
         let meetLink = (arguments["meetLink"] as? Bool) ?? false
         let location = arguments["location"] as? String
         let notes = arguments["notes"] as? String
@@ -342,7 +353,7 @@ final class MCPBridge: ObservableObject {
         let copyInvite = (arguments["copyInvite"] as? Bool) ?? state.copyInviteOnCreate
         let timeZone = tzArg.flatMap(TimeZone.init(identifier:))
 
-        var eventID = ""
+        var eventIDs: [String] = []
         var meetLinkOut: String?
         var icsPath: String?
         var shareText: String?
@@ -350,22 +361,33 @@ final class MCPBridge: ObservableObject {
         if meetLink {
             let minutes = Int(end.timeIntervalSince(start) / 60)
             let ok = await GoogleService.shared.createAppleMeeting(
-                title: title, start: start, minutes: minutes, calendarIDs: [calendarID],
+                title: title, start: start, minutes: minutes, calendarIDs: calendarIDs,
                 autoTranscribe: false, makeICS: makeICS, copyInvite: copyInvite,
                 calendarService: state.calendar)
-            guard ok, let id = GoogleService.shared.lastCreatedEventIDs.first, !id.isEmpty else {
+            let ids = GoogleService.shared.lastCreatedEventIDs.filter { !$0.isEmpty }
+            guard ok, !ids.isEmpty else {
                 return (nil, GoogleService.shared.lastError ?? L.t("Meet-Link konnte nicht erstellt werden.", "Could not create the Meet link."))
             }
-            eventID = id
+            eventIDs = ids
             meetLinkOut = GoogleService.shared.lastMeetLink
             icsPath = GoogleService.shared.lastICSURL?.path
             shareText = GoogleService.shared.lastShareText
         } else {
+            // Ein Termin je eingestelltem Ziel, genau wie im Formular. Der
+            // erste Fehlschlag bricht ab: ein halb geschriebener Zustand ist
+            // schlimmer als eine klare Fehlermeldung. Schon angelegte
+            // Haelften werden dabei wieder eingesammelt.
             do {
-                eventID = try state.calendar.createEvent(title: title, start: start, end: end, url: nil,
-                                                         calendarID: calendarID, timeZone: timeZone,
-                                                         location: location, notes: notes)
-            } catch { return (nil, error.localizedDescription) }
+                for cid in (calendarIDs.isEmpty ? [nil] : calendarIDs) {
+                    let newID = try state.calendar.createEvent(title: title, start: start, end: end, url: nil,
+                                                               calendarID: cid, timeZone: timeZone,
+                                                               location: location, notes: notes)
+                    if !newID.isEmpty { eventIDs.append(newID) }
+                }
+            } catch {
+                for id in eventIDs { try? state.calendar.deleteEvent(id: id) }
+                return (nil, error.localizedDescription)
+            }
             let text = GoogleService.shareText(title: title, start: start, end: end, link: nil)
             shareText = text
             if copyInvite {
@@ -377,15 +399,20 @@ final class MCPBridge: ObservableObject {
             }
         }
 
-        MCPCreatedStore.remember(eventID)
+        MCPCreatedStore.remember(eventIDs)
         state.monitor.tickNow()
 
         let outTZ = timeZone ?? .current
+        let titles = calendarTitles(for: calendarIDs, state: state)
         return ([
-            "eventID": eventID,
+            // `eventID` bleibt fuer Rueckwaertskompatibilitaet die erste
+            // Kennung, `eventIDs`/`calendars` zeigen alle Haelften.
+            "eventID": eventIDs.first ?? "",
+            "eventIDs": eventIDs,
             "start": MCPTools.isoString(start, tz: outTZ),
             "end": MCPTools.isoString(end, tz: outTZ),
-            "calendar": calendarTitle(for: calendarID, state: state),
+            "calendar": titles.joined(separator: " + "),
+            "calendars": titles,
             "meetLink": meetLinkOut.map { $0 as Any } ?? NSNull(),
             "icsPath": icsPath.map { $0 as Any } ?? NSNull(),
             "shareText": shareText.map { $0 as Any } ?? NSNull(),
@@ -427,6 +454,18 @@ final class MCPBridge: ObservableObject {
             // Termin loeschen darf, aendert sich durchs Verschieben nicht.
             let moved = try state.calendar.moveEvent(id: eventID, occurrenceStart: occurrenceStart,
                                                       newStart: newStart, newEnd: newEnd, timeZone: timeZone)
+            // Runde 80: Beim Ziel „beide" haengt am selben Termin eine zweite
+            // Haelfte im anderen Kalender. Die muss mit, sonst stehen die
+            // beiden danach zu verschiedenen Uhrzeiten im Kalender. Fremde
+            // Termine haben keine Geschwister, dort passiert nichts.
+            var movedIDs = [eventID]
+            for sibling in MCPCreatedStore.siblings(of: eventID) where sibling != eventID {
+                if (try? state.calendar.moveEvent(id: sibling, occurrenceStart: occurrenceStart,
+                                                  newStart: newStart, newEnd: moved.newEnd,
+                                                  timeZone: timeZone)) != nil {
+                    movedIDs.append(sibling)
+                }
+            }
             state.monitor.tickNow()
             let outTZ = timeZone ?? .current
 
@@ -442,7 +481,8 @@ final class MCPBridge: ObservableObject {
                 NSPasteboard.general.setString(text, forType: .string)
             }
             return ([
-                "eventID": eventID, "title": moved.title, "calendar": moved.calendarTitle,
+                "eventID": eventID, "eventIDs": movedIDs,
+                "title": moved.title, "calendar": moved.calendarTitle,
                 "oldStart": MCPTools.isoString(moved.oldStart, tz: outTZ),
                 "oldEnd": MCPTools.isoString(moved.oldEnd, tz: outTZ),
                 "newStart": MCPTools.isoString(newStart, tz: outTZ),
@@ -460,11 +500,23 @@ final class MCPBridge: ObservableObject {
             return (nil, L.t("Dieser Termin wurde nicht über Claude angelegt und kann hier nicht gelöscht werden.",
                              "This event was not created through Claude and cannot be deleted here."))
         }
-        do {
-            try state.calendar.deleteEvent(id: eventID)
-            MCPCreatedStore.forget(eventID)
-            state.monitor.tickNow()
-            return (["deleted": true, "eventID": eventID], nil)
-        } catch { return (nil, error.localizedDescription) }
+        // Runde 80: Ziel „beide" legt denselben Termin in zwei Kalendern an.
+        // Loeschen muss beide Haelften treffen, sonst bleibt eine Leiche
+        // stehen, die man von Hand nachraeumen muesste.
+        let targets = MCPCreatedStore.siblings(of: eventID)
+        let toDelete = targets.isEmpty ? [eventID] : targets
+        var deleted: [String] = []
+        var failure: String?
+        for id in toDelete {
+            do { try state.calendar.deleteEvent(id: id); deleted.append(id) }
+            // Eine bereits von Hand geloeschte Haelfte darf den Rest nicht
+            // aufhalten, der erste echte Fehler wird am Ende gemeldet.
+            catch { if failure == nil { failure = error.localizedDescription } }
+        }
+        guard !deleted.isEmpty else { return (nil, failure ?? L.t("Termin nicht gefunden.", "Event not found.")) }
+        MCPCreatedStore.forget(eventID)
+        state.monitor.tickNow()
+        return (["deleted": true, "eventID": eventID, "eventIDs": deleted,
+                 "note": failure.map { $0 as Any } ?? NSNull()], nil)
     }
 }

@@ -2,6 +2,18 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.7.1 — 2026-09-21
+
+**Claude wrote events to one calendar only.** With "both" set as the target,
+the New meeting form put an event in the Google and the Apple calendar, but
+anything Claude created reached only the first of the two. The event was
+missing from the other calendar and nothing reported an error. Claude now
+writes to every calendar you picked, and the reply names all of them.
+
+**Deleting and moving cover both copies.** An event that sits in two calendars
+is still one event. Deleting it removes both halves instead of leaving one
+behind, and moving it moves both, so the two cannot drift to different times.
+
 ## 1.7.0 — 2026-09-21
 
 **Claude can manage your calendar.** MeetingBlitz now works as an MCP server.

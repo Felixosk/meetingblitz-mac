@@ -123,6 +123,13 @@ enum MCPTools {
 /// Verzeichnis der per MCP angelegten Termine (Runde 78): `delete_event` darf
 /// AUSSCHLIESSLICH Termine löschen, die hier stehen. Datei statt In-Memory,
 /// weil die App zwischen zwei MCP-Aufrufen neu gestartet werden kann.
+///
+/// Runde 80: gespeichert werden GRUPPEN, nicht einzelne Kennungen. Ein Ziel
+/// „beide" legt denselben Termin in zwei Kalendern an, und für den Nutzer ist das
+/// EIN Termin: löschen muss beide Hälften löschen, verschieben beide
+/// verschieben, sonst bleibt im Apple-Kalender eine Leiche stehen bzw. die
+/// zwei Hälften laufen zeitlich auseinander. Die alte flache Liste wird beim
+/// Lesen weiter akzeptiert (jede Kennung ist dann ihre eigene Gruppe).
 enum MCPCreatedStore {
     private static var fileURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -131,29 +138,100 @@ enum MCPCreatedStore {
         return dir.appendingPathComponent("mcp-created.json")
     }
 
-    static func remember(_ eventID: String) {
-        guard !eventID.isEmpty else { return }
-        var ids = load()
-        ids.insert(eventID)
-        save(ids)
+    /// Eine Gruppe zusammengehöriger Termine merken (ein Aufruf = eine Gruppe).
+    static func remember(_ eventIDs: [String]) {
+        save(adding(eventIDs, to: load()))
     }
 
-    static func forget(_ eventID: String) {
-        var ids = load()
-        ids.remove(eventID)
-        save(ids)
+    /// Alle Kennungen derselben Gruppe, die gegebene eingeschlossen. Leer, wenn
+    /// der Termin nicht über MCP angelegt wurde.
+    static func siblings(of eventID: String) -> [String] { siblings(of: eventID, in: load()) }
+
+    /// Die ganze Gruppe vergessen, zu der diese Kennung gehört.
+    static func forget(_ eventID: String) { save(removing(eventID, from: load())) }
+
+    static func contains(_ eventID: String) -> Bool { !siblings(of: eventID).isEmpty }
+
+    // MARK: - Reine Logik (ohne Datei, damit `--selftest` sie pruefen kann)
+
+    /// Neue Gruppe anhaengen. Kennungen, die schon in einer aelteren Gruppe
+    /// stehen, werden dort herausgenommen: eine Kennung darf nie in zwei
+    /// Gruppen haengen, sonst loescht `delete_event` ueber die falsche Gruppe
+    /// einen fremden Termin mit.
+    static func adding(_ eventIDs: [String], to groups: [[String]]) -> [[String]] {
+        let clean = eventIDs.filter { !$0.isEmpty }
+        guard !clean.isEmpty else { return groups }
+        var out = groups.compactMap { group -> [String]? in
+            let rest = group.filter { !clean.contains($0) }
+            return rest.isEmpty ? nil : rest
+        }
+        out.append(clean)
+        return out
     }
 
-    static func contains(_ eventID: String) -> Bool { load().contains(eventID) }
-
-    private static func load() -> Set<String> {
-        guard let data = try? Data(contentsOf: fileURL),
-              let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
-        return Set(arr)
+    static func siblings(of eventID: String, in groups: [[String]]) -> [String] {
+        groups.first { $0.contains(eventID) } ?? []
     }
 
-    private static func save(_ ids: Set<String>) {
-        guard let data = try? JSONEncoder().encode(Array(ids).sorted()) else { return }
+    static func removing(_ eventID: String, from groups: [[String]]) -> [[String]] {
+        groups.filter { !$0.contains(eventID) }
+    }
+
+    /// Altbestand vor Runde 80 ist eine flache Liste einzelner Kennungen;
+    /// jede wird dann ihre eigene Gruppe.
+    static func decodeGroups(_ data: Data) -> [[String]] {
+        if let groups = try? JSONDecoder().decode([[String]].self, from: data) { return groups }
+        if let flat = try? JSONDecoder().decode([String].self, from: data) { return flat.map { [$0] } }
+        return []
+    }
+
+    private static func load() -> [[String]] {
+        guard let data = try? Data(contentsOf: fileURL) else { return [] }
+        return decodeGroups(data)
+    }
+
+    private static func save(_ groups: [[String]]) {
+        guard let data = try? JSONEncoder().encode(groups) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+}
+
+/// Prueft die Gruppenlogik von `MCPCreatedStore` ohne Dateizugriff (Runde 80).
+/// Haengt in `--selftest`, damit die echte `mcp-created.json` dabei nie
+/// angefasst wird.
+enum MCPCreatedStoreTests {
+    static func run() -> [String] {
+        var fails: [String] = []
+        func check(_ ok: Bool, _ what: String) { if !ok { fails.append(what) } }
+
+        // Eine Anlage mit Ziel „beide" = eine Gruppe aus zwei Kennungen.
+        var g = MCPCreatedStore.adding(["A", "B"], to: [])
+        check(MCPCreatedStore.siblings(of: "A", in: g) == ["A", "B"], "Geschwister von A")
+        check(MCPCreatedStore.siblings(of: "B", in: g) == ["A", "B"], "Geschwister von B")
+        check(MCPCreatedStore.siblings(of: "C", in: g).isEmpty, "Fremder Termin hat keine Geschwister")
+
+        // Loeschen nimmt die ganze Gruppe mit, nicht nur die eine Haelfte.
+        g = MCPCreatedStore.adding(["C"], to: g)
+        check(MCPCreatedStore.removing("A", from: g).count == 1, "Loeschen entfernt die ganze Gruppe")
+        check(MCPCreatedStore.siblings(of: "B", in: MCPCreatedStore.removing("A", from: g)).isEmpty,
+              "Nach dem Loeschen ist auch die zweite Haelfte vergessen")
+
+        // Dieselbe Kennung neu vergeben: sie darf nicht in zwei Gruppen haengen.
+        let reused = MCPCreatedStore.adding(["B", "D"], to: g)
+        check(reused.filter { $0.contains("B") }.count == 1, "B haengt in genau einer Gruppe")
+        check(MCPCreatedStore.siblings(of: "A", in: reused) == ["A"], "A bleibt allein zurueck")
+
+        // Leere Eingabe aendert nichts, leere Kennungen fliegen raus.
+        check(MCPCreatedStore.adding([], to: g).count == g.count, "Leere Anlage aendert nichts")
+        check(MCPCreatedStore.adding(["", ""], to: g).count == g.count, "Leere Kennungen zaehlen nicht")
+
+        // Altbestand: flache Liste wird zu Ein-Element-Gruppen.
+        let old = Data(#"["X","Y"]"#.utf8)
+        check(MCPCreatedStore.decodeGroups(old) == [["X"], ["Y"]], "Alte flache Liste wird gelesen")
+        let new = Data(#"[["X","Y"]]"#.utf8)
+        check(MCPCreatedStore.decodeGroups(new) == [["X", "Y"]], "Neues Gruppenformat wird gelesen")
+        check(MCPCreatedStore.decodeGroups(Data("kaputt".utf8)).isEmpty, "Kaputte Datei ergibt leer")
+
+        return fails
     }
 }

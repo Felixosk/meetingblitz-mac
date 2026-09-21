@@ -53,6 +53,8 @@ enum MCPTests {
         } catch is MCPTimeError { /* erwartet */ }
         catch { out.append("ungueltige Zone: falscher Fehlertyp \(error)") }
 
+        out += MCPCreatedStoreTests.run()
+
         return out
     }
 }
