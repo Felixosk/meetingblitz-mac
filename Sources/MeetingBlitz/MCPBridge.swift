@@ -103,23 +103,25 @@ final class MCPBridge: ObservableObject {
 
     private func accept(_ connection: NWConnection) {
         connection.start(queue: .main)
-        var buffer = Data()
-
-        func receiveMore() {
+        // Puffer als Parameter statt als veraenderliche Variable: aeltere Swift-
+        // Toolchains (GitHub-Runner) melden bei `var buffer` im @Sendable-
+        // Callback "sending 'buffer' risks causing data races" als Fehler.
+        func receiveMore(_ buffer: Data) {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
                 guard let self else { connection.cancel(); return }
-                if let data, !data.isEmpty { buffer.append(data) }
-                if let req = Self.parseHTTPRequest(buffer) {
+                var received = buffer
+                if let data, !data.isEmpty { received.append(data) }
+                if let req = Self.parseHTTPRequest(received) {
                     Task { @MainActor in
                         await self.handle(req, on: connection)
                     }
                     return
                 }
                 if isComplete || error != nil { connection.cancel(); return }
-                receiveMore()
+                receiveMore(received)
             }
         }
-        receiveMore()
+        receiveMore(Data())
     }
 
     private struct HTTPRequest {
