@@ -123,6 +123,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 - **Two global shortcuts**, both rebindable: open the widget, join the current or next call
 - **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
 - **Second time zone** in the widget, hidden while it matches your Mac
+- **The menu bar moves on**: ten minutes into a meeting it stops counting that one down and shows when the next one starts, so you can see how far you may overrun
 - **Claude manages your calendar** (optional, off by default): list, create and move events by talking to Claude, [details below](#optional-let-claude-manage-your-calendar)
 - **English and German**, switchable live, follows your system language on first run
 

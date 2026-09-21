@@ -205,6 +205,15 @@ final class AppState: ObservableObject {
         didSet { d.set(compactMenuBarInMeeting, forKey: "compactMenuBarInMeeting") }
     }
 
+    /// Runde 79: Nach so vielen Minuten Laufzeit tritt der laufende Termin in
+    /// der Menüleiste zurück und der NÄCHSTE übernimmt. 0 = aus.
+    /// Grund (21.09.2026): sitzt man selbst im Gespräch, ist „noch 54m"
+    /// wertlos, und man sieht nicht mehr, wie lange man überziehen darf.
+    /// Siehe `MenuBarFocus`.
+    @Published var switchToNextAfterMinutes: Int {
+        didSet { d.set(switchToNextAfterMinutes, forKey: "switchToNextAfterMinutes") }
+    }
+
     /// Sprache des Einladungstextes („auto" = wie die App, sonst „de"/„en").
     /// Getrennt von `appLanguage`, weil die App auf Deutsch bedient wird, die
     /// Einladung aber an internationale Empfänger geht (Runde 50). Default
@@ -469,6 +478,7 @@ final class AppState: ObservableObject {
         autoTranscribe = d.object(forKey: "autoTranscribe") as? Bool ?? false
         showReminders = d.object(forKey: "showReminders") as? Bool ?? true
         compactMenuBarInMeeting = d.object(forKey: "compactMenuBarInMeeting") as? Bool ?? true
+        switchToNextAfterMinutes = d.object(forKey: "switchToNextAfterMinutes") as? Int ?? 10
         createICSFile = d.object(forKey: "createICSFile") as? Bool ?? true
         copyInviteOnCreate = d.object(forKey: "copyInviteOnCreate") as? Bool ?? true
         mcpEnabled = d.object(forKey: "mcpEnabled") as? Bool ?? false
@@ -996,8 +1006,13 @@ final class AppState: ObservableObject {
 
     private func menuBarString(style: MenuBarStyle) -> String? {
         guard calendarAuthorized else { return L.t("Zugriff nötig", "Access needed") }
-        // A running call wins: show it with the remaining time.
-        if let c = currentMeeting {
+        // A running call wins: show it with the remaining time — aber nur die
+        // ersten Minuten (Runde 79, `switchToNextAfterMinutes`). Danach zählt,
+        // wann es weitergeht, nicht wann dieses hier endet.
+        if let c = currentMeeting,
+           MenuBarFocus.showsCurrent(runningFor: -c.start.timeIntervalSinceNow,
+                                     afterMinutes: switchToNextAfterMinutes,
+                                     hasNext: nextMeeting != nil) {
             let mins = max(1, Int(c.end.timeIntervalSinceNow / 60))
             let left = L.t("noch \(hmLabel(mins))", "\(hmLabel(mins)) left")
             return style == .countdownOnly ? left : "\(c.menuBarTitle) · \(left)"

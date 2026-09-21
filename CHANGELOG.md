@@ -16,6 +16,12 @@ zone and the current time, so "10 am" means 10 am where you are. No IP lookup.
 were invited to are refused with an explanation. Delete only works on events
 Claude created.
 
+**The menu bar moves on to the next meeting.** Once a meeting has been running
+for ten minutes, the menu bar stops counting that one down and shows when the
+next meeting starts instead. You already know what you are sitting in; what you
+cannot see is how far you may overrun. Settings → Widget picks the threshold
+(5, 10, 15 or 30 minutes) or turns the whole thing off.
+
 **New switch: Copy invite text.** Settings → Creating meetings has a switch for
 the invite text that lands on the clipboard, right above the `.ics` switch.
 

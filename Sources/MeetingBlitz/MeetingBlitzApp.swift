@@ -66,9 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest") {
             let fails = JoinLinkTests.failures() + CalendarStageTests.failures()
                 + QuickAddTests.failures() + SkinRotationTests.failures()
-                + MCPTests.failures()
+                + MCPTests.failures() + MenuBarFocusTests.failures()
             if fails.isEmpty {
-                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel")
+                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel, Menüleisten-Wechsel")
                 exit(0)
             }
             print("SELFTEST FEHLGESCHLAGEN (\(fails.count)):")

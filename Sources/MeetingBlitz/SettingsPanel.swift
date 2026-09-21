@@ -499,6 +499,23 @@ struct SettingsPane: View {
             Toggle(L.t("Im Meeting schmal halten", "Keep it narrow during meetings"),
                    isOn: $state.compactMenuBarInMeeting).font(.system(size: 12))
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Im Meeting auf den nächsten Termin wechseln nach",
+                         "During a meeting, switch to the next one after"))
+                    .font(.system(size: 12))
+                    .fixedSize(horizontal: false, vertical: true)
+                Picker("", selection: $state.switchToNextAfterMinutes) {
+                    ForEach(MenuBarFocus.choices, id: \.self) { m in
+                        Text(m == 0 ? L.t("Nie", "Never") : "\(m) min").tag(m)
+                    }
+                }
+                .labelsHidden().pickerStyle(.segmented)
+                Text(L.t("Läuft ein Termin länger, zeigt die Menüleiste wieder, wann der nächste beginnt. Gibt es keinen nächsten, bleibt der laufende stehen.",
+                         "Once a meeting has run that long, the menu bar goes back to showing when the next one starts. With no next meeting it keeps showing the running one."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {

@@ -123,6 +123,7 @@ aufeinanderfolgenden Terminen
 - **Ruhe-Modus**, befristet (1h / 5h / 1 Tag / 1 Woche) und automatisch bei Bildschirmfreigabe, mit stillem Hinweis statt gar nichts
 - **Zwei globale Tastenkürzel**, beide umbelegbar: Widget öffnen, laufendem oder nächstem Call beitreten
 - **Automation** über `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
+- **Die Menüleiste geht weiter**: läuft ein Termin zehn Minuten, zählt sie ihn nicht mehr herunter, sondern zeigt, wann der nächste beginnt. So siehst du, wie lange du überziehen darfst
 - **Claude verwaltet deinen Kalender** (optional, standardmäßig aus): Termine lesen, anlegen und verschieben, indem du mit Claude sprichst, [Details weiter unten](#optional-claude-verwaltet-deinen-kalender)
 - Komplett auf **Deutsch oder Englisch**, live umschaltbar
 
