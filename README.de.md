@@ -6,7 +6,7 @@ Bildschirme.
 
 ### ⬇ [MeetingBlitz 1.7.0 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
-Fertige App · 9,6 MB · macOS 14+ · Apple Silicon **und** Intel ·
+Fertige App · 9,8 MB · macOS 14+ · Apple Silicon **und** Intel ·
 [ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·
 oder [selbst bauen](#möglichkeit-b-selbst-bauen) in zwei Minuten
 
@@ -62,6 +62,7 @@ und wo diese sich wirklich unterscheidet.
 | Termin als Fließtext eintippen | ja (`fr 16 uhr bis 17 uhr call mit chris`) | nein | nein | ja |
 | Wochen-/Monatswahl im Widget | ja, ein Klick schaltet durch | nein | ja | ja |
 | Zweite Zeitzone | ja | nein | nein | ja |
+| Claude-/MCP-Zugang (Termine anlegen, verschieben) | ja, optional | nein | nein | nein |
 | Auswertung (Woche/Monat/Jahr) | ja | nein | nein | nein |
 | URL-Schema für Automation | `meetingblitz://` | Kurzbefehle + AppleScript | nein | `calendr://` |
 | Apple Erinnerungen in derselben Liste | ja | nein | ja | ja |
@@ -115,13 +116,14 @@ aufeinanderfolgenden Terminen
 - **Sofort-Meeting**: ein Klick erzeugt den Meet-Raum, legt den Termin an und öffnet den Call
 - **Auswertung** für Woche, Monat und Jahr als Balkengrafik
 - **Termin als .ics exportieren**, landet direkt als Datei in der Zwischenablage
+- **Einladungstext in der Zwischenablage** beim Anlegen: Titel, Datum und die Uhrzeit in deiner Zone und in Berliner Zeit. Ein Schalter schaltet es aus
 - **Apple Erinnerungen**, die heute fällig sind, stehen mit in der Übersicht
 - **Pro Kalender einstellbar**, was angezeigt wird, was ein Banner auslöst und ob Geburtstage mitkommen
 - **Abgesagte Termine warnen nie** — sie bleiben durchgestrichen sichtbar
 - **Ruhe-Modus**, befristet (1h / 5h / 1 Tag / 1 Woche) und automatisch bei Bildschirmfreigabe, mit stillem Hinweis statt gar nichts
 - **Zwei globale Tastenkürzel**, beide umbelegbar: Widget öffnen, laufendem oder nächstem Call beitreten
 - **Automation** über `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
-- **Zweite Zeitzone** im Widget, versteckt sich bei gleicher Zeit
+- **Claude verwaltet deinen Kalender** (optional, standardmäßig aus): Termine lesen, anlegen und verschieben, indem du mit Claude sprichst, [Details weiter unten](#optional-claude-verwaltet-deinen-kalender)
 - Komplett auf **Deutsch oder Englisch**, live umschaltbar
 
 Optional, nur mit eigener Google-Cloud-Konfiguration: Termine mit fertigem

@@ -6,7 +6,7 @@ screens.
 
 ### ⬇ [Download MeetingBlitz 1.7.0](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
-Ready-made app · 9.6 MB · macOS 14+ · Apple Silicon **and** Intel ·
+Ready-made app · 9.8 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
 or [build it yourself](#option-b-build-it-yourself) in two minutes
 
@@ -62,6 +62,7 @@ and where this one is genuinely different.
 | Natural-language input | yes (`fri 4pm to 5pm call with chris`) | no | no | yes |
 | Week / month picker in the widget | yes, one click steps through | no | yes | yes |
 | Second time zone | yes | no | no | yes |
+| Claude / MCP access (create, move events) | yes, optional | no | no | no |
 | Meeting stats (week / month / year) | yes | no | no | no |
 | URL scheme for automation | `meetingblitz://` | Shortcuts + AppleScript | no | `calendr://` |
 | Apple Reminders in the same list | yes | no | yes | yes |
@@ -114,6 +115,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 - **Instant meeting**: one click mints a Meet room, files the event and opens the call
 - **Meeting stats** for the week, month and year, as bar charts
 - **Export an event as .ics**, landing straight on your clipboard as a file
+- **Invite text on your clipboard** when you create an event: title, date and the time in your zone and in Berlin time. One switch turns it off
 - **Apple Reminders** due today show up next to your events
 - **Per calendar** you choose what shows, what fires a banner, and whether its birthdays appear
 - **Declined invitations never warn you** — they stay visible, struck through
@@ -121,6 +123,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 - **Two global shortcuts**, both rebindable: open the widget, join the current or next call
 - **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
 - **Second time zone** in the widget, hidden while it matches your Mac
+- **Claude manages your calendar** (optional, off by default): list, create and move events by talking to Claude, [details below](#optional-let-claude-manage-your-calendar)
 - **English and German**, switchable live, follows your system language on first run
 
 Optional, only with your own Google Cloud credentials: create an event with a
