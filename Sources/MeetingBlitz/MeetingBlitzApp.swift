@@ -714,8 +714,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // breites Item flackert (siehe inMeetingMenuBarWidth). Der Titel
             // bleibt drin, nur das Buchungs-Suffix ist vorher weggefallen.
             let inMeeting = s.compactMenuBarInMeeting && s.currentMeeting != nil
-            let shown = Self.fitToMenuBar(text, max: inMeeting ? Self.inMeetingMenuBarWidth
-                                                              : Self.maxMenuBarWidth)
+            // Runde 82: die Grenze stellt der Nutzer ein (Kurz/Mittel/Lang),
+            // 260pt (`maxMenuBarWidth`) ist nur noch die Stufe „Lang".
+            let shown = Self.fitToMenuBar(text, max: s.menuBarTitleLength.cap(
+                inMeeting: inMeeting, meetingCap: Self.inMeetingMenuBarWidth))
             // Runde 56: Im Zustand „Zugriff nötig" BLEIBT das U-Boot stehen.
             // Sonst zeigt die Menüleiste beim allerersten Start nur ein nacktes
             // Textfragment ohne App-Bezug, während der Einstieg und die

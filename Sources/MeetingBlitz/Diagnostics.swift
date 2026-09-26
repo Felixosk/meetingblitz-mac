@@ -106,6 +106,7 @@ enum Diagnostics {
         let text = s.menuBarText ?? "(Icon, kein Text)"
         line("Text", text)
         line("Breite", String(format: "%.1fpt", menuBarWidth(text)))
+        line("Titel-Länge", "\(s.menuBarTitleLength.rawValue) (\(Int(s.menuBarTitleLength.maxWidth))pt)")
         line("Im Meeting kompakt", s.compactMenuBarInMeeting)
         // Der häufigste Ausfall dieser App: zu breites Item → macOS wirft es raus.
         line("Budget rechts vom Notch", NSScreen.main.map { String(format: "%.0fpt", auxWidth($0)) } ?? "?")

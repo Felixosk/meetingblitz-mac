@@ -4,7 +4,7 @@
 before something from your Apple Calendar starts, a submarine flies across your
 screens.
 
-### ⬇ [Download MeetingBlitz 1.7.1](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [Download MeetingBlitz 1.7.2](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Ready-made app · 9.8 MB · macOS 14+ · Apple Silicon **and** Intel ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
@@ -124,6 +124,7 @@ where the fullscreen notification for the first of two back-to-back meetings
 - **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
 - **Second time zone** in the widget, hidden while it matches your Mac
 - **The menu bar moves on**: ten minutes into a meeting it stops counting that one down and shows when the next one starts, so you can see how far you may overrun
+- **Title length in the menu bar** (short, medium, long), so a long meeting name never pushes other icons behind the notch. Or show only the time, or only the icon
 - **Claude manages your calendar** (optional, off by default): list, create and move events by talking to Claude, [details below](#optional-let-claude-manage-your-calendar)
 - **English and German**, switchable live, follows your system language on first run
 

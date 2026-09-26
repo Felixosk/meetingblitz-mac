@@ -2,6 +2,18 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.7.2 — 2026-09-26
+
+**You choose how long the title in the menu bar gets.** A long meeting title
+could push other apps' icons behind the notch, where macOS hides them without
+a word. Settings → Widget now has Title length: Short, Medium or Long. Medium
+is the new default, Long is the old behaviour. The time never gets cut, only
+the name.
+
+**"Time only" works for the next meeting too.** Until now it only applied
+while a meeting was running. For the next meeting the menu bar still showed
+the title. Now it shows just "in 5h 15m".
+
 ## 1.7.1 — 2026-09-21
 
 **Claude wrote events to one calendar only.** With "both" set as the target,

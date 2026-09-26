@@ -180,6 +180,37 @@ enum MenuBarStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// Runde 82 (26.09.2026): wie breit der Termintitel in der Menüleiste werden
+/// darf. Rückmeldung: mit langem Titel schiebt MeetingBlitz andere Symbole
+/// (z.B. RecBlitz) hinter den Notch. Die feste Grenze aus Runde 46b (260pt)
+/// passte nur zu einer aufgeräumten Leiste, deshalb stellt man sie jetzt ein.
+/// Gemessen wird in Punkten, nicht in Zeichen: „WWW" ist doppelt so breit wie
+/// „iii", und das Budget der Menüleiste zählt Punkte.
+enum MenuBarTitleLength: String, CaseIterable, Identifiable {
+    case short, medium, long
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .short:  return L.t("Kurz", "Short")
+        case .medium: return L.t("Mittel", "Medium")
+        case .long:   return L.t("Lang", "Long")
+        }
+    }
+    /// Obergrenze fürs ganze Item inklusive Countdown.
+    var maxWidth: CGFloat {
+        switch self {
+        case .short:  return 120
+        case .medium: return 180
+        case .long:   return 260
+        }
+    }
+    /// Im Meeting nie breiter als die Meeting-Grenze, aber auch nicht breiter
+    /// als der Nutzer es ohnehin will.
+    func cap(inMeeting: Bool, meetingCap: CGFloat) -> CGFloat {
+        inMeeting ? min(maxWidth, meetingCap) : maxWidth
+    }
+}
+
 /// My own answer to an invitation (F3). `.none` covers events with no
 /// attendees at all — your own entries — and, deliberately, anything where the
 /// current user cannot be identified: never suppress a warning on a guess.

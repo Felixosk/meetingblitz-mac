@@ -496,6 +496,19 @@ struct SettingsPane: View {
                 }
                 .labelsHidden().pickerStyle(.segmented)
             }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L.t("Titel-Länge", "Title length")).font(.system(size: 12))
+                Picker("", selection: $state.menuBarTitleLength) {
+                    ForEach(MenuBarTitleLength.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.segmented)
+                Text(L.t("Verschwinden andere Symbole hinter der Kamera-Aussparung, eine Stufe kürzer wählen. Die Uhrzeit bleibt immer ganz stehen.",
+                         "If other icons vanish behind the notch, pick a shorter step. The time always stays in full."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .disabled(state.menuBarStyle != .titleAndCountdown)
+            .opacity(state.menuBarStyle == .titleAndCountdown ? 1 : 0.45)
             Toggle(L.t("Im Meeting schmal halten", "Keep it narrow during meetings"),
                    isOn: $state.compactMenuBarInMeeting).font(.system(size: 12))
 

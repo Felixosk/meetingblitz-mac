@@ -36,6 +36,18 @@ enum MenuBarFocusTests {
               MenuBarFocus.showsCurrent(runningFor: 5, afterMinutes: 10, hasNext: true),
               true)
 
+        // Runde 82: Titel-Länge. Kurz bleibt kurz, auch im Meeting; Lang wird
+        // im Meeting auf die Meeting-Grenze gedrückt.
+        check("Kurz im Meeting = 120",
+              MenuBarTitleLength.short.cap(inMeeting: true, meetingCap: 180) == 120, true)
+        check("Lang im Meeting = 180",
+              MenuBarTitleLength.long.cap(inMeeting: true, meetingCap: 180) == 180, true)
+        check("Lang ohne Meeting = 260",
+              MenuBarTitleLength.long.cap(inMeeting: false, meetingCap: 180) == 260, true)
+        check("Stufen werden breiter",
+              MenuBarTitleLength.short.maxWidth < MenuBarTitleLength.medium.maxWidth
+              && MenuBarTitleLength.medium.maxWidth < MenuBarTitleLength.long.maxWidth, true)
+
         return out
     }
 }

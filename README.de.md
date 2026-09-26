@@ -4,7 +4,7 @@
 etwas aus deinem Apple Kalender beginnt, fliegt ein U-Boot über deine
 Bildschirme.
 
-### ⬇ [MeetingBlitz 1.7.1 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [MeetingBlitz 1.7.2 laden](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
 Fertige App · 9,8 MB · macOS 14+ · Apple Silicon **und** Intel ·
 [ein Befehl beim ersten Start](#möglichkeit-a-fertige-app-laden) ·
@@ -124,6 +124,7 @@ aufeinanderfolgenden Terminen
 - **Zwei globale Tastenkürzel**, beide umbelegbar: Widget öffnen, laufendem oder nächstem Call beitreten
 - **Automation** über `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
 - **Die Menüleiste geht weiter**: läuft ein Termin zehn Minuten, zählt sie ihn nicht mehr herunter, sondern zeigt, wann der nächste beginnt. So siehst du, wie lange du überziehen darfst
+- **Titel-Länge in der Menüleiste** (kurz, mittel, lang), damit ein langer Terminname keine anderen Symbole hinter die Kamera-Aussparung schiebt. Oder nur die Zeit, oder nur das Symbol
 - **Claude verwaltet deinen Kalender** (optional, standardmäßig aus): Termine lesen, anlegen und verschieben, indem du mit Claude sprichst, [Details weiter unten](#optional-claude-verwaltet-deinen-kalender)
 - Komplett auf **Deutsch oder Englisch**, live umschaltbar
 

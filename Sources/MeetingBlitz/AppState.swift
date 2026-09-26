@@ -390,6 +390,10 @@ final class AppState: ObservableObject {
     @Published var snoozeMinutes: Int { didSet { d.set(snoozeMinutes, forKey: "snoozeMinutes") } }
     /// F6: how much the menu bar shows.
     @Published var menuBarStyle: MenuBarStyle { didSet { d.set(menuBarStyle.rawValue, forKey: "menuBarStyle") } }
+    /// Runde 82: wie breit der Titel in der Menüleiste werden darf.
+    @Published var menuBarTitleLength: MenuBarTitleLength {
+        didSet { d.set(menuBarTitleLength.rawValue, forKey: "menuBarTitleLength") }
+    }
     /// P3: only list events that have a join link.
     @Published var onlyWithLink: Bool { didSet { d.set(onlyWithLink, forKey: "onlyWithLink") } }
     /// P3: drop events that already ended from the day's list.
@@ -492,6 +496,8 @@ final class AppState: ObservableObject {
         agendaMaxRows = d.object(forKey: "agendaMaxRows") as? Int ?? 10
         snoozeMinutes = d.object(forKey: "snoozeMinutes") as? Int ?? 2
         menuBarStyle = d.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:)) ?? .titleAndCountdown
+        menuBarTitleLength = d.string(forKey: "menuBarTitleLength")
+            .flatMap(MenuBarTitleLength.init(rawValue:)) ?? .medium
         onlyWithLink = d.object(forKey: "onlyWithLink") as? Bool ?? false
         hidePastEvents = d.object(forKey: "hidePastEvents") as? Bool ?? false
         quietNotifications = d.object(forKey: "quietNotifications") as? Bool ?? true
@@ -1023,6 +1029,12 @@ final class AppState: ObservableObject {
         // meeting (Runde 25). Banners/blink are unaffected.
         let endOfToday = Calendar.current.startOfDay(for: Date()).addingTimeInterval(24 * 3600)
         guard m.start < endOfToday else { return nil }
+        // Runde 82: „Nur Zeit" galt bisher nur für den LAUFENDEN Termin, der
+        // nächste kam immer mit Titel (Rückmeldung 26.09.: „Nur Zeit geht nicht").
+        if style == .countdownOnly {
+            let mins = Int(m.start.timeIntervalSinceNow / 60)
+            return mins <= 0 ? L.t("jetzt", "now") : "in \(hmLabel(mins))"
+        }
         return m.menuBarLabel
     }
 
