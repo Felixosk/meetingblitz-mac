@@ -337,4 +337,4 @@ to `signing.local`. Instructions are inside that file.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+PolyForm Strict 1.0.0. Personal and other noncommercial use is allowed. Changing the code, building on it and passing it on are not allowed. See [LICENSE](LICENSE).

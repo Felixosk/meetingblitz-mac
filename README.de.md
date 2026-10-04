@@ -340,4 +340,4 @@ Claude Code einfach in diesem Ordner und sag, was klemmt.
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE).
+PolyForm Strict 1.0.0. Private und andere nicht-kommerzielle Nutzung ist erlaubt. Den Code ändern, darauf aufbauen und weitergeben ist nicht erlaubt. Siehe [LICENSE](LICENSE).
