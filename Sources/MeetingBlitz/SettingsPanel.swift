@@ -367,9 +367,20 @@ struct SettingsPane: View {
 
             // App version (Runde 42), shown on every tab.
             Divider()
-            Text("MeetingBlitz \(Self.appVersion)")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
+            HStack(spacing: 8) {
+                Text("MeetingBlitz \(Self.appVersion)")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Button {
+                    NotificationCenter.default.post(name: .meetingBlitzRestart, object: nil)
+                } label: {
+                    Label(L.t("Neu starten", "Restart"), systemImage: "arrow.clockwise")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.borderless)
+                .help(L.t("MeetingBlitz beenden und gleich wieder öffnen",
+                          "Quit MeetingBlitz and reopen it right away"))
+            }
         }
         .padding(14)
         .frame(width: 300)

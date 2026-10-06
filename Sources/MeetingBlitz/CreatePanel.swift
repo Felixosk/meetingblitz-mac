@@ -330,15 +330,26 @@ struct CreatePane: View {
     /// Ein noch nicht übernommener Freitext zählt schon mit, sonst prüft die
     /// Warnung den alten Formularstand, während oben längst etwas anderes steht.
     @ViewBuilder private var conflictWarning: some View {
-        if state.warnOnConflicts { conflictWarningBody }
+        // Während des Erstellens steht der neue Termin schon im Kalender, die
+        // ID-Liste ist aber noch leer: sonst meldet er sich selbst als Konflikt.
+        if state.warnOnConflicts, !google.busy { conflictWarningBody }
     }
 
     @ViewBuilder private var conflictWarningBody: some View {
         let p = activeQuickText.isEmpty ? nil : QuickAdd.parse(activeQuickText, now: Date())
         let start = p?.start ?? newStart
         let mins = p?.minutes ?? newMinutes
+        // Gerade selbst angelegte Termine sind kein Konflikt.
+        let mine = Set(google.lastCreatedEventIDs)
         let hits = state.calendar.conflicts(start: start, minutes: mins,
                                             selected: state.selectedCalendarIDs)
+            .filter { m in
+                if mine.contains(m.id) { return false }
+                if let c = google.lastCreatedSlot, m.title == c.title,
+                   abs(m.start.timeIntervalSince(c.start)) < 60,
+                   abs(m.end.timeIntervalSince(c.end)) < 60 { return false }
+                return true
+            }
         if !hits.isEmpty {
             HStack(alignment: .top, spacing: 5) {
                 Image(systemName: "exclamationmark.triangle.fill")

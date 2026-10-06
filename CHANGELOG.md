@@ -2,6 +2,21 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.7.3 — 2026-10-06
+
+**No more false overlap warning after creating a meeting.** Right after you
+pressed Create, the form warned that the time overlaps with another event.
+That event was the one you had just made. The warning now ignores the meeting
+you just created.
+
+**Restart button.** The menu and the bottom of Settings now have Restart, so
+you no longer need the right-click menu to restart the app.
+
+**Google sign-in after a rebuild.** The extra process Claude starts for the
+MCP connection no longer wipes your Google sign-in from the shared keychain
+when its session looks expired, and a red error under Instant and New meeting
+disappears once you reconnect.
+
 ## 1.7.2 — 2026-09-26
 
 **You choose how long the title in the menu bar gets.** A long meeting title

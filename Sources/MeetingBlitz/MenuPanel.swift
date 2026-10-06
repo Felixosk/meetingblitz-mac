@@ -502,6 +502,10 @@ struct MenuPanel: View {
             }
             .hint(L.t("Vorlaufzeit, Kalenderauswahl, Autostart und mehr", "Lead time, calendar selection, launch at login and more"), id: "settings")
             Spacer()
+            Button(L.t("Neu starten", "Restart")) {
+                NotificationCenter.default.post(name: .meetingBlitzRestart, object: nil)
+            }
+            Text("·").foregroundStyle(.secondary)
             Button(L.t("Beenden", "Quit")) { NSApp.terminate(nil) }
         }
         .font(.system(size: 12))

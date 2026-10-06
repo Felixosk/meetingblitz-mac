@@ -42,6 +42,10 @@ final class GoogleService: ObservableObject {
     /// (Runde 78, MCP): ein Aufruf legt bei „Beide" zwei Termine an, deshalb
     /// eine Liste statt einer einzelnen Kennung.
     @Published private(set) var lastCreatedEventIDs: [String] = []
+    /// Titel, Start und Ende des zuletzt angelegten Termins. Die Kennung allein
+    /// reicht nicht: bei Google-Kalendern (CalDAV) ändert sie sich nach dem Sync,
+    /// dann hielte die Kollisions-Warnung den eigenen Termin für fremd.
+    @Published private(set) var lastCreatedSlot: (title: String, start: Date, end: Date)?
 
     // openid+email only to show "verbunden als …"; calendar.events is the real
     // ask. meetings.space.settings (Runde 43) is a NON-sensitive scope that lets
@@ -81,8 +85,22 @@ final class GoogleService: ObservableObject {
 
     private func isExpired(_ e: GError) -> Bool { if case .expiredSession = e { return true }; return false }
 
+    /// Läuft dieser Prozess als Zweitinstanz (der `--mcp`-Prozess, den Claude
+    /// per `open -n` startet)? Die teilt sich Schlüsselbund und Einstellungen
+    /// mit der echten App, hat aber kein Fenster, in dem ein Mensch etwas
+    /// freigeben könnte. Sie darf deshalb nie im gemeinsamen Zustand aufräumen
+    /// (Runde 81: drei solcher Prozesse standen verwaist herum).
+    static var isSecondaryInstance: Bool { CommandLine.arguments.contains("--mcp") }
+
     /// Tote Sitzung wegräumen, damit das UI wieder „Verbinden" anbietet.
     private func dropExpiredSession() {
+        guard !Self.isSecondaryInstance else {
+            // Nur für sich selbst vergessen, Schlüsselbund und Kontoadresse
+            // gehören der echten App.
+            isConnected = false
+            needsReconnect = true
+            return
+        }
         disconnect()
         needsReconnect = true
     }
@@ -129,6 +147,10 @@ final class GoogleService: ObservableObject {
             isConnected = true
             needsReconnect = false
             lastMeetLink = nil
+            // Runde 81: Der rote Satz unter „Sofort"/„Neues Meeting" lebt in
+            // AppState, nicht hier. Ohne das blieb er nach einem erfolgreichen
+            // Neuverbinden stehen, während die Einstellungen längst grün waren.
+            AppState.shared.instantError = nil
         } catch {
             lastError = Self.human(error)
         }
@@ -190,6 +212,7 @@ final class GoogleService: ObservableObject {
                 if !newID.isEmpty { createdIDs.append(newID) }
             }
             lastCreatedEventIDs = createdIDs
+            lastCreatedSlot = (finalTitle, start, end)
             // Best effort, never blocks creation: switch the Meet space to
             // auto-transcribe (Runde 43). Fails softly (licence/scope) into a note.
             if autoTranscribe { await enableAutoTranscription(meetLink: link) }
@@ -478,7 +501,23 @@ final class GoogleService: ObservableObject {
     /// A live access token, refreshing via the stored refresh token if needed.
     private func validAccessToken() async throws -> String {
         if let t = accessToken, let e = accessExpiry, e > Date() { return t }
-        guard let refresh = keychain.refreshToken, let config else { throw GError.msg(L.t("Nicht mit Google verbunden.", "Not connected to Google.")) }
+        guard let config else {
+            throw GError.msg(L.t("OAuth-Konfiguration nicht gefunden.", "OAuth config not found."))
+        }
+        // Runde 81: Den Grund auseinanderhalten. Ist der Eintrag WEG, war die
+        // Sitzung echt zu Ende und der grüne Punkt muss mit ausgehen. Ist er nur
+        // GESPERRT, liegt der Zugang noch da und darf auf keinen Fall gelöscht
+        // werden, sonst kostet eine Signaturfrage eine funktionierende Sitzung.
+        let refresh: String
+        switch keychain.readToken() {
+        case .token(let t):
+            refresh = t
+        case .missing:
+            dropExpiredSession()
+            throw GError.expiredSession
+        case .blocked(let status):
+            throw GError.keychainBlocked(status)
+        }
         let tok: [String: Any]
         do {
             tok = try await postForm(tokenURL, [
@@ -591,10 +630,17 @@ private enum GError: LocalizedError {
     /// oder zurückgezogen wurde. Häufigster Grund hier: der OAuth-Client steht
     /// noch im Testing-Modus, da gelten Refresh-Tokens nur **7 Tage** (Runde 48).
     case expiredSession
+    /// Der Eintrag LIEGT im Schlüsselbund, macOS gibt ihn dieser Instanz nur
+    /// nicht frei (Runde 81). Eigener Fall, weil hier nichts abgelaufen ist und
+    /// „neu verbinden" das Problem nur für eine Stunde zudeckt.
+    case keychainBlocked(OSStatus)
     var errorDescription: String? {
         switch self {
         case .msg(let m): return m
         case .expiredSession: return L.t("Google-Verbindung abgelaufen.", "Google session expired.")
+        case .keychainBlocked(let st):
+            return L.t("Der Schlüsselbund gibt den Google-Zugang gerade nicht frei (Fehler \(st)). Das passiert nach einem Neubau der App: einmal beenden und neu starten, beim Nachfragen „Immer erlauben“ wählen.",
+                       "The keychain is not releasing the Google token right now (error \(st)). This happens after a rebuild: quit and relaunch the app, and pick “Always Allow” when asked.")
         }
     }
 }
@@ -736,7 +782,20 @@ private struct Keychain {
     var legacyServices: [String] = []
     private let account = "refresh_token"
 
-    private func read(service s: String) -> String? {
+    /// Was beim Lesen herauskam. „Der Eintrag ist weg" und „macOS gibt ihn
+    /// dieser Instanz gerade nicht frei" sind ZWEI verschiedene Dinge. Vorher
+    /// wurde beides zu nil zusammengefaltet, und daraus wurde die Falschaussage
+    /// „Nicht mit Google verbunden", während der Eintrag im Schlüsselbund lag
+    /// und der Punkt daneben grün war (Runde 81, Rückmeldung: „Widerspruch in sich
+    /// selber"). Häufigster Grund für den gesperrten Fall: ein Neubau ändert
+    /// die Signatur, oder eine per `open -n` gestartete Zweitinstanz fragt.
+    enum Read {
+        case token(String)
+        case missing
+        case blocked(OSStatus)
+    }
+
+    private func read(service s: String) -> Read {
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: s,
@@ -745,17 +804,36 @@ private struct Keychain {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
-              let data = out as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        switch status {
+        case errSecSuccess:
+            guard let data = out as? Data,
+                  let text = String(data: data, encoding: .utf8) else { return .blocked(errSecDecode) }
+            return .token(text)
+        case errSecItemNotFound:
+            return .missing
+        default:
+            return .blocked(status)
+        }
+    }
+
+    /// Wie `refreshToken`, nur mit dem Grund, falls nichts herauskam.
+    func readToken() -> Read {
+        var firstBlock: OSStatus?
+        for s in [service] + legacyServices {
+            switch read(service: s) {
+            case .token(let t): return .token(t)
+            case .blocked(let st): if firstBlock == nil { firstBlock = st }
+            case .missing: continue
+            }
+        }
+        if let st = firstBlock { return .blocked(st) }
+        return .missing
     }
 
     var refreshToken: String? {
         get {
-            if let current = read(service: service) { return current }
-            for legacy in legacyServices {
-                if let old = read(service: legacy) { return old }
-            }
+            if case .token(let t) = readToken() { return t }
             return nil
         }
         nonmutating set {

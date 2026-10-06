@@ -90,8 +90,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>      <string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key>      <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>1.7.2</string>
-    <key>CFBundleVersion</key>         <string>15</string>
+    <key>CFBundleShortVersionString</key> <string>1.7.3</string>
+    <key>CFBundleVersion</key>         <string>16</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>LSUIElement</key>             <true/>
