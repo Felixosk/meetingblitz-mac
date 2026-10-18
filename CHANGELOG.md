@@ -2,6 +2,13 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 1.7.4 — 2026-10-18
+
+**Skip the result view after creating a meeting.** New switch in Settings:
+"Show result after creating". Turn it off and the window closes as soon as the
+meeting is created. The .ics file still goes to ~/Downloads and the clipboard
+works as before.
+
 ## 1.7.3 — 2026-10-06
 
 **No more false overlap warning after creating a meeting.** Right after you

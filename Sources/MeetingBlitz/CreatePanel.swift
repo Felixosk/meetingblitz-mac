@@ -665,6 +665,12 @@ struct CreatePane: View {
                                                    copyInvite: state.copyInviteOnCreate,
                                                    calendarService: state.calendar) {
                     state.monitor.tickNow()   // show it in agenda/timeline right away
+                    // Runde 84: ohne Ergebnisansicht gleich zu, die .ics liegt
+                    // trotzdem schon in ~/Downloads.
+                    if !state.showResultAfterCreate {
+                        google.resetCreateFeedback()
+                        onClose?()
+                    }
                 }
             }
         } label: {

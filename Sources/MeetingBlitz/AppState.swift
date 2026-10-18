@@ -234,6 +234,10 @@ final class AppState: ObservableObject {
     /// nicht erst an, `lastShareText` bleibt trotzdem gesetzt, der Kopier-
     /// Knopf in der Ergebnisansicht bleibt also nutzbar.
     @Published var copyInviteOnCreate: Bool { didSet { d.set(copyInviteOnCreate, forKey: "copyInviteOnCreate") } }
+    /// Nach dem Erstellen die Ergebnisansicht zeigen (Runde 84). Standard AN.
+    /// Aus geschaltet schließt das Erstellen-Fenster sofort, .ics und
+    /// Zwischenablage laufen trotzdem wie eingestellt.
+    @Published var showResultAfterCreate: Bool { didSet { d.set(showResultAfterCreate, forKey: "showResultAfterCreate") } }
     /// Claude-Zugang per MCP (Runde 78). Standard AUS: eine lokale Bruecke,
     /// die Termine ohne Klick anlegen kann, ist ein bewusster Opt-in, kein
     /// automatisches Verhalten.
@@ -485,6 +489,7 @@ final class AppState: ObservableObject {
         switchToNextAfterMinutes = d.object(forKey: "switchToNextAfterMinutes") as? Int ?? 10
         createICSFile = d.object(forKey: "createICSFile") as? Bool ?? true
         copyInviteOnCreate = d.object(forKey: "copyInviteOnCreate") as? Bool ?? true
+        showResultAfterCreate = d.object(forKey: "showResultAfterCreate") as? Bool ?? true
         mcpEnabled = d.object(forKey: "mcpEnabled") as? Bool ?? false
         inviteLanguage = d.string(forKey: "inviteLanguage") ?? "en"
         secondZoneEnabled = d.object(forKey: "secondZoneEnabled") as? Bool ?? true

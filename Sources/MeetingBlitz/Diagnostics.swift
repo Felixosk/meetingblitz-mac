@@ -177,6 +177,7 @@ enum Diagnostics {
         line("Claude-Zugang", s.mcpEnabled ? "an" : "aus")
         line("Bruecke laeuft", mcp.isRunning ? "ja, Port \(mcp.port)" : "nein")
         line("Einladungstext kopieren", s.copyInviteOnCreate)
+        line("Ergebnis nach Erstellen", s.showResultAfterCreate)
         if mcp.recentCalls.isEmpty {
             line("Letzte Aufrufe", "keine")
         } else {

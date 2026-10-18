@@ -1200,6 +1200,18 @@ struct SettingsPane: View {
 
             Divider()
 
+            // Ergebnisansicht nach dem Erstellen (Runde 84).
+            Toggle(L.t("Nach dem Erstellen Ergebnis anzeigen", "Show result after creating"),
+                   isOn: $state.showResultAfterCreate).font(.system(size: 12))
+            if !state.showResultAfterCreate {
+                Text(L.t("Das Fenster schließt sich direkt nach dem Erstellen. Kalenderdatei und Zwischenablage laufen trotzdem wie eingestellt.",
+                         "The window closes right after creating. Calendar file and clipboard still work as set."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
             // Kalenderdatei zum Mitschicken (Runde 47).
             Toggle(L.t("Kalenderdatei (.ics) mit erstellen", "Also create a calendar file (.ics)"),
                    isOn: $state.createICSFile).font(.system(size: 12))
