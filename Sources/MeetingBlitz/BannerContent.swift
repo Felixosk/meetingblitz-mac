@@ -183,7 +183,7 @@ private struct CapsuleView: View {
                     .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
                 Text(vm.subtitle)
                     .font(.system(size: 12 * s))
-                    .foregroundStyle(Color(hex: 0xEAF6F2))
+                    .foregroundStyle(Color(hex: 0xE6F0FF))
                     .shadow(color: .black.opacity(0.30), radius: 1, y: 0.5)
             }
             if vm.docked {
@@ -201,7 +201,7 @@ private struct CapsuleView: View {
                 // nie mit der Maus hin. Das Kamerasymbol ist der Hinweis darauf.
                 Image(systemName: "video.fill")
                     .font(.system(size: 13 * s))
-                    .foregroundStyle(Color(hex: 0xEAF6F2).opacity(0.8))
+                    .foregroundStyle(Color(hex: 0xE6F0FF).opacity(0.8))
                     .shadow(color: .black.opacity(0.30), radius: 1, y: 0.5)
                     .padding(.leading, 2 * s)
             }
@@ -210,17 +210,21 @@ private struct CapsuleView: View {
         .padding(.trailing, (vm.docked ? 14 : 20) * s)
         .padding(.vertical, 11 * s)
         .background(
-            // Deterministic ocean gradient, clearly teal, never a black slab.
+            // Horizontal blue gradient, light on the left (motif) to dark on the right so the white Join button pops (was teal), never a black slab; same values as RecBlitz Theme.
             RoundedRectangle(cornerRadius: 19 * s, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [Color(hex: 0x18A9B4), Color(hex: 0x0A4E58)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                    gradient: Gradient(stops: [
+                        .init(color: Color(hex: 0x3D8CF5), location: 0.0),
+                        .init(color: Color(hex: 0x2F80F0), location: 0.22),
+                        .init(color: Color(hex: 0x0F3A8F), location: 0.70),
+                        .init(color: Color(hex: 0x0B2A6B), location: 1.0)]),
+                    startPoint: .leading, endPoint: .trailing))
         )
         // A hairline rim in a TEAL tint (not the old near-white stroke, which
         // showed as bright "white corners"), just enough to define the edge.
         .overlay(
             RoundedRectangle(cornerRadius: 19 * s, style: .continuous)
-                .strokeBorder(Color(hex: 0x2EC7A0).opacity(0.30), lineWidth: 1 * s)
+                .strokeBorder(Color(hex: 0x7DB4FF).opacity(0.30), lineWidth: 1 * s)
         )
         .contentShape(RoundedRectangle(cornerRadius: 19 * s, style: .continuous))
         .onTapGesture { vm.onDetails() }
@@ -324,8 +328,8 @@ private struct CapsuleView: View {
                 Text(label).font(.system(size: 12 * s, weight: .medium))
             }
             .padding(.horizontal, 10 * s).padding(.vertical, 6 * s)
-            .background(filled ? Color(hex: 0x2EC7A0) : Color.white.opacity(0.14))
-            .foregroundStyle(filled ? Color(hex: 0x06231C) : .white)
+            .background(filled ? Color.white : Color.white.opacity(0.14))
+            .foregroundStyle(filled ? Color(hex: 0x1650B8) : .white)
             .clipShape(RoundedRectangle(cornerRadius: 9 * s, style: .continuous))
         }
         .buttonStyle(.plain)

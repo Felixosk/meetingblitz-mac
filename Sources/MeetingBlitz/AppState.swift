@@ -783,6 +783,29 @@ final class AppState: ObservableObject {
         return false
     }
 
+    /// Fester Fake-Termin fuer `--demo-banner` und `--render-banner`. Kein
+    /// Kalender, keine echten Daten, keine Kalender-ID (nichts laesst sich
+    /// versehentlich oeffnen oder aendern).
+    static func demoMeeting() -> Meeting {
+        let start = Date().addingTimeInterval(120)
+        return Meeting(id: "demo-banner", title: L.t("Demo-Termin: Onboarding-Call", "Demo meeting: onboarding call"),
+                       start: start, end: start.addingTimeInterval(1800),
+                       isAllDay: false, isBirthday: false, calendarTitle: "Demo",
+                       calendarID: nil, color: Color(hex: 0x2F80F0),
+                       joinURL: URL(string: "https://meet.example.invalid/demo"), contactID: nil,
+                       calendarItemID: nil)
+    }
+
+    /// `--demo-banner`: zeigt den echten Banner mit dem Fake-Termin. Ruft
+    /// absichtlich NICHT `announce` auf: das wuerde das rotierende Motiv
+    /// weiterschalten und damit eine Einstellung der Person veraendern.
+    func showDemoBanner(docked: Bool) {
+        let m = Self.demoMeeting()
+        presenter.present(m, leadMinutes: 2, seconds: animationSeconds, playSound: false,
+                          dramaticEntrance: dramaticEntrance, element: currentSkinElement,
+                          pinnedDocked: docked)
+    }
+
     func showTestBanner(pinnedDocked: Bool = false) {
         let m = Meeting(id: "test-\(Int(Date().timeIntervalSince1970))", title: L.t("Test-Meeting", "Test meeting"),
                         start: Date().addingTimeInterval(Double(leadMinutes) * 60),

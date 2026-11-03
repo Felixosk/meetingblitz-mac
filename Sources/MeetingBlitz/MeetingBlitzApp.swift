@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ps.waitUntilExit()
         let args = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         return ["--mcp", "--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels",
-                "--squeeze-settings", "--selftest", "--parse"].contains { args.contains(" " + $0) }
+                "--squeeze-settings", "--selftest", "--parse", "--demo-banner", "--render-banner"].contains { args.contains(" " + $0) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -57,6 +57,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Prozess selbst.
         if CommandLine.arguments.contains("--mcp") {
             MCPServer.run()
+        }
+        // Testschalter fuer den Meeting-Banner (03.11.2026), absichtlich VOR dem
+        // Einzelinstanz-Schutz: sie laufen neben der echten App. Kein Kalender,
+        // kein start(), keine Einstellung wird geschrieben, Fake-Termin.
+        //   --demo-banner[=docked]       zeigt den echten Banner (30 s, dann Ende)
+        //   --render-banner <png> [docked]  zeichnet die Kapsel offscreen als PNG
+        if let i = CommandLine.arguments.firstIndex(of: "--render-banner"),
+           CommandLine.arguments.count > i + 1 {
+            let out = CommandLine.arguments[i + 1]
+            let docked = CommandLine.arguments.contains("docked")
+            let vm = FlightVM(meeting: AppState.demoMeeting(),
+                              title: AppState.demoMeeting().title, subtitle: "in 2 min · 15:30",
+                              hasLink: true)
+            vm.docked = docked; vm.emergeT = 1
+            vm.globalX = 0; vm.globalY = 0
+            let w = BannerContentView.panelW, h = BannerContentView.panelH
+            let host = NSHostingView(rootView: BannerContentView(vm: vm, bandOriginX: 0, bandTopY: h)
+                .frame(width: w, height: h)
+                .background(Color(hex: 0x3A3F4B)))
+            host.frame = CGRect(x: 0, y: 0, width: w, height: h)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.contentView = host
+            win.appearance = NSAppearance(named: .darkAqua)
+            host.layoutSubtreeIfNeeded()
+            // Zwei Laufschleifen-Runden, damit TimelineView/Bilder fertig sind.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+            host.displayIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("ERROR"); exit(1) }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let ok = (try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))) != nil
+            print(ok ? "OK \(out)" : "ERROR")
+            exit(ok ? 0 : 1)
+        }
+        if let arg = CommandLine.arguments.first(where: { $0 == "--demo-banner" || $0.hasPrefix("--demo-banner=") }) {
+            NSApp.setActivationPolicy(.accessory)
+            let docked = arg.hasSuffix("=docked")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                AppState.shared.showDemoBanner(docked: docked)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { exit(0) }
+            return
         }
         // F7: Selbsttest der Link-Erkennung. MUSS vor dem Einzelinstanz-Schutz
         // stehen — sonst beendet sich der Testlauf neben der laufenden App
