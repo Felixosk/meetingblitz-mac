@@ -35,56 +35,51 @@ final class WidgetPanelController {
     private var lastFrame: CGRect?
 
     var frame: CGRect? { panel?.frame ?? lastFrame }
+    /// Runde 110: Glas-Rahmen (Andockmaß). Ab Schritt 2 mit Bühnenrand.
+    var glassFrame: CGRect? { frame?.insetBy(dx: Self.stage, dy: Self.stage) }
+    static var stage: CGFloat { Theme.stageInset }
     var isOpen: Bool { panel?.isVisible ?? false }
-
-    /// A resizable rounded-rect mask so NSVisualEffectView clips to clean,
-    /// crisp corners (no bright antialiased fringe).
-    private static func roundedMask(radius: CGFloat) -> NSImage {
-        let d = radius * 2 + 1
-        let image = NSImage(size: NSSize(width: d, height: d), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        image.resizingMode = .stretch
-        return image
-    }
+    /// Runde 111b: Mitte des Menüleisten-Symbols (für den Rückgängig-Hinweis darunter), nil = unbekannt.
+    var anchorCenterX: CGFloat? { anchorX == 0 ? nil : anchorX }
 
     func toggle(state: AppState, statusButton: NSStatusBarButton?, anchorToMouseScreen: Bool = false) {
         if isOpen { close(); return }
+        if DryCreate.isOn { print("widget toggle open \(Date().timeIntervalSince1970)\n" + Thread.callStackSymbols.prefix(8).joined(separator: "\n")); fflush(stdout) }
+        if let u = noReopenUntil, Date() < u, ProcessInfo.processInfo.environment["MB_DRY_NOGUARD"] == nil {
+            if DryCreate.isOn { print("widget reopen blocked"); fflush(stdout) }
+            return
+        }
+        noReopenUntil = nil
 
         state.showToday()        // always open on today
         state.gridDisplay = nil       // ...and with the calendar folded away
         let host = FirstMouseHostingView(rootView: MenuPanel(state: state, onSize: { size in
-            Task { @MainActor in WidgetPanelController.shared.resize(to: size) }
+            DispatchQueue.main.async { MainActor.assumeIsolated { WidgetPanelController.shared.resize(to: size) } }
         }))
+        host.safeAreaRegions = []   // Runde 110b: die Bühne ragt über die Menüleiste, kein Sicherheitsabstand oben
         host.layoutSubtreeIfNeeded()
         let size = host.fittingSize
         hostingView = host
 
-        let effect = NSVisualEffectView()
-        effect.material = .popover
-        effect.blendingMode = .behindWindow
-        effect.state = .active            // never the flat "inactive" fallback
-        // Round with a mask IMAGE, not just layer.cornerRadius: a plain layer
-        // radius leaves bright antialiased fringes at the corners (das
-        // "weiße Ecken"). A mask image clips the vibrancy cleanly.
-        effect.maskImage = Self.roundedMask(radius: 13)
-        effect.frame = CGRect(origin: .zero, size: size)
+        // Runde 90: Liquid Glass als HINTERGRUND-Geschwister der Inhaltsansicht
+        // (Fallstrick 7: die Hosting-View liegt obenauf und bekommt die Klicks).
+        let effect = NSView(frame: CGRect(origin: .zero, size: size))
+        effect.autoresizesSubviews = true
         host.frame = effect.bounds
         host.autoresizingMask = [.width, .height]
         effect.addSubview(host)
 
-        let p = NSPanel(contentRect: NSRect(origin: .zero, size: size),
+        let p = StagePanel(contentRect: NSRect(origin: .zero, size: size),
                         styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
         p.level = .popUpMenu
         p.isReleasedWhenClosed = false
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true                // native shadow, no painted halo
+        p.hasShadow = Theme.systemShadow  // Runde 118: weicher Systemschatten
         p.isFloatingPanel = true
+        p.level = .floating               // Runde 111b (A1): NACH isFloatingPanel (das setzte die Ebene still zurück)
+        // Runde 115: Aussehen kommt von NSApp.appearance (Look.apply).
         p.hidesOnDeactivate = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = effect
@@ -110,8 +105,22 @@ final class WidgetPanelController {
         statusWindow = statusButton?.window
         panel = p
         place(size: size)
+        // Runde 111 (Fund 12): 0,12 s Einblenden statt Aufspringen in einem Bild.
+        p.alphaValue = 0
         p.orderFrontRegardless()
         installDismissMonitors()
+        // Runde 111c: die Animation erst starten, wenn der Inhalt zum ersten Mal GEZEICHNET ist (sonst lief sie
+        // ab, bevor das Fenster sichtbar war: ein Bild). Layout + Zeichnen erzwingen, dann im nächsten Runloop.
+        p.contentView?.layoutSubtreeIfNeeded()
+        p.displayIfNeeded()
+        DispatchQueue.main.async { [weak p] in
+            guard let p else { return }
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.15
+                ctx.timingFunction = CAMediaTimingFunction(name: .linear)
+                p.animator().alphaValue = 1
+            }
+        }
     }
 
     /// Close the widget when the user clicks anywhere outside it, like a real
@@ -130,7 +139,14 @@ final class WidgetPanelController {
         // Stelle hat sie mit abgeschaltet und die Erklärungen verstummten.
         let measuring = CommandLine.arguments.contains { $0.hasPrefix("--demo-day=") }
         let g = measuring ? nil : NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
-            Task { @MainActor in WidgetPanelController.shared.close() }
+            Task { @MainActor in
+                // Runde 114 (Punkt 4): ein Klick, der in EINEM UNSERER Fenster liegt (z. B. Reiter in den Einstellungen),
+                // darf nie schließen, auch wenn das Ereignis hier statt im lokalen Monitor ankommt.
+                let m = NSEvent.mouseLocation
+                let own = [WidgetPanelController.shared.panel?.frame, SettingsPanelController.shared.frame, CreatePanelController.shared.frame]
+                if own.contains(where: { $0.map { $0.insetBy(dx: Theme.stageInset, dy: Theme.stageInset).contains(m) } ?? false }) { return }
+                WidgetPanelController.shared.close()
+            }
         }
         let l = measuring ? nil : NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
             MainActor.assumeIsolated {
@@ -138,6 +154,7 @@ final class WidgetPanelController {
                 let keepOpen = w === WidgetPanelController.shared.panel
                     || SettingsPanelController.shared.owns(w)
                     || CreatePanelController.shared.owns(w)
+                    || UndoToast.owns(w)
                     || w === WidgetPanelController.shared.statusWindow
                 if !keepOpen { WidgetPanelController.shared.close() }
             }
@@ -154,7 +171,19 @@ final class WidgetPanelController {
             MainActor.assumeIsolated { HintWindow.shared.mouseMoved() }
             return event
         }
-        dismissMonitors = [g, l, gm, lm].compactMap { $0 }
+        // Runde 98: Esc schließt das Widget (macOS 5.3). Lokal reicht, solange das
+        // Widget die Tasten bekommt; Tasten anderer Apps sehen wir nicht.
+        let esc = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            var hit = false
+            MainActor.assumeIsolated {
+                if event.keyCode == 53, event.window === WidgetPanelController.shared.panel {
+                    WidgetPanelController.shared.close()
+                    hit = true
+                }
+            }
+            return hit ? nil : event
+        }
+        dismissMonitors = [g, l, gm, lm, esc].compactMap { $0 }
     }
 
     private func removeDismissMonitors() {
@@ -167,6 +196,8 @@ final class WidgetPanelController {
     /// boundaries (fractional offsets blur it).
     func resize(to size: CGSize) {
         guard let p = panel, p.isVisible else { return }
+        lastNatural = size
+        if ProcessInfo.processInfo.environment["MB_FIT_LOG"] != nil { print("widget natural \(size) panel \(p.frame.height)"); fflush(stdout) }
         place(size: size)
     }
 
@@ -188,77 +219,61 @@ final class WidgetPanelController {
     /// Nur Farbe, Füllung, Deckkraft und Drehung sind gefahrlos.
     static let foldDuration = 0.20
 
+    /// Runde 110: misst die Zielhöhe und setzt das Fenster (Bühne): Wachsen sofort, Schrumpfen erst nach
+    /// der Klapp-Feder. Das Glas ist der SwiftUI-Hintergrund und läuft im selben Bild mit dem Inhalt.
     func refreshSize(animated: Bool = false) {
-        guard let p = panel, p.isVisible, let host = hostingView,
-              let content = p.contentView else { return }
-        let w = p.frame.width
-        // Nur zum MESSEN die Höhe freigeben, sonst misst sie sich selbst auf die
-        // aktuelle Panelhöhe (die Ansicht klebt per autoresizingMask daran).
-        host.autoresizingMask = []
-        host.setFrameSize(NSSize(width: w, height: 0))
-        host.layoutSubtreeIfNeeded()
-        let h = host.fittingSize.height
-        // SOFORT zurück auf den aktuellen Stand und die Maske wieder scharf
-        // stellen. Den Rahmen hier auf die ZIEL-Höhe zu setzen war der Fehler:
-        // das Fenster animiert 0,2 s lang, die Ansicht stand aber schon auf der
-        // Endgröße — dadurch ragte sie oben aus dem Fenster (Kopfzeile weg) und
-        // unten blieb ein leerer Streifen. Mit aktiver Maske wächst sie
-        // stattdessen Bild für Bild mit dem Fenster mit.
-        host.frame = content.bounds
-        host.autoresizingMask = [.width, .height]
-        guard h > 0, abs(h - p.frame.height) > 0.5 else { return }
-
-        if animated {
-            // Der Inhalt steht FEST auf seiner Zielhöhe und ist OBEN verankert
-            // (`minYMargin` = der untere Abstand ist der flexible), das Fenster
-            // gibt ihn wie ein Vorhang frei. Ohne das ist der Inhalt für das
-            // noch kleinere Fenster zu groß und wird gestaucht — dabei rutscht
-            // die Kopfzeile für die Dauer der Animation um ein paar Pixel
-            // („verschiebt sich immer noch"). Unten darf er währenddessen ruhig
-            // abgeschnitten sein, dort wächst das Fenster ja gerade hin.
-            host.autoresizingMask = [.width, .minYMargin]
-            host.frame = NSRect(x: 0, y: p.frame.height - h, width: w, height: h)
-            place(size: CGSize(width: w, height: h), animated: true) { [weak self] in
-                guard let p = self?.panel, let host = self?.hostingView else { return }
-                host.frame = p.contentView?.bounds ?? host.frame
-                host.autoresizingMask = [.width, .height]
-            }
-        } else {
-            place(size: CGSize(width: w, height: h))
-        }
+        // Runde 110b: der Inhalt meldet seine natürliche Größe selbst (`resize(to:)` per onSize, am Glas vor der
+        // festen Höhe gemessen); hier nur noch nachsetzen.
+        guard let p = panel, p.isVisible, let s = lastNatural else { return }
+        place(size: s)
     }
+    private var lastNatural: CGSize?
 
-    private func place(size: CGSize, animated: Bool = false,
-                       completion: (() -> Void)? = nil) {
+    /// Höhe, auf die das Fenster nach dem Schrumpf-Warten gesetzt wird (nil = nichts offen).
+    private var pendingHeight: CGFloat?
+    private var pendingShrink: DispatchWorkItem?
+
+    private func place(size: CGSize) {
         guard let p = panel else { return }
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: anchorX, y: topY - 1)) } ?? NSScreen.main
         let vf = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         var x = anchorX - size.width / 2
-        x = min(max(x, vf.minX + 4), vf.maxX - size.width - 4)
-        // Die OBERKANTE bleibt fest, gewachsen wird nach unten: das Datum im
+        x = min(max(x, vf.minX + 4 - Self.stage), vf.maxX - size.width - 4 + Self.stage)
+        // Die OBERKANTE des Glases bleibt fest, gewachsen wird nach unten: das Datum im
         // Kopf darf beim Aufklappen nicht wandern.
-        let y = topY - size.height
+        let y = topY + Self.stage - size.height
         let rect = CGRect(x: x.rounded(), y: y.rounded(),
                           width: size.width.rounded(.up), height: size.height.rounded(.up))
-        if animated {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = Self.foldDuration
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                ctx.allowsImplicitAnimation = true
-                p.animator().setFrame(rect, display: true)
-            } completionHandler: { [weak p] in
-                p?.invalidateShadow()   // sonst bleibt der Schatten in der alten Form
-                completion?()
+        pendingShrink?.cancel(); pendingShrink = nil; pendingHeight = nil
+        if rect.height < p.frame.height - 0.5, rect.width == p.frame.width {
+            pendingHeight = rect.height
+            let w = DispatchWorkItem { [weak self, weak p] in
+                guard let self, let p else { return }
+                p.setFrame(rect, display: true)
+                WidgetLayout.shared.set(rect.height)
+                self.pendingHeight = nil
             }
+            pendingShrink = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + Theme.foldSettle, execute: w)
         } else {
             p.setFrame(rect, display: true)
-            p.invalidateShadow()
-            completion?()
+            WidgetLayout.shared.set(rect.height)
         }
-        HintWindow.log("widget place day=\(AppState.shared.dayOffset) grid=\(AppState.shared.showsToday ? "today" : "other") size=\(size) frame=\(rect) topY=\(topY) anim=\(animated)")
+        let glass = rect.insetBy(dx: Self.stage, dy: Self.stage)
+        CreatePanelController.shared.alignToWidget(glass)     // Reihenfolge: erst das Termin-Fenster, die Einstellungen docken daran
+        SettingsPanelController.shared.alignToWidget(glass)
+        HintWindow.log("widget place day=\(AppState.shared.dayOffset) grid=\(AppState.shared.showsToday ? "today" : "other") size=\(size) frame=\(rect) topY=\(topY)")
     }
 
-    func close() {
+    /// Runde 122: nach dem Schließen zusammen mit „New Meeting" darf das Widget kurz nicht wieder aufgehen
+    /// (ein Nachzügler-Aufruf hätte es sonst sofort neu geöffnet).
+    private var noReopenUntil: Date?
+    /// Gemeinsames Ausblenden: Dauer 0,18 s, weich an- und auslaufend, im selben Bild wie das Termin-Fenster.
+    static let jointFade = 0.18
+
+    func close(fade: Double = 0.15, joint: Bool = false) {
+        if joint { noReopenUntil = Date().addingTimeInterval(0.8) }
+        WidgetLayout.shared.set(nil); lastNatural = nil; pendingShrink?.cancel(); pendingShrink = nil; pendingHeight = nil
         removeDismissMonitors()
         HintWindow.shared.hide()     // sonst bleibt eine Erklaerbox stehen
         SettingsPanelController.shared.close()   // don't orphan the settings panel
@@ -266,9 +281,42 @@ final class WidgetPanelController {
         // its own × (Runde 28: a stray click must not eat a half-typed
         // meeting).
         lastFrame = panel?.frame ?? lastFrame
-        panel?.orderOut(nil)
-        panel?.contentView = nil
+        // Runde 111 (Fund 12): Inhalt und Glas gemeinsam ausblenden (Fenster-Alpha 0,15 s), dann erst abbauen.
+        if let p = panel {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = fade
+                ctx.timingFunction = CAMediaTimingFunction(name: joint ? .easeInEaseOut : .linear)
+                p.animator().alphaValue = 0
+            } completionHandler: {
+                p.orderOut(nil)
+                p.contentView = nil
+                // Runde 122c: erst jetzt (Widget weg) den eingefrorenen Kalender-Stand nachholen.
+                if joint { Task { @MainActor in AppState.shared.monitor.unfreeze() } }
+            }
+        } else if joint {
+            AppState.shared.monitor.unfreeze()
+        }
         panel = nil
         hostingView = nil
+    }
+}
+
+
+/// Runde 110b (F3): AppKit schob das Widget-Fenster unter die Menüleiste und damit das Glas 11 pt tiefer als die
+/// Nachbarn. Die durchsichtige Bühne darf über die Menüleiste ragen.
+final class StagePanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+}
+
+
+/// Runde 110b: Fensterhöhe des Widgets für die SwiftUI-Wurzel (oben verankert, ohne Animation gesetzt).
+@MainActor
+final class WidgetLayout: ObservableObject {
+    static let shared = WidgetLayout()
+    @Published var height: CGFloat?
+    func set(_ h: CGFloat?) {
+        guard height != h else { return }
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { height = h }
     }
 }

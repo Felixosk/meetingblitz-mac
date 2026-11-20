@@ -96,7 +96,7 @@ enum MCPServer {
             return (msg, true)
         }
         guard let url = URL(string: "http://127.0.0.1:\(config.port)/rpc") else {
-            return (L.t("Ungültige Bruecken-Adresse.", "Invalid bridge address."), true)
+            return (L.t("Ungültige Brücken-Adresse.", "Invalid bridge address."), true)
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -116,10 +116,10 @@ enum MCPServer {
             answer = synchronousRequest(req)
         }
         guard let (data, _) = answer else {
-            return (L.t("Bruecke antwortet nicht.", "Bridge did not respond."), true)
+            return (L.t("Brücke antwortet nicht.", "Bridge did not respond."), true)
         }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return (L.t("Antwort der Bruecke war kein gueltiges JSON.", "Bridge response was not valid JSON."), true)
+            return (L.t("Antwort der Brücke war kein gültiges JSON.", "Bridge response was not valid JSON."), true)
         }
         if let err = obj["error"] as? String {
             return (err, true)

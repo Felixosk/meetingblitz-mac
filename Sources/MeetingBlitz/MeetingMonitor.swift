@@ -18,6 +18,12 @@ final class MeetingMonitor {
     private var startedKeys: Set<String> = []   // start blink fired
     private var autoJoinedKeys: Set<String> = [] // auto-join opened (Runde 5)
     private var endWarnedKeys: Set<String> = []  // end-of-meeting warning blinked (Runde 5)
+    /// Runde 88: jedes Banner dieses Tages, NICHT auf `upcoming` beschnitten
+    /// (dort fällt ein Termin mit Beginn heraus). Für das Nachholen nach dem
+    /// Aufwachen: wer das Banner schon gesehen hat, bekommt keins mehr.
+    private var everAlertedKeys: Set<String> = []
+    /// Genaue Weckzeit für Auto-Beitreten (Runde 88), siehe `scheduleAutoJoin`.
+    private var autoJoinTimer: Timer?
 
     init(state: AppState) {
         self.state = state
@@ -38,12 +44,52 @@ final class MeetingMonitor {
         ) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        // Runde 88: nach dem Aufwachen sofort prüfen und verpasste Starts
+        // nachholen. Vorher kam nach Deckel-auf 2 Minuten nach Beginn nichts,
+        // weder Banner (braucht „noch nicht begonnen") noch Blinken (< 60 s).
+        let ws = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.tick(catchUp: true) }
+            }
+        }
         tick()
     }
 
     func tickNow() { tick() }
 
-    private func tick() {
+    // Runde 122c: Widget beim gemeinsamen Ausblenden nach „New Meeting" EINFRIEREN. Vorher holte sich das Widget
+    // den neuen Termin schon im Ausblenden (tickNow + EventKit-Meldung), man sah ihn kurz „live" auftauchen.
+    // Während `frozen` merkt sich tick() nur, dass es etwas zu tun gibt; `unfreeze()` holt es nach dem Schließen nach.
+    private(set) var frozen = false
+    private var pendingWhileFrozen = false
+    private var pendingCatchUp = false
+    private var freezeSafety: DispatchWorkItem?
+
+    func freezeForClose() {
+        frozen = true
+        freezeSafety?.cancel()
+        // Sicherheitsnetz: nie länger als 15 s (Banner, Menüleiste dürfen nicht hängen bleiben).
+        let w = DispatchWorkItem { [weak self] in Task { @MainActor in self?.unfreeze() } }
+        freezeSafety = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: w)
+        if DryCreate.isOn { print("monitor freeze \(Date().timeIntervalSince1970)"); fflush(stdout) }
+    }
+
+    func unfreeze() {
+        freezeSafety?.cancel(); freezeSafety = nil
+        guard frozen else { return }
+        frozen = false
+        if DryCreate.isOn { print("monitor unfreeze pending=\(pendingWhileFrozen) \(Date().timeIntervalSince1970)"); fflush(stdout) }
+        if pendingWhileFrozen {
+            let c = pendingCatchUp
+            pendingWhileFrozen = false; pendingCatchUp = false
+            tick(catchUp: c)
+        }
+    }
+
+    private func tick(catchUp: Bool = false) {
+        if frozen { pendingWhileFrozen = true; pendingCatchUp = pendingCatchUp || catchUp; return }
         // Befristete Ruhe hier ablaufen lassen, nicht per Timer: ein Timer über
         // Stunden oder Tage überlebt weder Ruhezustand noch Neustart.
         state.expireQuietIfNeeded()
@@ -112,6 +158,7 @@ final class MeetingMonitor {
                     continue
                 }
                 alertedKeys.insert(key)
+                everAlertedKeys.insert(key)
                 state.announce(meeting)
             }
         }
@@ -119,18 +166,26 @@ final class MeetingMonitor {
         quietNoticeKeys.formIntersection(Set(upcoming.map(alertKey(for:))))
 
         // --- Auto-join (Runde 5, opt-in): open the link ~10s before start. ---
+        // Runde 88: Vorher nur über `upcoming` (Beginn noch in der Zukunft) und
+        // nur beim 20-s-Takt: das Fenster war real 0–10 s, der Takt traf es
+        // meist nicht. Jetzt zählen auch gerade begonnene Termine (bis 30 s
+        // danach, aus `todayAlert`), und ein Einmal-Timer weckt genau 10 s vorher.
         if state.autoJoin {
-            for meeting in upcoming {
-                guard let url = meeting.joinURL else { continue }
-                let secondsUntil = meeting.start.timeIntervalSinceNow
+            var seen = Set<String>()
+            let candidates = (upcoming + todayAlert.filter { !$0.isAllDay && !$0.isBirthday && $0.start <= now })
+                .filter { seen.insert(alertKey(for: $0)).inserted }
+            for meeting in candidates where meeting.joinURL != nil {
                 let key = alertKey(for: meeting)
-                if secondsUntil <= 10, secondsUntil > -30, !autoJoinedKeys.contains(key) {
+                if MonitorRules.autoJoinDue(secondsUntil: meeting.start.timeIntervalSince(now)),
+                   !autoJoinedKeys.contains(key) {
                     autoJoinedKeys.insert(key)
-                    _ = url   // routing uses the meeting title (per-account override)
                     MeetingLauncher.join(meeting)
                 }
             }
-            autoJoinedKeys.formIntersection(Set(upcoming.map(alertKey(for:))))
+            autoJoinedKeys.formIntersection(Set(candidates.map(alertKey(for:))))
+            scheduleAutoJoin(upcoming.filter { $0.joinURL != nil }.map { $0.start.timeIntervalSince(now) })
+        } else {
+            autoJoinTimer?.invalidate(); autoJoinTimer = nil
         }
 
         // --- End-of-meeting warning (Runde 5): blink 5 min before the current
@@ -161,15 +216,65 @@ final class MeetingMonitor {
         }
         startedKeys.formIntersection(Set(todayAlert.map(alertKey(for:))))
 
+        // --- Nachholen nach dem Aufwachen (Runde 88): ein Termin, der in den
+        // letzten 10 Minuten begonnen hat, noch läuft und nie ein Banner
+        // bekam, kommt angedockt mit „hat vor 2 min begonnen". ---
+        if catchUp, !state.bannersSuppressed {
+            for meeting in todayAlert where !meeting.isAllDay && !meeting.isBirthday {
+                let key = alertKey(for: meeting)
+                guard MonitorRules.catchUpDue(sinceStart: now.timeIntervalSince(meeting.start),
+                                              ended: meeting.end <= now),
+                      !everAlertedKeys.contains(key) else { continue }
+                everAlertedKeys.insert(key)
+                let mins = max(1, Int(now.timeIntervalSince(meeting.start) / 60))
+                state.announce(meeting, pinnedDocked: true,
+                               subtitle: L.t("hat vor \(mins) min begonnen · \(meeting.timeLabel)",
+                                             "started \(mins) min ago · \(meeting.timeLabel)"))
+            }
+        }
+        everAlertedKeys.formIntersection(Set((todayAlert + upcoming).map(alertKey(for:))))
+
         // --- Apple Reminders (Runde 43): keep the widget's list fresh. ---
         if state.showReminders, state.remindersAuthorized {
             Task { await state.refreshReminders() }
         }
     }
 
+    /// Einmal-Timer auf „10 s vor Beginn" des nächsten Termins, wenn der
+    /// innerhalb der nächsten zwei Takte liegt. Ersetzt einen alten Timer.
+    private func scheduleAutoJoin(_ secondsUntil: [TimeInterval]) {
+        autoJoinTimer?.invalidate(); autoJoinTimer = nil
+        guard let delay = MonitorRules.autoJoinWakeDelay(secondsUntil) else { return }
+        let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        t.tolerance = 0.5
+        RunLoop.main.add(t, forMode: .common)
+        autoJoinTimer = t
+    }
+
     /// Occurrence-unique key: EKEvent.eventIdentifier repeats across the
     /// occurrences of a recurring event, so the start time disambiguates them.
     private func alertKey(for meeting: Meeting) -> String {
         "\(meeting.id)@\(Int(meeting.start.timeIntervalSince1970))"
+    }
+}
+
+/// Reine Regeln des Monitors (Runde 88), testbar ohne Kalender und Uhr.
+enum MonitorRules {
+    /// Auto-Beitreten: von 10 s vor bis 30 s nach Beginn.
+    static func autoJoinDue(secondsUntil: TimeInterval) -> Bool {
+        secondsUntil <= 10 && secondsUntil > -30
+    }
+
+    /// Wann der Einmal-Timer feuern soll: 10 s vor dem nächsten Beginn, der
+    /// noch nicht im Fenster ist und vor dem übernächsten Takt (≤ 50 s) liegt.
+    static func autoJoinWakeDelay(_ secondsUntil: [TimeInterval]) -> TimeInterval? {
+        secondsUntil.filter { $0 > 10 && $0 <= 50 }.min().map { $0 - 10 }
+    }
+
+    /// Nachholen nach dem Aufwachen: begonnen, höchstens 10 min her, läuft noch.
+    static func catchUpDue(sinceStart: TimeInterval, ended: Bool) -> Bool {
+        !ended && sinceStart > 0 && sinceStart <= 600
     }
 }

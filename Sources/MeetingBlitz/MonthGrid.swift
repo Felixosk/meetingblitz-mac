@@ -12,9 +12,6 @@ struct MonthGrid: View {
     @Binding var selection: Date
     /// 1 = Sunday … 7 = Saturday, like `Calendar.firstWeekday`.
     var firstWeekday: Int = 2
-    /// Compact mode for the widget: slightly tighter rows, since it sits above
-    /// a full agenda rather than in a roomy form.
-    var compact: Bool = false
     /// Called after a day was picked. The widget uses it to fold the grid away
     /// again — without it the calendar just sits there and the way back is
     /// invisible (Rückmeldung 18.08.: „wie komme ich wieder back da?").
@@ -26,21 +23,42 @@ struct MonthGrid: View {
     /// whichever mode the settings say (Rückmeldung 18.08.: „wie kann ich dann
     /// den Monat sehen?"), and the settings are two panels away.
     var onToggleMode: (() -> Void)?
+    /// Runde 110: Widget-Raster klappt auf/zu, ohne aus dem Baum zu verschwinden.
+    var isOpen: Bool = true
+    /// Runde 113: vergangene Tage abgedunkelt, Tage mit Terminen mit Punkt (Termin-Fenster).
+    var dimPast: Bool = false
+    var eventDays: Set<Date> = []
+    /// Meldet den sichtbaren Zeitraum [von, bis), damit der Aufrufer die Punkte mit einer Abfrage lädt.
+    var onRange: ((Date, Date) -> Void)? = nil
 
     /// A day inside the shown period. Paging moves this, picking a day does not
     /// — that keeps browsing and choosing separate.
-    @State private var anchor: Date
+    @State private var localAnchor: Date
+    /// Runde 110b (U2): Das Widget führt den Anker selbst (sein Kopf zeigt den Monat und blättert).
+    var externalAnchor: Binding<Date>? = nil
+    private var anchorB: Binding<Date> { externalAnchor ?? $localAnchor }
+    private var anchor: Date { anchorB.wrappedValue }
+    /// Ohne eigenen Kopf (Widget) beginnt der Raster mit `topGap` Luft.
+    var showsHeader: Bool = true
+    var topGap: CGFloat = Theme.s8
 
-    init(selection: Binding<Date>, firstWeekday: Int = 2, compact: Bool = false,
-         mode: CalendarViewMode = .month, onPick: (() -> Void)? = nil,
-         onToggleMode: (() -> Void)? = nil) {
+    init(selection: Binding<Date>, firstWeekday: Int = 2, mode: CalendarViewMode = .month, onPick: (() -> Void)? = nil,
+         onToggleMode: (() -> Void)? = nil, isOpen: Bool = true,
+         anchor: Binding<Date>? = nil, showsHeader: Bool = true, topGap: CGFloat = Theme.s8,
+         dimPast: Bool = false, eventDays: Set<Date> = [], onRange: ((Date, Date) -> Void)? = nil) {
+        self.dimPast = dimPast
+        self.eventDays = eventDays
+        self.onRange = onRange
+        self.isOpen = isOpen
+        self.externalAnchor = anchor
+        self.showsHeader = showsHeader
+        self.topGap = topGap
         _selection = selection
         self.firstWeekday = firstWeekday
-        self.compact = compact
         self.mode = mode
         self.onPick = onPick
         self.onToggleMode = onToggleMode
-        _anchor = State(initialValue: selection.wrappedValue)
+        _localAnchor = State(initialValue: selection.wrappedValue)
     }
 
     private var cal: Calendar {
@@ -49,9 +67,16 @@ struct MonthGrid: View {
         return c
     }
 
+    /// Runde 110: `isOpen` = ganzer Baustein auf/zu (Widget); alles ist FLACH in eigenen Folds
+    /// (ein Fold im Fold meldet dem äußeren sofort die Zielhöhe und springt).
     var body: some View {
-        VStack(spacing: compact ? 3 : 5) {
-            HStack(spacing: 10) {
+        let weeks = monthWeeks()
+        let r = anchorRow(weeks)
+        let month = mode == .month
+        VStack(spacing: 0) {
+            ThemeFold(isOpen: isOpen && showsHeader, gap: 0) {
+                VStack(spacing: 0) {
+            HStack(spacing: Theme.s8) {
                 // Monat + Jahr tragen die ganze Orientierung des Rasters, im
                 // Widget sitzen sie zwischen zwei anderen Blöcken. Deshalb hier
                 // klar sichtbar statt als Beiwerk (Rückmeldung 18.08.: „würde
@@ -59,86 +84,140 @@ struct MonthGrid: View {
                 if let toggle = onToggleMode {
                     // Titel als Umschalter, wie im iPhone-Kalender: Woche
                     // aufklappen zum Monat, Monat einklappen zur Woche.
-                    Button(action: toggle) {
-                        HStack(spacing: 4) {
-                            Text(monthTitle)
-                                .font(.system(size: 13, weight: .bold))
-                            Image(systemName: mode == .week ? "chevron.down" : "chevron.up")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .help(mode == .week ? L.t("Ganzen Monat zeigen", "Show the whole month")
-                                        : L.t("Nur die Woche zeigen", "Show just the week"))
+                    ThemeTextRow(title: monthTitle, trailingIcon: mode == .week ? "chevron.down" : "chevron.up",
+                                 weight: .bold, fullWidth: false, action: toggle)
+                        .themeRowList()
+                        .layoutPriority(1)
+                        .transaction { $0.animation = nil }   // Runde 110: Titeltext tauscht hart, keine Geisterschrift
+                        .help(mode == .week ? L.t("Ganzen Monat zeigen", "Show the whole month")
+                                            : L.t("Nur die Woche zeigen", "Show just the week"))
                 } else {
                     Text(monthTitle)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.theme(.normal, .bold)).foregroundStyle(Theme.label)
                 }
                 Spacer()
-                Button { step(-1) } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                // [Heute] ‹ ›: derselbe Text-Knopf wie im Widget-Kopf, Platz links
+                // reserviert, damit die Pfeile nebeneinander bleiben.
+                let todayShown = cal.startOfDay(for: selection) == cal.startOfDay(for: Date())
+                    && gridDays().contains(cal.startOfDay(for: Date()))
+                // Runde 110c: "Heute" nimmt nur Platz, wenn es sichtbar ist (die Kapsel steht rechtsbündig und
+                // springt nicht); so passt auch "28. September – 4. October" in den Titel.
+                if !todayShown {
+                    ThemeTextRow(title: L.t("Heute", "Today"), accent: true, fullWidth: false) { jumpToToday() }
+                        .fixedSize()
+                        .help(L.t("Zu heute springen", "Jump to today"))
                 }
-                Button { jumpToToday() } label: {
-                    Circle().fill(Color.accentColor).frame(width: 6, height: 6)
-                }
-                .help(L.t("Zu heute springen", "Jump to today"))
-                Button { step(1) } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                }
+                ThemeNavCapsule(onBack: { step(-1) }, onForward: { step(1) })
                 if onPick != nil {
                     // Sichtbarer Rückweg. Ein zweiter Klick auf das Datum oben
                     // tut dasselbe, aber das sieht man dem Raster nicht an.
-                    Button { onPick?() } label: {
-                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .help(L.t("Kalender schließen", "Close the calendar"))
+                    ThemeIconButton(systemName: "xmark") { onPick?() }
+                        .help(L.t("Kalender schließen", "Close the calendar"))
                 }
             }
             .buttonStyle(.borderless)
 
+                }
+                .padding(.top, Theme.s4)
+            }
+            ThemeFold(isOpen: isOpen, gap: showsHeader ? Theme.s8 : topGap) {
             HStack(spacing: 0) {
                 ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, d in
                     Text(d)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(.theme(.small, .medium))
+                        .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity)
                 }
             }
 
-            let today = cal.startOfDay(for: Date())
-            let selectedDay = cal.startOfDay(for: selection)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7),
-                      spacing: 2) {
-                ForEach(gridDays(), id: \.timeIntervalSinceReferenceDate) { day in
-                    // In der Wochenansicht gehören alle sieben Tage dazu, da gibt
-                    // es keinen ausgegrauten Nachbarmonat.
-                    let inMonth = mode == .week
-                        || cal.isDate(day, equalTo: anchor, toGranularity: .month)
-                    let isSelected = day == selectedDay
-                    let isToday = day == today
-                    Button { pick(day) } label: {
-                        Text("\(cal.component(.day, from: day))")
-                            .font(.system(size: 11.5, weight: isSelected || isToday ? .semibold : .regular))
-                            .monospacedDigit()
-                            .frame(maxWidth: .infinity, minHeight: compact ? 18 : 20)
-                            .background(
-                                Circle()
-                                    .fill(isSelected ? Color.accentColor
-                                          : isToday ? Color.accentColor.opacity(0.18) : .clear)
-                                    .frame(width: compact ? 18 : 20, height: compact ? 18 : 20)
-                            )
-                            .foregroundStyle(isSelected ? Color.white
-                                             : isToday ? Color.accentColor
-                                             : inMonth ? Color.primary : Color.secondary.opacity(0.45))
-                            .contentShape(Rectangle())
+            }
+            ThemeFold(isOpen: isOpen && month, gap: Theme.s4, edge: .bottom) {
+                weekRows(Array(weeks[..<r])).padding(.top, Theme.s8)
+            }
+            ThemeFold(isOpen: isOpen, gap: 0) {
+                weekRows([weeks[r]])
+                    .padding(.top, month ? 0 : Theme.s8)
+                    .padding(.bottom, month ? 0 : Theme.s4)
+            }
+            ThemeFold(isOpen: isOpen && month, gap: Theme.s4) {
+                weekRows(Array(weeks[(r + 1)...])).padding(.bottom, Theme.s4)
+            }
+        }
+        .onAppear { reportRange() }
+        .onChange(of: anchor) { _, _ in reportRange() }
+        .onChange(of: mode) { _, _ in reportRange() }
+        // Runde 113: springt die Auswahl aus dem gezeigten Zeitraum (z. B. durch das Eingabefeld), blättert das Raster mit.
+        .onChange(of: selection) { _, new in
+            guard externalAnchor == nil else { return }
+            let d = cal.startOfDay(for: new)
+            if !gridDays().contains(d) { localAnchor = new }
+        }
+    }
+
+    private func reportRange() {
+        guard let onRange else { return }
+        let days = mode == .week ? gridDays() : monthWeeks().flatMap { $0 }
+        guard let f = days.first, let l = days.last, let e = cal.date(byAdding: .day, value: 1, to: l) else { return }
+        onRange(f, e)
+    }
+
+    private func weekRows(_ weeks: [[Date]]) -> some View {
+        let today = cal.startOfDay(for: Date())
+        let selectedDay = cal.startOfDay(for: selection)
+        return VStack(spacing: Theme.s4) {
+            ForEach(weeks.indices, id: \.self) { w in
+                HStack(spacing: 0) {
+                    ForEach(weeks[w], id: \.timeIntervalSinceReferenceDate) { day in
+                        // In der Wochenansicht gehören alle sieben Tage dazu, da gibt
+                        // es keinen ausgegrauten Nachbarmonat.
+                        let inMonth = mode == .week
+                            || cal.isDate(day, equalTo: anchor, toGranularity: .month)
+                        let isSelected = day == selectedDay
+                        let isToday = day == today
+                        let isPast = dimPast && day < today
+                        Button { pick(day) } label: {
+                            Text("\(cal.component(.day, from: day))")
+                                .font(.theme(.normal, isSelected || isToday ? .semibold : .regular))
+                                .monospacedDigit()
+                                .frame(maxWidth: .infinity, minHeight: Theme.iconButton)
+                                .background(
+                                    Circle()
+                                        .fill(isSelected ? Theme.blue : .clear)
+                                        .frame(width: Theme.iconButton, height: Theme.iconButton)
+                                )
+                                // Heute ohne Auswahl: weißer Ring (Blau = ausgewählt).
+                                .overlay(Circle().strokeBorder(isToday && !isSelected ? Theme.label : .clear, lineWidth: 1)
+                                    .frame(width: Theme.iconButton, height: Theme.iconButton))
+                                .overlay {
+                                    if eventDays.contains(day) {
+                                        Circle().fill(isSelected ? Theme.onBlue.opacity(0.8) : Theme.muted)
+                                            .frame(width: 4, height: 4).offset(y: 8)
+                                    }
+                                }
+                                .foregroundStyle(isSelected ? Theme.onBlue
+                                                 : inMonth ? Theme.label : Theme.faint)
+                                .opacity(isPast && !isSelected ? 0.45 : 1)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.vertical, 2)
+    }
+
+    /// 6 Wochen des Monats vom Anker, jede Zeile 7 Tage ab dem ersten Wochentag.
+    private func monthWeeks() -> [[Date]] {
+        guard let first = cal.dateInterval(of: .month, for: anchor)?.start,
+              let gridStart = cal.dateInterval(of: .weekOfYear, for: first)?.start
+        else { return Array(repeating: [], count: 6) }
+        let days = (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
+        return (0..<6).map { Array(days[($0 * 7)..<($0 * 7 + 7)]) }
+    }
+
+    private func anchorRow(_ weeks: [[Date]]) -> Int {
+        let a = cal.startOfDay(for: anchor)
+        return weeks.firstIndex { $0.contains(a) } ?? 0
     }
 
     /// Weekday headers in the app's language, rotated to `firstWeekday`. Two
@@ -172,7 +251,7 @@ struct MonthGrid: View {
         let t = cal.dateComponents([.hour, .minute], from: selection)
         selection = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0,
                              second: 0, of: day) ?? day
-        anchor = day
+        anchorB.wrappedValue = day
         // Tag gewählt heißt fertig: das Raster klappt weg und gibt die Agenda
         // des Tages frei, wie ein normaler Datumsauswähler.
         onPick?()
@@ -180,29 +259,36 @@ struct MonthGrid: View {
 
     /// Eine Periode weiter oder zurück: Woche oder Monat, je nach Modus.
     private func step(_ by: Int) {
-        let unit: Calendar.Component = mode == .week ? .weekOfYear : .month
-        anchor = cal.date(byAdding: unit, value: by, to: anchor) ?? anchor
+        anchorB.wrappedValue = MonthGridMath.step(anchor, mode: mode, by: by, firstWeekday: firstWeekday)
     }
 
     private func jumpToToday() {
         pick(cal.startOfDay(for: Date()))
     }
 
+    private var monthTitle: String { MonthGridMath.title(anchor, mode: mode, firstWeekday: firstWeekday) }
+
+}
+
+
+/// Runde 110b (U2): Titel und Blättern des Rasters, auch vom Widget-Kopf aus nutzbar.
+enum MonthGridMath {
+    static func cal(_ firstWeekday: Int) -> Calendar { var c = Calendar.current; c.firstWeekday = firstWeekday; return c }
+
+    static func step(_ anchor: Date, mode: CalendarViewMode, by: Int, firstWeekday: Int) -> Date {
+        let unit: Calendar.Component = mode == .week ? .weekOfYear : .month
+        return cal(firstWeekday).date(byAdding: unit, value: by, to: anchor) ?? anchor
+    }
+
     /// Monat + Jahr, in der Wochenansicht der Zeitraum der Woche.
-    private var monthTitle: String {
-        let f = DateFormatter()
-        f.locale = L.locale
+    static func title(_ anchor: Date, mode: CalendarViewMode, firstWeekday: Int) -> String {
+        let cal = cal(firstWeekday)
         guard mode == .week,
               let start = cal.dateInterval(of: .weekOfYear, for: anchor)?.start,
               let end = cal.date(byAdding: .day, value: 6, to: start) else {
-            f.dateFormat = "LLLL yyyy"
-            return f.string(from: anchor)
+            return L.date(anchor, "LLLLyyyy")
         }
-        // „18. – 24. August", über einen Monatswechsel hinweg „30. Aug – 5. Sep".
-        let sameMonth = cal.isDate(start, equalTo: end, toGranularity: .month)
-        f.dateFormat = sameMonth ? "d." : L.t("d. MMM", "MMM d")
-        let a = f.string(from: start)
-        f.dateFormat = sameMonth ? L.t("d. MMMM", "MMMM d") : L.t("d. MMM", "MMM d")
-        return "\(a) – \(f.string(from: end))"
+        // Runde 111 (Fund 3): lokalisierter Zeitraum, EN "Nov 16 – 22", DE "16.–22. Nov."
+        return L.dateRange(start, end)
     }
 }

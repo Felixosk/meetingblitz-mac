@@ -2,13 +2,13 @@ import Foundation
 import AppKit
 
 /// Central join-link opener (Runde 43). Someone may work in ONE Chrome profile
-/// (personal@gmail.example is his private default) but hosts agency meetings under
+/// (personal@gmail.example is the private default) but hosts work meetings under
 /// you@work-domain.example, which is ALSO signed into that same profile. So
-/// clicking a Meet link opened it as the wrong (default) account and he had to
+/// clicking a Meet link opened it as the wrong (default) account and they had to
 /// switch by hand every time.
 ///
-/// The fix needs no change to his Chrome setup: for a Google Meet link we append
-/// `?authuser=<agency-email>` and open it in Chrome's profile. Google web apps
+/// The fix needs no change to the Chrome setup: for a Google Meet link we append
+/// `?authuser=<work-email>` and open it in Chrome's profile. Google web apps
 /// honour `authuser` and select that signed-in account directly. Non-Google
 /// links (Zoom/Teams/…) are opened unchanged via the system default browser.
 ///

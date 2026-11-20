@@ -15,7 +15,7 @@ enum JoinLinkTests {
         ("https://meet.google.com/abc-defg-hij", "Google Meet"),
         ("https://us02web.zoom.us/j/1234567890?pwd=xyz", "Zoom"),
         ("https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc", "Microsoft Teams"),
-        ("https://company.webex.com/meet/felix", "Webex"),
+        ("https://company.webex.com/meet/jordan", "Webex"),
         ("https://whereby.com/my-room", "Whereby"),
         ("https://meet.jit.si/StandupDaily", "Jitsi"),
         ("https://discord.gg/abcd1234", "Discord"),
@@ -54,6 +54,12 @@ enum JoinLinkTests {
                                   texts: ["Notizen: https://www.notion.so/Agenda\nRaum: https://meet.google.com/xyz-abcd-efg"])
         if mixed?.host != "meet.google.com" {
             out.append("Vorrang falsch: bei Wiki + Meet-Link muss der Meet-Link gewinnen, bekommen: \(mixed?.absoluteString ?? "nil")")
+        }
+        // Runde 99: nur ein Maps-Link → kein Beitreten.
+        let maps = JoinLink.best(explicit: URL(string: "https://maps.app.goo.gl/abc123"),
+                                 texts: ["Treffpunkt: https://www.google.com/maps/place/Essen"])
+        if maps != nil {
+            out.append("Maps-Link darf kein Beitreten sein, bekommen: \(maps?.absoluteString ?? "")")
         }
         return out
     }

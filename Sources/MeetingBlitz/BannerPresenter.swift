@@ -18,9 +18,8 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
-/// One announcement. Runde 9 sequence: `.jumping` (capsule leaps out of the sea
-/// — or, for air motifs since Runde 72, bursts out of a cloud — along a
-/// parabolic arc, sub tilting with the tangent) → `.flying` (cruises toward
+/// One announcement. Runde 117 sequence: `.entering` (Kasten baut sich von links
+/// auf, das Motiv taucht auf, siehe `BannerMotion`) → `.flying` (cruises toward
 /// the far edge with a gentle wog). Hover docks it in place with actions,
 /// a click pins it with the detail popover, the × closes it.
 ///
@@ -40,16 +39,13 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// panels). Hover is POLLED from `NSEvent.mouseLocation`.
 @MainActor
 final class Flight {
-    private enum Phase { case winding, jumping, flying, docked, exiting }
+    private enum Phase { case entering, flying, docked, exiting }
 
     private let vm: FlightVM
     private let seconds: Double
     private let laneIndex: Int
     private let pinnedDocked: Bool     // debug: stay docked at centre (--demo-dock)
     private var bands: [NSPanel] = []
-    /// The stationary entrance-effect panel(s) at the launch point: a
-    /// SeaSplash for water motifs, a CloudBurst for air motifs (Runde 72).
-    private var entrancePanels: [NSPanel] = []
     private var phase: Phase
     private var startedAt = Date()
     private var travelStartedAt = Date()
@@ -67,7 +63,6 @@ final class Flight {
 
     // Global flight path (screen coordinates), fixed in start().
     private var launchX: CGFloat = 0   // virtual-box x at the submerged launch
-    private var waterY: CGFloat = 0    // virtual-box y submerged
     private var cruiseX: CGFloat = 0   // virtual-box x where the cruise begins
     private var cruiseY: CGFloat = 0   // virtual-box y at cruise height
     private var endX: CGFloat = 0      // exit x at the far edge of all screens
@@ -75,20 +70,10 @@ final class Flight {
     private let panelW = BannerContentView.panelW   // virtual banner box
     private let panelH = BannerContentView.panelH
     private let frameInterval = 1.0 / 60.0
-    private let jumpDuration = 1.45    // slower, more graceful arc (Rückmeldung: „2 aber langsam")
-    private let jumpDepth: CGFloat = 155   // how far below cruise the launch sits
-    private let arcHeight: CGFloat = 70    // overshoot above the straight climb
     private let cruiseWog: CGFloat = 6     // gentle up/down while cruising
     private let wogCount = 2.5
 
-    // MARK: Runde 70, drei Handwerksregeln aus der Motion-Design-Recherche
-
-    /// Anticipation: kurzes Ausholen entgegen der Flugrichtung vor dem Absprung.
-    /// Bewusst kurz gehalten, ab etwa einer Viertelsekunde wirkt es zögerlich
-    /// statt kraftvoll.
-    private let windUpDuration = 0.18
-    private let windUpBack: CGFloat = 26   // wie weit zurück
-    private let windUpDown: CGFloat = 14   // wie weit zusätzlich abtauchen
+    // MARK: Runde 70, Handwerksregeln
 
     /// Beschleunigter Abgang: ab `exitFrom` (Anteil der Strecke) legt sich
     /// `exitBoost` quadratisch obendrauf, das Banner zieht also zum Schluss an.
@@ -108,6 +93,10 @@ final class Flight {
 
     /// Laufende Werte der Feder zwischen Objekt und Kapsel.
     private var lagVelocity: CGFloat = 0
+
+    private var flightDir: CGFloat = -1
+    private var morphStartedAt = Date()
+    private var createdAt = Date()
     private var lastGlobalX: CGFloat = 0
     private var haveLastX = false
 
@@ -116,9 +105,7 @@ final class Flight {
         self.seconds = seconds
         self.laneIndex = laneIndex
         self.pinnedDocked = pinnedDocked
-        // Der Wind-up gehört zum dramatischen Auftritt: erst ausholen, dann
-        // springen. Ohne dramatischen Auftritt fliegt es wie bisher level herein.
-        self.phase = pinnedDocked ? .docked : (vm.dramaticEntrance ? .winding : .flying)
+        self.phase = pinnedDocked ? .docked : .entering
         vm.docked = pinnedDocked
         vm.emergeT = 1
         vm.tilt = 0
@@ -143,37 +130,30 @@ final class Flight {
             // Path: capsule sits about a third down the start screen; overlapping
             // flights stack downward via laneIndex.
             cruiseY = sf.maxY - sf.height * 0.30 - panelH - CGFloat(laneIndex) * (BannerContentView.capsuleZone + 6)
-            waterY = cruiseY - jumpDepth
             launchX = toRight ? (sf.minX + sf.width * 0.09) : (sf.maxX - sf.width * 0.09 - panelW)
             cruiseX = launchX + dir * (sf.width * 0.06)
             endX = toRight ? allMaxX : (allMinX - panelW)
             // 272 was half of an assumed ~544pt docked width; scales with the
-            // banner (Runde 20.08.) so the pinned/docked debug pose (--demo-dock)
-            // still centres the now-bigger capsule instead of drifting off-centre.
+            // banner so the pinned/docked debug pose (--demo-dock) centres it.
             let centerX = sf.midX - 272 * BannerContentView.geometryScale
             vm.facingLeft = !toRight
 
-            // Initial global position of the virtual box.
             if pinnedDocked {
                 vm.globalX = centerX; vm.globalY = cruiseY
                 dockCenterX = centerX; dockCenterY = cruiseY
-            } else if vm.dramaticEntrance {
-                // Both elements launch from the same submerged/below-cruise
-                // point and ride the identical jump arc (Runde 72) — only the
-                // stationary panel at this point differs (splash vs. cloud).
-                vm.globalX = launchX; vm.globalY = waterY
             } else {
-                vm.globalX = toRight ? (sf.minX - panelW) : sf.maxX
-                vm.globalY = cruiseY
+                // Der Banner baut sich an Ort und Stelle auf, dann fliegt er quer.
+                vm.globalX = cruiseX; vm.globalY = cruiseY
+                _ = BannerMotion.enter(vm, t: 0)
             }
+            flightDir = dir
 
             // Stationary bands: full width of each screen, tall enough for the
             // whole flight (launch depth … arc overshoot). Clipped to the screen;
             // screens the flight band misses get no window.
-            // windUpDown mit einrechnen: das Objekt taucht beim Ausholen unter
-            // waterY, ohne diesen Zuschlag würde es am Bandrand abgeschnitten.
-            let bandBottom = waterY - 30 - windUpDown
-            let bandTop = cruiseY + panelH + arcHeight + 40
+            // Unten Platz für das Motiv, das von unten auftaucht; oben für die Schräglage.
+            let bandBottom = cruiseY - 40
+            let bandTop = cruiseY + panelH + 40
             for screen in screens {
                 let f = screen.frame
                 let y0 = max(bandBottom, f.minY)
@@ -181,30 +161,10 @@ final class Flight {
                 guard y1 - y0 > 40 else { continue }
                 bands.append(makeBand(at: CGRect(x: f.minX, y: y0, width: f.width, height: y1 - y0)))
             }
-            // Auftritts-Panel (Gischt bzw. Wolke) NICHT sofort: seit dem Wind-up
-            // (Runde 70) holt das Objekt erst `windUpDuration` lang aus und
-            // springt erst danach. Käme der Splash schon beim Start, spritzte
-            // es, bevor überhaupt etwas durch die Oberfläche stößt.
-            let delay = vm.dramaticEntrance ? windUpDuration : 0
-            if vm.dramaticEntrance && !pinnedDocked {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    Task { @MainActor in
-                        // Der Flug kann in diesen 180 ms schon vorbei sein (per
-                        // × geschlossen oder weggeschnoozt). Dann liefe der
-                        // Timer aus und es spritzte ins Leere.
-                        guard let self, self.backupTimer != nil else { return }
-                        self.entrancePanels.append(
-                            self.vm.entranceElement == .water ? self.makeSplash() : self.makeCloud())
-                        let dur = self.vm.entranceElement == .water
-                            ? SplashMetalView.duration : CloudBurst.duration
-                        DispatchQueue.main.asyncAfter(deadline: .now() + dur + 0.3) { [weak self] in
-                            Task { @MainActor in self?.closeEntrancePanels() }
-                        }
-                    }
-                }
-            }
         }
         startedAt = Date()
+        createdAt = startedAt
+        if !pinnedDocked { morphStartedAt = startedAt }
         travelStartedAt = startedAt
         lastTickAt = startedAt
         lastX = vm.globalX; lastY = vm.globalY; haveLast = true
@@ -298,7 +258,7 @@ final class Flight {
         panel.collectionBehavior = [.fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = false   // Runde 118: Band wäre Systemschatten um das ganze Motiv (UFO bekäme dunklen Rand); Schatten zeichnet die Kapsel selbst
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = !pinnedDocked
@@ -307,88 +267,6 @@ final class Flight {
         panel.contentView = host
         panel.orderFrontRegardless()
         return panel
-    }
-
-    /// Stationary Metal-shader splash at the launch point, ordered in FRONT of
-    /// the banner so the spray flies over the leaping capsule.
-    private func makeSplash() -> NSPanel {
-        // Big panel so droplets never hit the edge (the reference-scale shader
-        // keeps them the same size; the extra room just prevents clipping).
-        let splashW: CGFloat = 720, splashH: CGFloat = 600
-        // Submarine centre on screen at the launch (capsule is top-padded).
-        // The 31/27 offsets estimate the classic sub's rendered centre inside
-        // its icon frame; scale with the banner (Runde 20.08.) so the splash
-        // still lines up with the (now bigger) nose instead of drifting.
-        let subScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.motifScale
-        let subMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.motifScale
-        let originX = subScreenX - 0.50 * splashW
-        let originY = subMidScreenY - 0.333 * splashH
-        let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: splashW, height: splashH),
-                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.level = .screenSaver
-        panel.collectionBehavior = [.fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.hidesOnDeactivate = false
-        // Shader uv is y-DOWN, so the AppKit y-up fraction is flipped.
-        let uvOrigin = SIMD2<Float>(Float((subScreenX - originX) / splashW),
-                                    Float(1.0 - (subMidScreenY - originY) / splashH))
-        let view = SplashMetalView(frame: CGRect(origin: .zero, size: CGSize(width: splashW, height: splashH)),
-                                   origin: uvOrigin, amount: 100)
-        panel.contentView = view
-        panel.orderFrontRegardless()
-        view.start()
-        return panel
-    }
-
-    /// Stationary cloud-burst panel at the launch point, for AIR motifs
-    /// (Runde 72, "Dramatischer Auftritt"). Same panel mechanic as
-    /// `makeSplash()` — borderless/nonactivating, screenSaver level,
-    /// click-through, closed after its duration — but the content is a plain
-    /// SwiftUI `Canvas` (`CloudBurst`) painted with deterministic, softly
-    /// graded fills. NEVER an NSVisualEffectView/behindWindow blur here: a
-    /// material falls back to solid black in a panel that is never key/active
-    /// (teure Projektlektion, siehe `SeaSplash`).
-    private func makeCloud() -> NSPanel {
-        // Same panel size/anchor formula as the splash: approximates the
-        // flying object's nose inside the capsule, close enough across every
-        // skin (water or air) without per-skin tuning.
-        let cloudW: CGFloat = 720, cloudH: CGFloat = 600
-        let objScreenX = launchX + BannerContentView.capsuleLeading + 31 * BannerContentView.motifScale
-        let objMidScreenY = waterY + panelH - BannerContentView.capsuleTop - 27 * BannerContentView.motifScale
-        let originX = objScreenX - 0.50 * cloudW
-        let originY = objMidScreenY - 0.333 * cloudH
-        let panel = NSPanel(contentRect: CGRect(x: originX, y: originY, width: cloudW, height: cloudH),
-                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.level = .screenSaver
-        panel.collectionBehavior = [.fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.hidesOnDeactivate = false
-        // SwiftUI/Canvas y is DOWN inside the hosted view, AppKit screen y is
-        // UP, so the local burst point is flipped against the panel's own
-        // height (same trick as the splash's uv flip above).
-        let localX = objScreenX - originX
-        let localY = cloudH - (objMidScreenY - originY)
-        let host = FirstMouseHostingView(rootView:
-            CloudBurst(startedAt: Date(), launchX: localX, launchY: localY)
-                .frame(width: cloudW, height: cloudH))
-        host.frame = CGRect(origin: .zero, size: CGSize(width: cloudW, height: cloudH))
-        panel.contentView = host
-        panel.orderFrontRegardless()
-        return panel
-    }
-
-    private func closeEntrancePanels() {
-        for p in entrancePanels {
-            (p.contentView as? SplashMetalView)?.stop()
-            p.orderOut(nil); p.contentView = nil
-        }
-        entrancePanels = []
     }
 
     /// The moving virtual banner box, in global screen coordinates.
@@ -411,25 +289,6 @@ final class Flight {
         updateHover(now)
 
         switch phase {
-        case .winding:
-            // Anticipation (Runde 70): kurz ZURÜCK und tiefer, bevor es losgeht.
-            // Ohne diesen Wind-up liest sich der Absprung als Ruckler statt als
-            // Absicht; es ist das billigste der Animationsprinzipien und das mit
-            // der größten Wirkung am Anfang einer Bewegung.
-            let wt = min(1, now.timeIntervalSince(startedAt) / windUpDuration)
-            let e = sin(.pi * wt)                          // 0 → 1 → 0, weiches Ausholen
-            vm.globalX = launchX - windUpBack * e
-            vm.globalY = waterY - windUpDown * e
-            updateTilt(CGPoint(x: vm.globalX, y: vm.globalY))
-            if wt >= 1 { phase = .jumping; startedAt = now }
-        case .jumping:
-            let jt = min(1, now.timeIntervalSince(startedAt) / jumpDuration)
-            let e = 1 - (1 - jt) * (1 - jt)                // easeOut: fast off the water, settle
-            let arc = arcHeight * sin(.pi * jt)            // parabolic overshoot, 0 at both ends
-            vm.globalX = launchX + (cruiseX - launchX) * e
-            vm.globalY = waterY + (cruiseY - waterY) * e + arc
-            updateTilt(CGPoint(x: vm.globalX, y: vm.globalY))
-            if jt >= 1 { phase = .flying; travelStartedAt = now }
         case .flying:
             let te = now.timeIntervalSince(travelStartedAt)
             let progress = te / seconds
@@ -446,11 +305,14 @@ final class Flight {
             vm.globalX = approach(vm.globalX, dockCenterX, f)
             vm.globalY = approach(vm.globalY, dockCenterY, f)
             vm.tilt += (0 - vm.tilt) * 0.25              // level out when docked
+        case .entering:
+            if BannerMotion.enter(vm, t: now.timeIntervalSince(morphStartedAt)) {
+                phase = .flying
+                travelStartedAt = now
+            }
         case .exiting:
-            let f = approachFactor(0.16, dt)
-            vm.globalX = approach(vm.globalX, endX, f)
-            vm.tilt += (0 - vm.tilt) * 0.2
-            if abs(vm.globalX - endX) <= 4 { close() }
+            vm.globalX = approach(vm.globalX, dockCenterX, approachFactor(0.22, dt))
+            if BannerMotion.exit(vm, t: now.timeIntervalSince(morphStartedAt), dir: flightDir) { close(); return }
         }
         updateCapsuleLag(dt)
     }
@@ -491,7 +353,7 @@ final class Flight {
                 // Vertical slope only (direction-independent), so it works flying
                 // both left and right; the sub mirror handles the facing.
                 let raw = atan2(dy, abs(dx)) * 180 / .pi
-                let target = max(-34, min(34, raw * 0.7))
+                let target = max(-vm.tiltMax, min(vm.tiltMax, raw * 0.7))
                 vm.tilt += (target - vm.tilt) * 0.30
             }
         }
@@ -529,8 +391,14 @@ final class Flight {
     private func updateHover(_ now: Date) {
         if pinnedDocked { return }   // debug: never leave the docked pose
         let mouse = NSEvent.mouseLocation
-        let inside = capsuleHitRect(virtualFrame).contains(mouse)
-        for b in bands { b.ignoresMouseEvents = !inside }
+        var inside = capsuleHitRect(virtualFrame).contains(mouse)
+        if let ad = BannerDemo.autodock {
+            // Nur für Videos: Andocken nach Uhr statt nach Maus, Bänder bleiben durchklickbar.
+            let el = now.timeIntervalSince(createdAt)
+            inside = el >= ad.start && el < ad.start + ad.length
+        } else {
+            for b in bands { b.ignoresMouseEvents = !inside }
+        }
         if detailsOpen { return }    // pinned while the detail popover is open
         if inside != mouseInside {
             mouseInside = inside
@@ -540,7 +408,9 @@ final class Flight {
                 vm.docked = true
                 // Dock in place, nudged only as far as needed so the widened
                 // docked capsule (buttons) stays fully on the cursor's screen.
-                if let sf = (NSScreen.screens.first { $0.frame.contains(mouse) })?.frame {
+                if BannerDemo.autodock != nil {
+                    dockCenterX = vm.globalX; dockCenterY = vm.globalY
+                } else if let sf = (NSScreen.screens.first { $0.frame.contains(mouse) })?.frame {
                     dockCenterX = min(max(vm.globalX, sf.minX + 8), sf.maxX - BannerContentView.dockedWidthEstimate)
                     dockCenterY = vm.globalY
                 } else {
@@ -550,8 +420,15 @@ final class Flight {
         }
         if !inside, phase == .docked, now.timeIntervalSince(hoverChangedAt) >= 1.0 {
             vm.docked = false
-            phase = .exiting
+            beginExit(now)
         }
+    }
+
+    /// Abgang an Ort und Stelle: Kasten zieht sich zusammen, Motiv geht (BannerMotion.exit).
+    private func beginExit(_ now: Date) {
+        phase = .exiting
+        morphStartedAt = now
+        dockCenterX = vm.globalX; dockCenterY = vm.globalY
     }
 
     /// Clicking the capsule pins it and shows the details beneath it (Runde 19)
@@ -577,7 +454,6 @@ final class Flight {
         writeMotionLog()
         displayLink?.invalidate(); displayLink = nil
         backupTimer?.invalidate(); backupTimer = nil
-        closeEntrancePanels()
         // Banner-× while the popover is open: both go down together. Safe
         // against recursion, the popover's onClosed re-enters close(), which
         // the `closed` guard above swallows.
@@ -594,7 +470,8 @@ final class BannerPresenter {
     private var active: [Flight] = []
 
     func present(_ meeting: Meeting, leadMinutes: Int, seconds: Double, playSound: Bool,
-                dramaticEntrance: Bool = true, element: SkinElement = .water, pinnedDocked: Bool = false) {
+                element: SkinElement = .water, pinnedDocked: Bool = false,
+                subtitleOverride: String? = nil) {
         // Runde 56: Der NAME des Termins steht groß, die Vorwarnzeit klein
         // darunter. Vorher war es umgekehrt („Meeting in 2 min" groß), das ist
         // für jedes Banner derselbe Satz und beantwortet ausgerechnet die Frage
@@ -603,9 +480,8 @@ final class BannerPresenter {
         let vm = FlightVM(
             meeting: meeting,
             title: meeting.title,
-            subtitle: "\(lead) · \(meeting.timeLabel)",
+            subtitle: subtitleOverride ?? "\(lead) · \(meeting.timeLabel)",
             hasLink: meeting.joinURL != nil,
-            dramaticEntrance: dramaticEntrance,
             entranceElement: element
         )
         if let url = meeting.joinURL {

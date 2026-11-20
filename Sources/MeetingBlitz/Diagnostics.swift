@@ -144,7 +144,7 @@ enum Diagnostics {
         line("Neues-Meeting Notplatzierung",
              CreatePanelController.shared.lastRescueReason ?? "nicht nötig")
         for id in ["create", "settings"] {
-            let d = UserDefaults.standard.dictionary(forKey: "panelTopLeft_\(id)")
+            let d = UserDefaults.standard.dictionary(forKey: "panelTopLeftV2_\(id)")
             let v = d.flatMap { dict -> String? in
                 guard let x = dict["x"] as? Double, let y = dict["y"] as? Double else { return nil }
                 return String(format: "(%.0f | %.0f)", x, y)
@@ -171,6 +171,16 @@ enum Diagnostics {
         line("Neu verbinden nötig", g.needsReconnect)
         line("Meet-Routing", s.meetRoutingEnabled ? s.effectiveMeetAccount : "aus")
         line("Letzter Fehler", g.lastError ?? "-")
+        // Runde 109: nur Ja/Nein und Fehlercode, nie eine Adresse.
+        line("Mail an Gast", s.mailInviteEnabled ? "an" : "aus")
+        if s.mailInviteEnabled {
+            line("Scope gmail.send", g.canSendMail ? "ja" : "nein (Google neu verbinden)")
+            switch g.lastMailStatus {
+            case .sent: line("Letzte Mail", "gesendet")
+            case .failed(let f): line("Letzte Mail", "Fehler: \(f)")
+            case nil: line("Letzte Mail", "-")
+            }
+        }
 
         section("MCP")
         let mcp = MCPBridge.shared

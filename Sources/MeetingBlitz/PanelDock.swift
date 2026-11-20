@@ -38,7 +38,18 @@ enum PanelDock {
     static let companionBehavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
     /// Ursprung (unten links, AppKit-Koordinaten) für ein Panel dieser Größe.
-    static func origin(panelSize: CGSize, anchor: CGRect?, gap: CGFloat = 10) -> NSPoint {
+    /// Runde 110: `stage` = durchsichtiger Bühnenrand des Fensters, `anchor` = GLAS-Rahmen
+    /// des Nachbarn. Gerechnet wird mit dem Glas, der Rückgabewert ist der Fensterursprung.
+    /// `rightAnchor`: reicht links vom `anchor` der Platz nicht, steht das Fenster RECHTS von diesem Rahmen
+    /// (statt rechts vom `anchor`; z. B. Einstellungen links vom Termin-Fenster, sonst rechts vom Widget).
+    static func origin(panelSize full: CGSize, anchor: CGRect?, gap: CGFloat = Theme.s8, stage: CGFloat = 0,
+                       rightAnchor: CGRect? = nil) -> NSPoint {
+        let panelSize = CGSize(width: full.width - 2 * stage, height: full.height - 2 * stage)
+        let o = glassOrigin(panelSize: panelSize, anchor: anchor, gap: gap, rightAnchor: rightAnchor)
+        return NSPoint(x: o.x - stage, y: o.y - stage)
+    }
+
+    private static func glassOrigin(panelSize: CGSize, anchor: CGRect?, gap: CGFloat, rightAnchor: CGRect? = nil) -> NSPoint {
         guard let a = anchor else {
             let m = NSEvent.mouseLocation
             return NSPoint(x: (m.x - panelSize.width / 2).rounded(),
@@ -48,22 +59,34 @@ enum PanelDock {
 
         var x = a.minX - panelSize.width - gap                 // links daneben
         if x < vf.minX + 8 {
-            let right = a.maxX + gap                            // sonst rechts daneben
+            let right = (rightAnchor ?? a).maxX + gap           // sonst rechts daneben
             x = (right + panelSize.width <= vf.maxX - 8) ? right : a.midX - panelSize.width / 2
         }
         x = min(max(x, vf.minX + 8), vf.maxX - panelSize.width - 8)
 
         // Oben bündig mit dem Widget, dann in den sichtbaren Bereich klemmen.
-        let y = clampY(a.maxY - panelSize.height, height: panelSize.height, vf: vf)
+        // Runde 99: Das Widget hängt nur ~5 pt unter der Menüleiste. Mit dem
+        // normalen 8-pt-Rand säße das Panel dann 3 pt TIEFER als das Widget.
+        // Deshalb darf der Rand oben so klein sein wie der des Widgets.
+        let topMargin = max(0, min(8, vf.maxY - a.maxY))
+        let y = clampY(a.maxY - panelSize.height, height: panelSize.height, vf: vf, topMargin: topMargin)
         return NSPoint(x: x.rounded(), y: y.rounded())
     }
 
     /// Hält das Panel vollständig im sichtbaren Bereich. Ist es höher als der
     /// Bildschirm (Notfall), gewinnt die Unterkante, dort sitzt der Button.
-    static func clampY(_ y: CGFloat, height: CGFloat, vf: CGRect) -> CGFloat {
+    static func clampY(_ y: CGFloat, height: CGFloat, vf: CGRect, topMargin: CGFloat = 8) -> CGFloat {
         let lo = vf.minY + 8
-        let hi = vf.maxY - height - 8
+        let hi = vf.maxY - height - topMargin
         return hi < lo ? lo : min(max(y, lo), hi)
+    }
+
+    /// Runde 114 (Punkt 4): Liegen beide Rechtecke (Mittelpunkt) auf demselben Bildschirm? Ein Fenster, das der Nutzer
+    /// auf einen anderen Bildschirm gestellt hat, dockt nicht mehr ans Widget zurück.
+    static func sameScreen(_ a: CGRect, _ b: CGRect) -> Bool {
+        func scr(_ r: CGRect) -> NSScreen? { NSScreen.screens.first { $0.frame.contains(CGPoint(x: r.midX, y: r.midY)) } }
+        guard let sa = scr(a), let sb = scr(b) else { return true }
+        return sa == sb
     }
 
     static func visibleFrame(containing rect: CGRect) -> CGRect? {
@@ -82,7 +105,25 @@ enum PanelDock {
     /// Gespeichert wird die OBERE linke Ecke, nicht der AppKit-Ursprung: die
     /// Panelhöhe ändert sich beim Auf- und Zuklappen, die Oberkante ist das,
     /// was optisch stehen bleiben soll.
-    private static func key(_ id: String) -> String { "panelTopLeft_\(id)" }
+    /// Runde 110: Schlüssel V2 = Ecke des GLASES (nicht des Fensters mit Bühne).
+    /// Der alte Wert (Glas = Fenster) wird einmal übernommen und gelöscht.
+    private static func key(_ id: String) -> String {
+        let v2 = "panelTopLeftV2_\(id)", old = "panelTopLeft_\(id)"
+        let ud = UserDefaults.standard
+        if ud.object(forKey: v2) == nil, let o = ud.dictionary(forKey: old) { ud.set(o, forKey: v2) }
+        ud.removeObject(forKey: old)
+        return v2
+    }
+
+    /// Nur Fensterhöhe/-ursprung → Glas-Y klemmen (Bühnenrand zählt nicht zum sichtbaren Bereich).
+    static func clampedWindowY(frame f: CGRect, newHeight h: CGFloat? = nil, vf: CGRect, stage: CGFloat) -> CGFloat {
+        let height = h ?? f.height
+        let glassH = height - 2 * stage
+        let glassTop = f.maxY - stage
+        let top = max(0, min(8, vf.maxY - glassTop))
+        let y = clampY(glassTop - glassH, height: glassH, vf: vf, topMargin: top)
+        return y - stage
+    }
 
     static func storeTopLeft(_ p: NSPoint, id: String) {
         UserDefaults.standard.set(["x": Double(p.x), "y": Double(p.y)], forKey: key(id))
@@ -91,7 +132,12 @@ enum PanelDock {
     /// Gemerkter Ursprung für diese Panelgröße, oder nil, wenn es nichts
     /// Gemerktes gibt oder die Position auf keinem angeschlossenen Bildschirm
     /// mehr liegt (Monitor abgesteckt, Auflösung geändert).
-    static func savedOrigin(panelSize: CGSize, id: String) -> NSPoint? {
+    static func savedOrigin(panelSize full: CGSize, id: String, anchor: CGRect? = nil, stage: CGFloat = 0) -> NSPoint? {
+        let panelSize = CGSize(width: full.width - 2 * stage, height: full.height - 2 * stage)
+        // Runde 99: Ist das Widget offen, gilt IMMER der Platz neben dem Widget
+        // (Oberkante exakt gleich, Abstand s8). Die gemerkte Position greift nur
+        // noch, wenn das Widget zu ist.
+        if anchor != nil { return nil }
         guard let d = UserDefaults.standard.dictionary(forKey: key(id)),
               let storedX = d["x"] as? Double, let storedTop = d["y"] as? Double
         else { return nil }
@@ -104,7 +150,7 @@ enum PanelDock {
 
         let clampedX = min(max(x, vf.minX + 8), vf.maxX - panelSize.width - 8)
         let y = clampY(top - panelSize.height, height: panelSize.height, vf: vf)
-        return NSPoint(x: clampedX.rounded(), y: y.rounded())
+        return NSPoint(x: clampedX.rounded() - stage, y: y.rounded() - stage)
     }
 
     /// Letzte Instanz kurz nach dem Öffnen: Liegt das Panel trotz aller
@@ -152,6 +198,7 @@ enum PanelDock {
     /// nimmt wieder den Automatik-Platz neben dem Widget.
     static func forgetPositions() {
         for id in ["create", "settings"] { UserDefaults.standard.removeObject(forKey: key(id)) }
+        for id in ["create", "settings"] { UserDefaults.standard.removeObject(forKey: "panelTopLeft_\(id)") }
     }
 }
 
@@ -210,15 +257,20 @@ enum PanelRescue {
 @MainActor
 final class PanelMoveRecorder: NSObject, NSWindowDelegate {
     private let id: String
+    /// Runde 110: Bühnenrand; gespeichert wird die Ecke des Glases.
+    private let stage: CGFloat
     /// Während wir das Fenster SELBST verschieben (Panel wächst beim Aufklappen)
     /// darf nichts gespeichert werden, sonst wandert die gemerkte Position mit
     /// jedem Auf- und Zuklappen davon (Runde 47i).
     var suspended = false
+    /// Runde 111 (Fund 11): vom Nutzer gezogen → der Controller dockt nicht mehr automatisch an.
+    var onUserMove: (() -> Void)?
 
-    init(id: String) { self.id = id }
+    init(id: String, stage: CGFloat = 0) { self.id = id; self.stage = stage }
 
     func windowDidMove(_ notification: Notification) {
         guard !suspended, let w = notification.object as? NSWindow else { return }
-        PanelDock.storeTopLeft(NSPoint(x: w.frame.minX, y: w.frame.maxY), id: id)
+        onUserMove?()
+        PanelDock.storeTopLeft(NSPoint(x: w.frame.minX + stage, y: w.frame.maxY - stage), id: id)
     }
 }

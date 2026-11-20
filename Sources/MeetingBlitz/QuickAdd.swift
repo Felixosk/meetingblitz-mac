@@ -9,6 +9,26 @@ struct ParsedEvent: Equatable {
     /// nackte Zahl da („call 22"), das kann auch ein Namensbestandteil sein.
     /// Die Vorschau färbt das ein, statt es zu verschweigen.
     var confident: Bool
+    /// Runde 86: „17:00 manila" → die Uhrzeit gilt in dieser Zone.
+    var zoneID: String? = nil
+}
+
+/// Runde 113: Ergebnis von `QuickAdd.scan` (Teile mit Position im ORIGINALTEXT).
+struct QuickScan {
+    enum Kind { case day, time, duration, zone }
+    var tokens: [(range: NSRange, kind: Kind)] = []
+    /// Aufgelöster Tag (Beginn des Tages), wenn ein Tag oder eine Zeit genannt ist.
+    var day: Date?
+    var hour: Int?
+    var minute: Int = 0
+    /// Voller Beginn, nur wenn eine Uhrzeit erkannt wurde.
+    var start: Date?
+    var minutes: Int?
+    var zoneID: String?
+    var title: String
+    var confident = false
+    /// Es stand ein Tageswort ("fr", "morgen") da.
+    var dayWord = false
 }
 
 /// Freitext zu Termin (F8): „fr 10-12 call mit chris", „morgen 14 uhr standup".
@@ -36,101 +56,158 @@ enum QuickAdd {
         ("sonntag", 1), ("sunday", 1), ("so", 1), ("sun", 1),
     ]
 
-    static func parse(_ raw: String, now: Date, calendar cal: Calendar = .current) -> ParsedEvent? {
-        var text = " " + raw.trimmingCharacters(in: .whitespacesAndNewlines) + " "
-        guard text.count > 1 else { return nil }
+    /// Runde 113 (B1): Erkennung MIT Positionen im Originaltext. Treffer werden durch gleich viele Leerzeichen ersetzt
+    /// (nicht gelöscht), damit die Bereiche für die Markierung im Feld gültig bleiben.
+    static func scan(_ raw: String, now: Date, calendar baseCal: Calendar = .current,
+                     zones: [String: String]? = nil) -> QuickScan {
+        var cal = baseCal
+        var out = QuickScan(title: raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        // 1 Zeichen Polster links, damit `(?<![\w])` am Anfang trifft; Position im Original = Position − 1.
+        var text = " " + raw + " "
+        guard text.count > 2 else { return out }
 
-        // 1. Tag. Ohne Angabe: heute (bzw. morgen, wenn die Zeit schon vorbei ist).
+        func blank(_ r: Range<String.Index>, _ kind: QuickScan.Kind) {
+            let ns = NSRange(r, in: text)
+            // Leerraum am Rand nicht mitmarkieren.
+            var loc = ns.location, len = ns.length
+            let u = Array(text.utf16)
+            while len > 0, u[loc] == 32 { loc += 1; len -= 1 }
+            while len > 0, u[loc + len - 1] == 32 { len -= 1 }
+            if len > 0 { out.tokens.append((NSRange(location: loc - 1, length: len), kind)) }
+            text.replaceSubrange(r, with: String(repeating: " ", count: text[r].count))
+        }
+
+        // 1. Tag.
         var dayOffset: Int?
         var weekday: Int?
         for (word, off) in [("übermorgen", 2), ("uebermorgen", 2), ("day after tomorrow", 2),
                             ("morgen", 1), ("tomorrow", 1), ("heute", 0), ("today", 0)] {
-            if let r = find(word, in: text) { text.removeSubrange(r); dayOffset = off; break }
+            if let r = find(word, in: text) { blank(r, .day); dayOffset = off; break }
         }
         if dayOffset == nil {
             for (word, wd) in weekdays.sorted(by: { $0.0.count > $1.0.count }) {
-                if let r = find(word, in: text) { text.removeSubrange(r); weekday = wd; break }
+                if let r = find(word, in: text) { blank(r, .day); weekday = wd; break }
             }
         }
 
-        // 2. Zeit: erst Bereich („10-12", „9:30 – 11"), sonst Einzelzeit.
+        // 2. Zeit.
         var startH: Int?, startM = 0, endH: Int?, endM = 0
-        var confident = false
-        // „16-17", „9:30 – 11", aber AUCH „16 uhr bis 17 uhr": das Wort zwischen
-        // Zahl und Trenner muss erlaubt sein, sonst bleibt „bis 17 uhr" im
-        // Titel stehen und die Dauer fällt auf 30 Minuten zurück.
+        var timePos: Int?
         if let m = firstMatch(#"(\d{1,2})(?::(\d{2}))?\s*(?:uhr|h|am|pm)?\s*(?:-|–|bis|to|until)\s*(\d{1,2})(?::(\d{2}))?\s*(?:uhr|h|am|pm)?"#, text) {
             startH = Int(m.groups[0] ?? ""); startM = Int(m.groups[1] ?? "") ?? 0
             endH = Int(m.groups[2] ?? ""); endM = Int(m.groups[3] ?? "") ?? 0
-            text.removeSubrange(m.range); confident = true
-        } else if let m = firstMatch(#"(\d{1,2})(?::(\d{2}))\s*(uhr|h)?"#, text) {
-            // Mit Doppelpunkt ist es eindeutig eine Uhrzeit.
+            timePos = text.distance(from: text.startIndex, to: m.range.lowerBound); blank(m.range, .time)
+        } else if let m = firstMatch(#"(\d{1,2})(?::(\d{2}))\s*(uhr|h|am|pm)?"#, text) {
             startH = Int(m.groups[0] ?? ""); startM = Int(m.groups[1] ?? "") ?? 0
-            text.removeSubrange(m.range); confident = true
+            // Runde 114: "7:30 pm" ist 19:30 (vorher las die Erkennung am/pm hinter Minuten nicht).
+            let suffix = (m.groups[2] ?? "").lowercased()
+            if suffix == "pm", let h = startH, h < 12 { startH = h + 12 }
+            if suffix == "am", startH == 12 { startH = 0 }
+            timePos = text.distance(from: text.startIndex, to: m.range.lowerBound); blank(m.range, .time)
         } else if let m = firstMatch(#"(\d{1,2})\s*(uhr|am|pm|a\.m\.|p\.m\.)"#, text) {
-            // „14 uhr", „3pm" — das Wort macht es eindeutig.
             startH = Int(m.groups[0] ?? "")
             let suffix = (m.groups[1] ?? "").lowercased()
             if suffix.hasPrefix("p"), let h = startH, h < 12 { startH = h + 12 }
             if suffix.hasPrefix("a"), startH == 12 { startH = 0 }
-            text.removeSubrange(m.range); confident = true
+            timePos = text.distance(from: text.startIndex, to: m.range.lowerBound); blank(m.range, .time)
         } else if let m = firstMatch(#"(?<![\w:])(\d{1,2})(?![\w:])"#, text) {
-            // Nackte Zahl: könnte die Uhrzeit sein, könnte auch zum Titel
-            // gehören („Call 2"). Übernehmen, aber als unsicher markieren.
+            // Runde 113: eine nackte Zahl ist NUR eine Uhrzeit, wenn direkt davor ein Tag oder "um/at" steht
+            // ("fr 10 call", "call at 3"). Sonst bleibt sie im Titel ("Call 2").
             let h = Int(m.groups[0] ?? "") ?? 99
-            if (0...23).contains(h) { startH = h; text.removeSubrange(m.range); confident = false }
+            let before = String(text[text.startIndex..<m.range.lowerBound])
+            let prevWord = before.split(whereSeparator: { $0 == " " }).last.map(String.init)?.lowercased()
+            let L = NSRange(m.range, in: text).location
+            let u = Array(text.utf16)
+            let dayBefore = out.tokens.contains { t in
+                guard t.kind == .day else { return false }
+                let end = t.range.location + 1 + t.range.length
+                return end <= L && (end..<L).allSatisfy { u[$0] == 32 }
+            }
+            if (0...23).contains(h), dayBefore || prevWord == "um" || prevWord == "at" {
+                startH = h; timePos = text.distance(from: text.startIndex, to: m.range.lowerBound); blank(m.range, .time)
+            }
         }
-        guard let hour = startH, (0...23).contains(hour), (0...59).contains(startM) else { return nil }
+        // „um"/„at" direkt vor der Zeit gehören zum Zeit-Teil, nicht zum Titel (nur Titelrand-Bereinigung unten).
 
-        // 3. Dauer („1,5h", „45min", „1 std"), sonst aus dem Bereich, sonst 30.
+        // 2b. Zone direkt hinter der Zeit.
+        var zoneID: String?
+        if startH != nil, let pos = timePos, pos <= text.count {
+            let table = zones ?? ZoneNames.quickAddTable()
+            let rest = String(text[text.index(text.startIndex, offsetBy: pos)...])
+            for key in table.keys.sorted(by: { $0.count > $1.count }) {
+                let pattern = #"^\s*(?:in\s+)?\(?"# + NSRegularExpression.escapedPattern(for: key) + #"\)?(?![\wäöüß])"#
+                if let m = firstMatch(pattern, rest), let id = table[key], let tz = TimeZone(identifier: id) {
+                    let from = text.index(text.startIndex, offsetBy: pos)
+                    let len = rest.distance(from: rest.startIndex, to: m.range.upperBound)
+                    blank(from..<text.index(from, offsetBy: len), .zone)
+                    zoneID = id
+                    cal.timeZone = tz
+                    break
+                }
+            }
+        }
+
+        // 3. Dauer.
         var minutes: Int?
         if let m = firstMatch(#"(\d+(?:[.,]\d+)?)\s*(stunden|stunde|std|hrs|hr|h)(?![\w])"#, text) {
             let v = Double((m.groups[0] ?? "0").replacingOccurrences(of: ",", with: ".")) ?? 0
-            if v > 0 { minutes = Int(v * 60); text.removeSubrange(m.range) }
+            if v > 0 { minutes = Int(v * 60); blank(m.range, .duration) }
         } else if let m = firstMatch(#"(\d{1,3})\s*(minuten|minute|mins|min|m)(?![\w])"#, text) {
-            if let v = Int(m.groups[0] ?? ""), v > 0 { minutes = v; text.removeSubrange(m.range) }
+            if let v = Int(m.groups[0] ?? ""), v > 0 { minutes = v; blank(m.range, .duration) }
         }
-        if minutes == nil, let eh = endH {
-            var diff = (eh * 60 + endM) - (hour * 60 + startM)
-            if diff <= 0 { diff += 24 * 60 }        // „22-1" = über Mitternacht
+        if minutes == nil, let eh = endH, let sh = startH {
+            var diff = (eh * 60 + endM) - (sh * 60 + startM)
+            if diff <= 0 { diff += 24 * 60 }
             minutes = diff
         }
+        out.minutes = minutes
+        out.zoneID = zoneID
 
-        // 4. Datum zusammensetzen.
+        // 4. Datum (nur wenn Tag oder Zeit da sind).
         let today = cal.startOfDay(for: now)
         var day = today
         if let off = dayOffset {
             day = cal.date(byAdding: .day, value: off, to: today) ?? today
         } else if let wd = weekday {
-            // Nächster Tag mit diesem Wochentag, heute eingeschlossen.
             for i in 0..<7 {
                 let d = cal.date(byAdding: .day, value: i, to: today) ?? today
                 if cal.component(.weekday, from: d) == wd { day = d; break }
             }
         }
-        var start = cal.date(bySettingHour: hour, minute: startM, second: 0, of: day) ?? day
-        // Ohne Tagesangabe und die Zeit ist heute schon vorbei: morgen meinen.
-        if dayOffset == nil, weekday == nil, start <= now {
-            start = cal.date(byAdding: .day, value: 1, to: start) ?? start
+        if let hour = startH, (0...23).contains(hour), (0...59).contains(startM) {
+            out.hour = hour; out.minute = startM
+            var start = cal.date(bySettingHour: hour, minute: startM, second: 0, of: day) ?? day
+            if dayOffset == nil, weekday == nil, start <= now { start = cal.date(byAdding: .day, value: 1, to: start) ?? start }
+            if let wd = weekday, cal.component(.weekday, from: start) == wd, start <= now {
+                start = cal.date(byAdding: .day, value: 7, to: start) ?? start
+            }
+            out.start = start
+            out.day = cal.startOfDay(for: start)
+        } else if dayOffset != nil || weekday != nil {
+            // Nur ein Tag: Wochentag in der Vergangenheit von heute aus nach vorn.
+            out.day = day
         }
-        // Wochentag genannt, aber die Zeit heute schon vorbei: nächste Woche.
-        if let wd = weekday, cal.component(.weekday, from: start) == wd, start <= now {
-            start = cal.date(byAdding: .day, value: 7, to: start) ?? start
-        }
+        out.confident = out.hour != nil
+        out.dayWord = dayOffset != nil || weekday != nil
 
-        // 5. Rest ist der Titel: Füllwörter am Rand weg, Rest unverändert lassen.
+        // 5. Titel.
         var title = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
         for filler in ["um", "at", "von", "from", "ab"] {
             if title.lowercased().hasPrefix(filler + " ") { title = String(title.dropFirst(filler.count + 1)) }
             if title.lowercased().hasSuffix(" " + filler) { title = String(title.dropLast(filler.count + 1)) }
         }
-        title = title.trimmingCharacters(in: CharacterSet(charactersIn: " ,;:-–"))
+        out.title = title.trimmingCharacters(in: CharacterSet(charactersIn: " ,;:-–"))
+        out.tokens.sort { $0.range.location < $1.range.location }
+        return out
+    }
 
-        return ParsedEvent(title: title,
-                           start: start,
-                           minutes: max(5, minutes ?? defaultMinutes),
-                           confident: confident)
+    static func parse(_ raw: String, now: Date, calendar baseCal: Calendar = .current,
+                      zones: [String: String]? = nil) -> ParsedEvent? {
+        let sc = scan(raw, now: now, calendar: baseCal, zones: zones)
+        guard let start = sc.start else { return nil }
+        return ParsedEvent(title: sc.title, start: start, minutes: max(5, sc.minutes ?? defaultMinutes),
+                           confident: true, zoneID: sc.zoneID)
     }
 
     // MARK: - Kleine Helfer

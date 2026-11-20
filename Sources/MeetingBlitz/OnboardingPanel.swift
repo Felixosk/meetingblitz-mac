@@ -38,6 +38,9 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
 
     var isOpen: Bool { panel?.isVisible == true }
 
+    /// ✕ in der Kopfzeile.
+    func closeByUser() { panel?.close() }
+
     func show(state: AppState) {
         if let p = panel, p.isVisible {
             p.makeKeyAndOrderFront(nil)
@@ -45,22 +48,31 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
         }
         let hosting = NSHostingView(rootView: OnboardingPane(
             state: state,
-            onFinish: { Task { @MainActor in OnboardingPanelController.shared.finish(state: state) } }))
+            onFinish: { Task { @MainActor in OnboardingPanelController.shared.finish(state: state) } },
+            onClose: { Task { @MainActor in OnboardingPanelController.shared.closeByUser() } },
+            onHeight: { h in DispatchQueue.main.async { MainActor.assumeIsolated { OnboardingPanelController.shared.setGlassHeight(h) } } }))
         hosting.layoutSubtreeIfNeeded()
 
         // Feste Größe statt fittingSize: Der Inhalt wechselt pro Schritt, und
         // ein Panel, das bei jedem „Weiter" springt, wirkt kaputt. Die Höhe
         // fasst den längsten Schritt.
-        let size = NSSize(width: 470, height: 560)
-        let p = NSPanel(contentRect: NSRect(origin: .zero, size: size),
-                        styleMask: [.titled, .closable, .utilityWindow],
+        let size = NSSize(width: Theme.welcomeWidth + 2 * Theme.stageInset, height: Theme.welcomeHeight + 2 * Theme.stageInset)
+        let p = ThemePanel(contentRect: NSRect(origin: .zero, size: size),
+                        styleMask: [.titled, .closable, .utilityWindow, .fullSizeContentView],
                         backing: .buffered, defer: false)
         p.title = L.t("Willkommen bei MeetingBlitz", "Welcome to MeetingBlitz")
+        // Runde 98: Glas wie die anderen Fenster; Esc schließt nur, wenn die
+        // Einrichtung schon einmal fertig war (sonst würde man sie versehentlich überspringen).
+        p.titlebarAppearsTransparent = true
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.onEscape = { [weak p] in if AppState.shared.onboardingDone { p?.close() } }
         p.isReleasedWhenClosed = false
         // Gleiche Ebene wie Widget und Einstellungen. Mit `.floating` lag der
         // Einstieg HINTER dem Einstellungs-Panel (`.popUpMenu`), ausgerechnet
         // beim „Nochmal zeigen", das ja von dort aus aufgerufen wird.
-        p.level = .popUpMenu
+        p.level = .floating
+        // Runde 115: Aussehen kommt von NSApp.appearance (Look.apply).
         p.hidesOnDeactivate = false
         p.becomesKeyOnlyIfNeeded = false
         // Wie beim Widget: ohne das erscheint der Einstieg bei laufender
@@ -68,11 +80,12 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
         // nicht (22.08.2026, Begründung in PanelDock).
         p.collectionBehavior = PanelDock.companionBehavior
         p.contentView = hosting
+        Theme.installStage(in: p)
         p.delegate = self
         self.state = state
         // Das Einstellungsfenster aus dem Weg räumen: Der Einstieg erklärt die
         // Einstellungen, da soll er nicht mit ihnen um den Platz streiten.
-        SettingsPanelController.shared.close()
+        // Runde 111b (B6): Widget und Einstellungen bleiben offen, das Willkommen liegt mittig darüber.
         centerOnMouseScreen(p, size: size)
         // Eine Accessory-App steht nie im Vordergrund. Ohne dieses activate
         // erscheint der Einstieg hinter dem Fenster, in dem der Nutzer gerade
@@ -106,7 +119,27 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
                                  y: (vf.midY - size.height / 2).rounded()))
     }
 
+    private var pendingShrink: DispatchWorkItem?
+    /// Runde 112 (Fund 9): Fensterhöhe folgt dem Schritt, Oberkante bleibt; Wachsen sofort, Schrumpfen nach der Feder.
+    func setGlassHeight(_ h: CGFloat) {
+        guard let p = panel else { return }
+        let target = h + 2 * Theme.stageInset
+        let old = p.frame
+        guard abs(target - old.height) > 0.5 else { return }
+        let apply = { [weak p] in
+            guard let p else { return }
+            let f = p.frame
+            (p as? ThemePanel)?.setFrameFromController(NSRect(x: f.minX, y: f.maxY - target, width: f.width, height: target), display: true)
+        }
+        pendingShrink?.cancel()
+        if target < old.height {
+            let w = DispatchWorkItem(block: apply); pendingShrink = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + Theme.foldSettle, execute: w)
+        } else { apply() }
+    }
+
     func close() {
+        pendingShrink?.cancel()
         panel?.delegate = nil          // sonst feuert windowWillClose beim Aufräumen
         panel?.orderOut(nil)
         panel?.contentView = nil
@@ -119,6 +152,7 @@ final class OnboardingPanelController: NSObject, NSWindowDelegate {
 struct OnboardingPane: View {
     @ObservedObject var state: AppState
     let onFinish: () -> Void
+    var onClose: (() -> Void)? = nil
 
     /// Startschritt, damit sich jeder Schritt einzeln prüfen lässt:
     /// `--demo-onboarding --onboarding-step=2`. Ohne das ist die Optik der
@@ -132,7 +166,29 @@ struct OnboardingPane: View {
     /// ein Einstiegsschritt dafür eine Anleitung für einen Knopf, den es beim
     /// Empfänger gar nicht gibt.
     private var hasGoogleStep: Bool { google.hasConfig }
-    private var lastStep: Int { hasGoogleStep ? 4 : 3 }
+    /// Runde 111b (B6): vier Schritte (ohne Google-Konfiguration drei): Kalender, Google Meet, So planst du ein Meeting, Fertig.
+    private enum Step { case calendar, google, plan, done }
+    private var steps: [Step] { hasGoogleStep ? [.calendar, .google, .plan, .done] : [.calendar, .plan, .done] }
+    private var lastStep: Int { steps.count - 1 }
+    var onHeight: ((CGFloat) -> Void)? = nil
+
+    /// Runde 116: gemessene Inhaltshöhe von Schritt 2/3 (statt fester Zahl); Rest = Rand + Teiler + Knopfzeile.
+    @State private var measuredPlan: CGFloat = 0
+    @State private var measuredGoogle: CGFloat = 0
+    private var footerFixed: CGFloat { Theme.s16 * 2 + Theme.s8 * 2 + 1 + Theme.rowHeight }
+    /// Runde 112 (Fund 9): Höhe je Schritt (Glas), keine leeren zwei Drittel.
+    private var stepHeight: CGFloat {
+        let footer: CGFloat = 70 + Theme.s16 * 2
+        switch steps[min(step, lastStep)] {
+        case .calendar:
+            let base: CGFloat = state.calendarAuthorized ? 200 : 330
+            let list: CGFloat = state.calendarAuthorized && !state.availableCalendars.isEmpty ? min(CGFloat(state.availableCalendars.count), 8) * 28 + 40 : 0
+            return base + list + footer - 70
+        case .google: return measuredGoogle > 0 ? measuredGoogle + footerFixed : 270 + footer - 70
+        case .plan: return measuredPlan > 0 ? measuredPlan + footerFixed : 340 + footer - 70
+        case .done: return 250 + footer - 70
+        }
+    }
 
     static var initialStep: Int {
         for a in CommandLine.arguments where a.hasPrefix("--onboarding-step=") {
@@ -143,201 +199,135 @@ struct OnboardingPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Fortschritt: vier Punkte, damit klar ist, wie lang das noch geht.
-            HStack(spacing: 6) {
-                ForEach(0...lastStep, id: \.self) { i in
-                    Capsule()
-                        .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
-                        .frame(width: i == step ? 18 : 6, height: 6)
-                        .animation(.easeInOut(duration: 0.2), value: step)
-                }
-                Spacer()
-                Picker("", selection: $state.appLanguage) {
-                    Text("EN").tag("en")
-                    Text("DE").tag("de")
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 90)
-            }
-            .padding(.bottom, 14)
-
+            // Runde 110b (U3): keine Platzhalter-Zeile mehr, die Überschrift steht auf Glas-y 16.
             Group {
-                switch step {
-                case 0: welcomeStep
-                case 1: accessStep
-                case 2: calendarStep
-                case 3 where hasGoogleStep: googleStep
-                default: finishStep
+                switch steps[min(step, lastStep)] {
+                case .calendar: calendarStep
+                case .google: googleStep
+                case .plan: planStep
+                case .done: finishStep
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            Divider().padding(.vertical, 10)
+            ThemeDivider().padding(.vertical, Theme.s8)
 
-            HStack {
-                if step > 0 {
-                    Button(L.t("Zurück", "Back")) {
-                        withAnimation(.easeInOut(duration: 0.15)) { step -= 1 }
+            // Fortschritt als Seitenzähler mittig zwischen Zurück und Weiter, auf deren Mittellinie.
+            ZStack {
+                HStack {
+                    if step > 0 {
+                        ThemeTextRow(title: L.t("Zurück", "Back"), fullWidth: false) {
+                            withAnimation(.easeInOut(duration: 0.15)) { step -= 1 }
+                        }
                     }
-                    .buttonStyle(.borderless)
-                }
-                Spacer()
-                if step < lastStep {
-                    Button(L.t("Weiter", "Next")) {
-                        withAnimation(.easeInOut(duration: 0.15)) { step += 1 }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                } else {
-                    Button(L.t("Fertig", "Done"), action: onFinish)
+                    Spacer()
+                    if step < lastStep {
+                        ThemePrimaryButton(title: L.t("Weiter", "Continue")) {
+                            withAnimation(.easeInOut(duration: 0.15)) { step += 1 }
+                        }
+                        .frame(width: 140)
                         .keyboardShortcut(.defaultAction)
-                }
-            }
-        }
-        .padding(18)
-        .frame(width: 470, height: 560)
-    }
-
-    // MARK: Schritt 1, was das ist und wo es wohnt
-
-    private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            title(L.t("Ein U-Boot warnt dich vor jedem Termin",
-                      "A submarine warns you before every meeting"))
-            body(L.t("""
-                Kurz bevor ein Termin aus deinem Apple-Kalender startet, fliegt ein \
-                Banner über alle Bildschirme. Überschneidende Termine bekommen jeder \
-                ihre eigene Warnung.
-                """, """
-                Shortly before an event from your Apple Calendar starts, a banner flies \
-                across all your screens. Overlapping meetings each get their own warning.
-                """))
-
-            // Der wichtigste Satz des ganzen Einstiegs.
-            calloutBox(icon: "menubar.arrow.up.rectangle",
-                       text: L.t("""
-                           Wichtig: Diese App hat kein Fenster und kein Dock-Symbol. \
-                           Sie lebt oben rechts in der Menüleiste. Klicke dort auf das \
-                           U-Boot, um deinen Tag zu sehen.
-                           """, """
-                           Important: this app has no window and no dock icon. It lives \
-                           in the menu bar, top right. Click the submarine there to see \
-                           your day.
-                           """))
-        }
-    }
-
-    // MARK: Schritt 2, Kalenderzugriff
-
-    private var accessStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            title(L.t("Zugriff auf deinen Kalender", "Access to your calendar"))
-            body(L.t("""
-                Ohne Kalenderfreigabe sieht MeetingBlitz keine Termine und kann nichts \
-                anzeigen. Die Daten bleiben auf deinem Mac, es wird nichts hochgeladen.
-                """, """
-                Without calendar access MeetingBlitz sees no events and can't show \
-                anything. Your data stays on your Mac, nothing is uploaded.
-                """))
-
-            if state.calendarAuthorized {
-                statusRow(ok: true, text: L.t("Zugriff erteilt", "Access granted"))
-            } else {
-                Button(L.t("Zugriff erlauben", "Allow access")) {
-                    Task { await state.requestCalendarAccess() }
-                }
-                .buttonStyle(.borderedProminent)
-
-                statusRow(ok: false, text: L.t("Noch kein Zugriff", "No access yet"))
-
-                // Zweiter Weg: Nach einem versehentlichen „Nicht erlauben"
-                // fragt macOS NIE wieder von selbst. Ohne diesen Knopf ist der
-                // Nutzer an dieser Stelle gestrandet.
-                Button(L.t("Systemeinstellungen öffnen", "Open System Settings")) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
-                        NSWorkspace.shared.open(url)
+                    } else {
+                        ThemePrimaryButton(title: L.t("Fertig", "Done"), action: onFinish)
+                            .frame(width: 140)
+                            .keyboardShortcut(.defaultAction)
                     }
                 }
-                .buttonStyle(.link)
-                body(L.t("""
-                    Falls du versehentlich „Nicht erlauben" geklickt hast: macOS fragt \
-                    danach nicht noch einmal. Setz den Haken bei MeetingBlitz unter \
-                    Datenschutz & Sicherheit → Kalender.
-                    """, """
-                    If you accidentally clicked "Don't Allow": macOS won't ask again. \
-                    Tick MeetingBlitz under Privacy & Security → Calendars.
-                    """))
+                HStack(spacing: Theme.s8) {
+                    ForEach(0...lastStep, id: \.self) { i in
+                        Capsule()
+                            .fill(i == step ? Theme.blue : Theme.line)
+                            .frame(width: i == step ? 18 : 6, height: 6)
+                            .animation(.easeInOut(duration: 0.2), value: step)
+                    }
+                }
+                .allowsHitTesting(false)
             }
-
-            // Wer die App selbst aus dem Quellcode baut: ohne eigenes Zertifikat ist
-            // jeder Rebuild für macOS eine neue App, und genau diese Freigabe ist
-            // danach wieder weg. Mit einem stabilen eigenen Zertifikat (siehe
-            // signing.local.example) bleibt sie über Updates hinweg erhalten.
-            Divider().padding(.vertical, 4)
-            body(L.t("""
-                Baust du die App selbst aus dem Quellcode: ein Rebuild ohne eigenes \
-                Zertifikat setzt diese Freigabe bei jedem Update wieder zurück. \
-                Anleitung dazu in signing.local.example im Repo.
-                """, """
-                Building the app yourself from source: a rebuild without your own \
-                certificate resets this permission on every update. See \
-                signing.local.example in the repo for setup.
-                """))
+            .frame(height: Theme.rowHeight)   // gleich hoch mit und ohne "Zurück": der Weiter-Knopf springt nicht
         }
+        .toggleStyle(ThemeToggleStyle())
+        .padding(.horizontal, Theme.s16).padding(.bottom, Theme.s16).padding(.top, Theme.s16)
+        .frame(width: Theme.welcomeWidth, height: stepHeight)
+        .onChange(of: stepHeight, initial: true) { _, h in onHeight?(h) }
+        .background(ThemeGlass())   // Runde 116: gleiches Glas wie alle Fenster
+        .themeDragHeader()
+        .themeCloseCorner { onClose?() }
+        .padding(Theme.stageInset)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea()   // Runde 103: Kopfzeile sitzt exakt 16 pt unter der Fensterkante
     }
 
     // MARK: Schritt 3, welche Kalender
 
     private var calendarStep: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            title(L.t("Deine Kalender", "Your calendars"))
-            body(L.t("""
-                Fremde Kalender lässt man oft sichtbar, will davon aber kein U-Boot und \
-                keine Geburtstage. Alles hier ist später in den Einstellungen änderbar.
-                """, """
-                Shared calendars are often worth seeing without a submarine for every \
-                entry. All of this is changeable later in settings.
-                """))
+        VStack(alignment: .leading, spacing: Theme.s8) {
+            HStack(alignment: .firstTextBaseline) {
+                title(L.t("Dein Kalender", "Your calendar"))
+                Spacer(minLength: Theme.s8)
+                // Sprache klein oben rechts.
+                SegPick(options: [("EN", "en"), ("DE", "de")], selection: $state.appLanguage, fill: false).fixedSize()
+            }
+            body(L.t("MeetingBlitz zeigt dir dein nächstes Meeting und legt neue mit einem Klick an. Termine bleiben auf deinem Mac, Meet-Links kommen von Google.",
+                     "MeetingBlitz shows your next meeting and creates new ones with one click. Your events stay on your Mac, Meet links come from Google."))
 
-            if state.availableCalendars.isEmpty {
-                body(L.t("Noch keine Kalender sichtbar, erteile im Schritt davor den Zugriff.",
-                         "No calendars yet, grant access in the previous step."))
+            if !state.calendarAuthorized {
+                ThemePrimaryButton(title: L.t("Zugriff erlauben", "Allow access")) {
+                    Task { await state.requestCalendarAccess() }
+                }
+                statusRow(ok: false, text: L.t("Noch kein Zugriff", "No access yet"))
+                // Nach einem versehentlichen „Nicht erlauben" fragt macOS NIE wieder von selbst.
+                ThemeTextRow(title: L.t("Systemeinstellungen öffnen", "Open System Settings"),
+                             accent: true, fullWidth: false) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .themeRowList()
+                body(L.t("Falls du „Nicht erlauben“ geklickt hast: macOS fragt nicht noch einmal. Setz den Haken bei MeetingBlitz unter Datenschutz & Sicherheit → Kalender.",
+                         "If you clicked “Don’t Allow”: macOS won’t ask again. Tick MeetingBlitz under Privacy & Security → Calendars."))
             } else {
+                statusRow(ok: true, text: L.t("Zugriff erteilt", "Access granted"))
+            }
+
+            if state.calendarAuthorized, !state.availableCalendars.isEmpty {
                 // Beschriftete Spalten: drei nackte Häkchen nebeneinander sind
                 // sonst nicht zu erraten (dieselbe Kopfzeile wie in den
                 // Einstellungen, damit man es nur einmal lernen muss).
                 HStack(spacing: 0) {
-                    Text(L.t("Kalender", "Calendar"))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(L.t("Zeigen", "Show")).frame(width: 46)
-                    Text("🔔").frame(width: 34)
-                    Text("🎂").frame(width: 34)
+                    Text(L.t("Kalender", "Calendar")).frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach([("eye", L.t("Zeigen", "Show"), 46), ("bell", L.t("Banner", "Banner"), 40), ("gift", L.t("Geburtstage", "Birthdays"), 40)], id: \.0) { sym, name, w in
+                        VStack(spacing: 1) {
+                            Image(systemName: sym).font(.theme(.small, .semibold))
+                            Text(name).font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .frame(width: CGFloat(w))
+                    }
                 }
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                .font(.theme(.small))
+                .foregroundStyle(Theme.muted)
                 .padding(.trailing, 14)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: Theme.s4) {
                         ForEach(state.availableCalendars) { c in
                             HStack(spacing: 0) {
-                                HStack(spacing: 6) {
+                                HStack(spacing: Theme.s8) {
                                     Circle().fill(c.color).frame(width: 8, height: 8)
-                                    Text(c.title).font(.system(size: 12)).lineLimit(1)
+                                    Text(c.title).font(.theme(.normal)).lineLimit(1)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 Toggle("", isOn: Binding(
                                     get: { state.selectedCalendarIDs.contains(c.id) },
                                     set: { _ in state.toggleCalendar(c.id) }
-                                )).labelsHidden().toggleStyle(.checkbox).frame(width: 46)
+                                )).labelsHidden().toggleStyle(ThemeCheckStyle()).frame(width: 46)
                                 Toggle("", isOn: Binding(
                                     get: { state.isAlertCalendar(c.id) },
                                     set: { _ in state.toggleAlertCalendar(c.id) }
-                                )).labelsHidden().toggleStyle(.checkbox).frame(width: 34)
+                                )).labelsHidden().toggleStyle(ThemeCheckStyle()).frame(width: 34)
                                 Toggle("", isOn: Binding(
                                     get: { state.isBirthdayCalendar(c.id) },
                                     set: { _ in state.toggleBirthdayCalendar(c.id) }
-                                )).labelsHidden().toggleStyle(.checkbox).frame(width: 34)
+                                )).labelsHidden().toggleStyle(ThemeCheckStyle()).frame(width: 34)
                             }
                         }
                     }
@@ -346,7 +336,7 @@ struct OnboardingPane: View {
                 // Feste Höhe: ScrollView hat keine intrinsische Höhe und würde
                 // in einem sich selbst messenden Panel auf 0 kollabieren
                 // (Lektion aus Runde 14). Hoch genug für ~10 Kalender am Stück.
-                .frame(height: 270)
+                .frame(height: min(CGFloat(state.availableCalendars.count), 8) * 28 + 4)
             }
         }
     }
@@ -354,123 +344,132 @@ struct OnboardingPane: View {
     // MARK: Google Meet (nur mit vorhandener Konfiguration)
 
     private var googleStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            title(L.t("Google Meet verbinden", "Connect Google Meet"))
-            body(L.t("""
-                Optional. Verbunden kannst du direkt aus der App einen Termin mit \
-                fertigem Meet-Link anlegen. Der Einladungstext landet dabei gleich in \
-                der Zwischenablage.
-                """, """
-                Optional. Once connected you can create an event with a ready Meet link \
-                straight from the app. The invite text goes to your clipboard with it.
-                """))
+        VStack(alignment: .leading, spacing: Theme.s16) {
+            title(L.t("Google Meet", "Google Meet"))
+            body(L.t("Damit jeder Termin automatisch einen Meet-Link bekommt.",
+                     "So every meeting gets a Meet link automatically."))
 
             if google.isConnected {
+                // Runde 116: verbunden = Haken + Konto; "Trennen" gibt es nur in den Einstellungen.
                 statusRow(ok: true, text: L.t("Verbunden als \(google.accountEmail ?? "")",
                                               "Connected as \(google.accountEmail ?? "")"))
-                Button(L.t("Trennen", "Disconnect")) { google.disconnect() }
-                    .buttonStyle(.link).font(.system(size: 11))
             } else {
-                Button(L.t("Mit Google verbinden", "Connect with Google")) {
+                ThemePrimaryButton(title: L.t("Mit Google verbinden", "Connect with Google")) {
                     Task { await google.connect() }
                 }
-                .buttonStyle(.borderedProminent)
                 statusRow(ok: false, text: L.t("Nicht verbunden", "Not connected"))
             }
 
-            Divider()
+            if !google.isConnected {
+                // Später verbinden: geht weiter, ohne Google läuft alles andere normal.
+                ThemeTextRow(title: L.t("Später verbinden", "Connect later"), accent: false, fullWidth: false) {
+                    withAnimation(.easeInOut(duration: 0.15)) { step += 1 }
+                }
+                .themeRowList()
+            }
+        }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { measuredGoogle = $0 }
+    }
 
-            body(L.t("""
-                So läuft es ab: Es öffnet sich dein Browser mit der Google-Anmeldung. \
-                Wähle das Konto, unter dem deine Termine laufen, und bestätige den \
-                Zugriff auf Kalender. Danach kannst du das Browserfenster schließen.
-                """, """
-                What happens: your browser opens with the Google sign-in. Pick the \
-                account your meetings run under and confirm calendar access. After that \
-                you can close the browser window.
-                """))
-            body(L.t("""
-                Ohne diesen Schritt funktioniert alles andere ganz normal. Du kannst ihn \
-                jederzeit in den Einstellungen unter Google nachholen.
-                """, """
-                Everything else works normally without this step. You can do it later in \
-                settings under Google.
-                """))
+    // MARK: Schritt 3, So planst du ein Meeting
+
+    private var planStep: some View {
+        VStack(alignment: .leading, spacing: Theme.s16) {
+            title(L.t("So planst du ein Meeting", "Plan a meeting"))
+            // Schein-Formular, nur Beispieldaten (keine echten Namen oder Termine).
+            OnboardingMiniForm()
+            VStack(alignment: .leading, spacing: Theme.s8) {
+                tip("keyboard", L.t("\(state.hotkeyWidgetLabel) öffnet das Widget.", "\(state.hotkeyWidgetLabel) opens the widget."))
+                tip("text.cursor", L.t("Tippen wie „fr 10-12 call mit chris“.", "Type like “fri 10-12 call with chris”."))
+                tip("paperplane", L.t("Erstellen kopiert die Einladung oder schickt die Mail.", "Create copies the invite or sends the mail."))
+            }
+        }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { measuredPlan = $0 }
+    }
+
+    private func tip(_ symbol: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: Theme.s8) {
+            Image(systemName: symbol).font(.theme(.normal)).foregroundStyle(Theme.blue).frame(width: 18)
+            Text(text).font(.theme(.normal)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     // MARK: Letzter Schritt, einrichten und ausprobieren
 
     private var finishStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            title(L.t("Fast fertig", "Almost done"))
-
-            Toggle(L.t("Beim Login starten", "Launch at login"), isOn: Binding(
+        VStack(alignment: .leading, spacing: Theme.s16) {
+            title(L.t("Fertig", "You’re set"))
+            body(L.t("Kurz vor jedem Meeting fliegt ein Hinweis über den Bildschirm.",
+                     "Shortly before every meeting a notice flies across the screen."))
+            ThemeTextRow(title: L.t("Test-Banner zeigen", "Show test banner"), accent: true, fullWidth: false) { state.showTestBanner() }.themeRowList()
+            Toggle(L.t("Bei der Anmeldung öffnen", "Open at login"), isOn: Binding(
                 get: { state.launchAtLogin },
                 set: { state.setLaunchAtLogin($0) }
             ))
-            .font(.system(size: 12))
-
-            Toggle(L.t("Öffnen per Tastenkürzel (⌃⌥M)", "Open with keyboard shortcut (⌃⌥M)"),
-                   isOn: $state.hotkeyEnabled)
-                .font(.system(size: 12))
-            body(L.t("""
-                Nützlich, wenn das Menüleisten-Icon mal nicht zu sehen ist: Wenn rechts \
-                oben zu viele Symbole liegen, wirft macOS einzelne kommentarlos raus. \
-                Das Kürzel öffnet das Fenster trotzdem.
-                """, """
-                Useful when the menu bar icon isn't visible: when the top right gets \
-                crowded, macOS silently drops icons. The shortcut opens the window anyway.
-                """))
-
-            Divider()
-
-            Button(L.t("Test-Banner zeigen", "Show test banner")) { state.showTestBanner() }
-            body(L.t("""
-                So sieht die Warnung aus. Vorlaufzeit, Flugdauer und Ton stellst du in \
-                den Einstellungen ein, Klick aufs U-Boot in der Menüleiste, dann unten \
-                auf „Einstellungen".
-                """, """
-                That's what the warning looks like. Lead time, flight duration and sound \
-                are in settings, click the submarine in the menu bar, then "Settings".
-                """))
+            .font(.theme(.normal))
         }
     }
 
     // MARK: - Bausteine
 
     private func title(_ t: String) -> some View {
-        Text(t).font(.system(size: 15, weight: .semibold))
+        Text(t).font(.theme(.title, .bold)).foregroundStyle(Theme.label).padding(.bottom, Theme.s4)
     }
 
     private func body(_ t: String) -> some View {
         Text(t)
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+            .font(.theme(.normal))
+            .foregroundStyle(Theme.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private func statusRow(ok: Bool, text: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.s8) {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .foregroundStyle(ok ? Color.green : Color.secondary)
-            Text(text).font(.system(size: 12))
+                .foregroundStyle(ok ? Theme.ok : Theme.muted)
+            Text(text).font(.theme(.normal))
         }
     }
 
     private func calloutBox(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Theme.s8) {
             Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(Color.accentColor)
+                .font(.theme(.normal))
+                .foregroundStyle(Theme.blue)
             Text(text)
-                .font(.system(size: 12))
+                .font(.theme(.normal))
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)   // Runde 110b (U3): volle Breite
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.accentColor.opacity(0.12))
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .fill(Theme.blue.opacity(0.18))
         )
+    }
+}
+
+
+/// Runde 116: Schein-Termin-Fenster für Schritt 3, nur das Wesentliche (Eingabefeld, Uhrzeit, Knopf), in Originalgröße.
+/// Texte wie im echten Termin-Fenster (CreateButtonTitle), nur Beispieldaten.
+struct OnboardingMiniForm: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.s8) {
+            Text("Call with Anna").font(.theme(.normal)).foregroundStyle(Theme.label)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.s8).frame(height: 36)
+                .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.fill))
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("10:30").font(.theme(.big, .bold)).foregroundStyle(Theme.blue)
+                Text("AM").font(.theme(.title, .bold)).foregroundStyle(Theme.blue)
+                Spacer()
+                Text(L.t("Fr 20. Nov", "Fri, Nov 20")).font(.theme(.normal)).foregroundStyle(Theme.muted)
+            }
+            Text(CreateButtonTitle.make(mailTo: [], text: true, ics: false, de: L.isDE))
+                .font(.theme(.normal, .semibold)).foregroundStyle(Theme.onBlue)
+                .frame(maxWidth: .infinity).frame(height: 36)
+                .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.blue))
+        }
+        .padding(Theme.s16)
+        .background(RoundedRectangle(cornerRadius: Theme.windowRadius, style: .continuous).fill(Theme.fill))
     }
 }

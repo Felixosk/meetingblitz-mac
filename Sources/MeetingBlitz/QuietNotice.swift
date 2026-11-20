@@ -46,6 +46,8 @@ enum QuietNotice {
                 subtitle: L.t("So sieht der stille Hinweis aus", "This is the silent notice"))
     }
 
+    static func showText(title: String, subtitle: String) { present(title: title, subtitle: subtitle) }
+
     private static func present(title: String, subtitle: String) {
         hide()
 
@@ -91,6 +93,7 @@ enum QuietNotice {
         p.hasShadow = true
         p.level = .popUpMenu
         p.isFloatingPanel = true
+        // Runde 115: Aussehen kommt von NSApp.appearance (Look.apply).
         p.hidesOnDeactivate = false
         p.ignoresMouseEvents = true       // nichts abfangen, es ist nur ein Hinweis
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

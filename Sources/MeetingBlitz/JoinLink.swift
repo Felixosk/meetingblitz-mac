@@ -89,16 +89,16 @@ enum JoinLink {
     static func isMeetingLink(_ url: URL) -> Bool { service(for: url) != nil }
 
     /// Pick the join link out of an event: the explicit URL field first, then
-    /// the first known link found in location/notes. A non-meeting URL in the
-    /// URL field is still returned as a last resort, unchanged from before —
-    /// some people paste a company-internal room link there.
+    /// the first known link found in location/notes. Runde 99: ONLY real call
+    /// links count. A Maps link, a wiki page or any other URL gives no
+    /// "Beitreten" and does not make the event a meeting.
     static func best(explicit: URL?, texts: [String?]) -> URL? {
         if let u = explicit, isMeetingLink(u) { return u }
         let text = texts.compactMap { $0 }.joined(separator: "\n")
-        guard !text.isEmpty else { return explicit }
+        guard !text.isEmpty else { return nil }
         let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
         let range = NSRange(text.startIndex..., in: text)
         let urls = detector?.matches(in: text, options: [], range: range).compactMap { $0.url } ?? []
-        return urls.first(where: isMeetingLink) ?? urls.first ?? explicit
+        return urls.first(where: isMeetingLink)
     }
 }

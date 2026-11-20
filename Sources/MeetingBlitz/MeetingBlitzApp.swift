@@ -16,6 +16,8 @@ struct MeetingBlitzApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// `--demo-create`: Signalquellen müssen leben bleiben (Runde 87).
+    nonisolated(unsafe) static var demoSignalSources: [DispatchSourceSignal] = []
     private var statusItem: NSStatusItem?
     private var cancellable: AnyCancellable?
     private var splashDemoPanel: NSPanel?
@@ -45,10 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ps.waitUntilExit()
         let args = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         return ["--mcp", "--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels",
-                "--squeeze-settings", "--selftest", "--parse", "--demo-banner", "--render-banner"].contains { args.contains(" " + $0) }
+                "--squeeze-settings", "--selftest", "--parse", "--demo-banner", "--render-banner", "--render-ui",
+                "--demo-create"].contains { args.contains(" " + $0) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Runde 111b (B1): Testschalter, erzwingt Hellmodus der App, ohne die Systemdarstellung zu ändern.
+        Look.apply()   // Runde 115: Aussehen aus den Einstellungen (Standard Dunkel); MB_FORCE_LIGHT bleibt als Testschalter
         // Runde 78: `--mcp` zweigt GANZ ZUERST ab, noch vor dem Selbsttest.
         // Dieser Modus ist der stdio-MCP-Server fuer Claude (siehe
         // MCPServer.swift), er baut nie ein Menueleisten-Icon auf und reicht
@@ -90,9 +95,118 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print(ok ? "OK \(out)" : "ERROR")
             exit(ok ? 0 : 1)
         }
+        // Runde 111b: `--render-ui <onboarding|widget> <png>` zeichnet eine Ansicht offscreen (ohne Bildschirmzugriff,
+        // z. B. bei gesperrtem Mac). Kein Glas, dunkler Untergrund. Schritt: `--onboarding-step=N`, Termine: `MB_DEMO_AGENDA=<kind>`.
+        if let i = CommandLine.arguments.firstIndex(of: "--render-ui"), CommandLine.arguments.count > i + 2 {
+            let kind = CommandLine.arguments[i + 1], out = CommandLine.arguments[i + 2]
+            NSApp.setActivationPolicy(.accessory)
+            let st = AppState.shared
+            let size: CGSize
+            let host: NSHostingView<AnyView>
+            let light = ProcessInfo.processInfo.environment["MB_RENDER_LIGHT"] != nil   // Runde 126: Hell-Variante für Fake-Beispielbilder
+            if kind == "onboarding" {
+                size = CGSize(width: Theme.welcomeWidth, height: Theme.welcomeHeight)
+                host = NSHostingView(rootView: AnyView(OnboardingPane(state: st, onFinish: {}).frame(width: size.width, height: size.height).background(Color(white: 0.12))))
+            } else {
+                st.calendarAuthorized = true
+                st.agenda = HeroDemo.agenda(ProcessInfo.processInfo.environment["MB_DEMO_AGENDA"] ?? "late")
+                size = CGSize(width: 392, height: Double(ProcessInfo.processInfo.environment["MB_RENDER_H"] ?? "") ?? 520)
+                host = NSHostingView(rootView: AnyView(MenuPanel(state: st).frame(width: size.width, height: size.height, alignment: .top).background(Color(white: light ? 0.96 : 0.12))))
+            }
+            host.frame = CGRect(origin: .zero, size: size)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.contentView = host
+            win.appearance = NSAppearance(named: light ? .aqua : .darkAqua)
+            host.layoutSubtreeIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            host.displayIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("ERROR"); exit(1) }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let ok = (try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))) != nil
+            print(ok ? "OK \(out)" : "ERROR")
+            exit(ok ? 0 : 1)
+        }
+        // Runde 86: `--demo-create` öffnet nur das Termin-Fenster, neben der
+        // echten App, ohne start() (kein Banner, kein Monitor). Gedacht für
+        // Bildschirmfotos der Zeitzonen-Leiste. Gibt die Fensternummer aus
+        // (`screencapture -l <nr>`), endet nach 15 Minuten von selbst.
+        // ACHTUNG: „Erstellen" legt auch hier einen ECHTEN Termin an.
+        if CommandLine.arguments.contains("--demo-create") {
+            NSApp.setActivationPolicy(.accessory)
+            // Runde 87: Einstellungen merken und auf JEDEM Weg hinaus
+            // zurückschreiben (Drehbuchende, 15-Minuten-Ende, beenden, kill).
+            AppState.snapshotDemoSettings()
+            NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                                   object: nil, queue: nil) { _ in AppState.restoreDemoSettings() }
+            for sig in [SIGTERM, SIGINT, SIGHUP] {
+                signal(sig, SIG_IGN)
+                let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+                src.setEventHandler { AppState.restoreDemoSettings(); exit(0) }
+                src.resume()
+                Self.demoSignalSources.append(src)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Runde 110: Testschalter MB_DEMO_WIDGET=1 öffnet vorher das Widget (oben rechts), das Termin-Fenster dockt daneben an.
+                if ProcessInfo.processInfo.environment["MB_DEMO_WIDGET"] != nil {
+                    WidgetPanelController.shared.toggle(state: .shared, statusButton: nil, anchorToMouseScreen: true)
+                }
+                AppState.shared.toggleCreatePanel()
+                // Runde 111b: MB_DEMO_AGENDA=<kind> (HeroDemo, z. B. nolink/late/running) füllt das Widget mit Schein-Terminen.
+                if let kind = ProcessInfo.processInfo.environment["MB_DEMO_AGENDA"] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        AppState.shared.calendarAuthorized = true
+                        AppState.shared.agenda = HeroDemo.agenda(kind)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { WidgetPanelController.shared.refreshSize() }
+                    }
+                }
+                if ProcessInfo.processInfo.environment["MB_DEMO_SETTINGS"] != nil {   // Runde 111b: Einstellungen für Fotos
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { AppState.shared.toggleSettingsPanel() }
+                }
+                if ProcessInfo.processInfo.environment["MB_DEMO_ONBOARD"] != nil {   // Runde 110: Willkommen-Fenster für Fotos
+                    OnboardingPanelController.shared.show(state: .shared)
+                }
+                // Runde 110: MB_DEMO_AT="x,y" (CG-Koordinaten, Fenster-Oberkante) setzt das Termin-Fenster auf den Hauptbildschirm (Videotest).
+                if let at = ProcessInfo.processInfo.environment["MB_DEMO_AT"]?.split(separator: ",").compactMap({ Double($0) }), at.count == 2 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                        guard let cw = NSApp.windows.first(where: { $0.title == "New Meeting" }) else { return }
+                        cw.setFrameOrigin(NSPoint(x: at[0], y: NSScreen.screens[0].frame.height - at[1] - cw.frame.height))
+                    }
+                }
+                // Runde 110: MB_DEMO_OVERLAP=1 schiebt die Bühne des Termin-Fensters (oben) über die Knopfreihe des Widgets (Durchklick-Test).
+                if ProcessInfo.processInfo.environment["MB_DEMO_OVERLAP"] != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                        guard let wf = WidgetPanelController.shared.frame,
+                              let cw = NSApp.windows.first(where: { $0.title == "New Meeting" }) else { return }
+                        cw.setFrameOrigin(NSPoint(x: wf.minX + 184, y: wf.maxY - 269 - cw.frame.height))
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    for w in NSApp.windows where w.isVisible {
+                        let f = w.frame
+                        print("window \(w.windowNumber) \(w.title) "
+                              + String(format: "frame=(%.0f | %.0f) %.0f×%.0f", f.minX, f.minY, f.width, f.height))
+                    }
+                    fflush(stdout)
+                    // `--demo-create <ordner>`: festes Drehbuch mit Fotos.
+                    if let i = CommandLine.arguments.firstIndex(of: "--demo-create"),
+                       CommandLine.arguments.count > i + 1 {
+                        AppState.runCreateDemo(outDir: CommandLine.arguments[i + 1],
+                                               prefix: CreatePanelController.simulatedScreenHeight
+                                                   .map { "h\(Int($0))_" } ?? "")
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 900) { AppState.restoreDemoSettings(); exit(0) }
+            return
+        }
         if let arg = CommandLine.arguments.first(where: { $0 == "--demo-banner" || $0.hasPrefix("--demo-banner=") }) {
             NSApp.setActivationPolicy(.accessory)
             let docked = arg.hasSuffix("=docked")
+            // Banner-Varianten (20.11.2026): MB_BANNER_BACKDROP=1 legt eine ruhige
+            // Tapete hinter den Banner, damit Fotos/Videos nicht den Desktop zeigen.
+            if ProcessInfo.processInfo.environment["MB_BANNER_BACKDROP"] != nil {
+                BannerBackdrop.show()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 AppState.shared.showDemoBanner(docked: docked)
             }
@@ -108,8 +222,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let fails = JoinLinkTests.failures() + CalendarStageTests.failures()
                 + QuickAddTests.failures() + SkinRotationTests.failures()
                 + MCPTests.failures() + MenuBarFocusTests.failures()
+                + MonitorTests.failures() + HeroTests.failures() + MailInviteTests.failures() + GuestTokenTests.failures() + EntryStateTests.failures() + EntryRewrite.failures() + CreateButtonTitle.failures() + InstantTarget.failures() + AfterCreate.failures() + MeetArtifacts.failures()
             if fails.isEmpty {
-                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel, Menüleisten-Wechsel")
+                print("selftest ok: \(JoinLinkTests.cases.count) Link-Fälle, \(JoinLink.services.count) Dienste, Klick-Stufen, Freitext, Motivwechsel, Menüleisten-Wechsel, Zeitzonen, Monitor-Regeln, Google-Login-Frist, Hero-Auswahl, Mail (Adressen, Platzhalter, MIME, Fehler), Meet-Artefakte (Transkript, Gemini-Notizen)")
                 exit(0)
             }
             print("SELFTEST FEHLGESCHLAGEN (\(fails.count)):")
@@ -145,7 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Diese Prüf-Aufrufe brauchen den Kalender, aber keine Menüleiste, und
         // laufen deshalb absichtlich neben der App.
         let readOnlyChecks = ["--diagnose", "--conflicts", "--stats", "--test-notice", "--check-panels",
-                              "--squeeze-settings"]
+                              "--squeeze-settings", "--measure-rows"]
         if !CommandLine.arguments.contains(where: readOnlyChecks.contains),
            let bid = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bid)
@@ -207,6 +322,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // die App über sich selbst ausgeben. Läuft absichtlich VOR `start()`:
         // die Panels brauchen keinen Kalender, und so fragt der Selbsttest
         // keine Rechte an.
+        // Runde 104: `--measure-rows` öffnet die Einstellungen, schaltet jeden Reiter durch und
+        // gibt Zeilenhöhen, Abstände und Fensterhöhe aus. Mit MB_LEGACY_ROWS=1 die alten Werte.
+        if CommandLine.arguments.contains("--measure-rows") {
+            let st = AppState.shared
+            SettingsPanelController.shared.toggle(state: st, anchor: nil)
+            var tabIndex = 0
+            func step() {
+                guard tabIndex < 8 else {
+                    SettingsPanelController.shared.close()
+                    CreatePanelController.shared.toggle(state: st, anchor: nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        let rows = (RowProbe.rows["create"] ?? []).sorted { $0.minY < $1.minY }
+                        let hs = rows.map { String(format: "%.0f", $0.height) }.joined(separator: " ")
+                        var gaps: [String] = []
+                        for i in 1..<max(1, rows.count) { gaps.append(String(format: "%.0f", rows[i].minY - rows[i - 1].maxY)) }
+                        print("termin-fenster: Zeilen \(rows.count)  Höhen [\(hs)]  Abstände [\(gaps.joined(separator: " "))]")
+                        fflush(stdout); exit(0)
+                    }
+                    return
+                }
+                UserDefaults.standard.set(tabIndex, forKey: "settingsTab")
+                // Der Reiter liegt in @AppStorage: Panel neu öffnen, damit er greift.
+                SettingsPanelController.shared.close()
+                SettingsPanelController.shared.toggle(state: st, anchor: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {   // nach dem Resize messen
+                    let rows = (RowProbe.rows["settings"] ?? []).sorted { $0.minY < $1.minY }
+                    let hs = rows.map { String(format: "%.0f", $0.height) }.joined(separator: " ")
+                    var gaps: [String] = []
+                    for i in 1..<max(1, rows.count) { gaps.append(String(format: "%.0f", rows[i].minY - rows[i - 1].maxY)) }
+                    let winH = NSApp.windows.first { $0.title == "Settings" || $0.title == "Einstellungen" }?.frame.height ?? 0
+                    print("tab \(tabIndex): Zeilen \(rows.count)  Höhen [\(hs)]  Abstände [\(gaps.joined(separator: " "))]  Fensterhöhe \(Int(winH))  unten \(Int(RowProbe.footTop - RowProbe.contentBottom))")
+                    fflush(stdout)
+                    tabIndex += 1
+                    step()
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { step() }
+        }
         if CommandLine.arguments.contains("--check-panels") {
             // Einstieg ZUERST: sein `show` räumt das Einstellungsfenster aus
             // dem Weg, in der anderen Reihenfolge wäre es beim Ablesen zu.
@@ -223,6 +376,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let aux = b.contains(.fullScreenAuxiliary)
                     let name = w.title.isEmpty ? "(ohne Titel: Widget)" : w.title
                     if !all { bad += 1 }
+                    // Runde 111b: Ebene .floating und dunkles Aussehen für ALLE vier Fenster (Gegenprobe: Zeile in
+                    // den Panels auskommentieren, dann schlägt das hier an).
+                    if w.level != .floating || !Look.matches(w) {
+                        bad += 1
+                        print("FEHLT  \(name): Ebene \(w.level.rawValue), Aussehen passt nicht zur Einstellung")
+                    }
                     // Rahmen mitschreiben: derselbe Wert, den die Diagnose beim
                     // Nutzer meldet, damit hier auffällt, wenn ein Fenster zwar
                     // offen ist, aber 0 Punkte groß oder außerhalb der Schirme.
@@ -492,6 +651,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Verification aid: open the widget (and settings) programmatically so
         // their look/position can be screenshotted without clicking.
+        // Runde 101: `--demo-glass` legt die vier Fenster (Widget, Termin-Fenster,
+        // Einstellungen, Willkommen) nebeneinander vor ein Streifenmuster-Fenster,
+        // damit man die Glas-Durchsicht direkt vergleichen kann. Gibt das Rechteck
+        // (CG-Koordinaten, für `screencapture -R`) aus.
+        if CommandLine.arguments.contains("--demo-glass") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self else { return }
+                let st = AppState.shared
+                OnboardingPanelController.shared.show(state: st)
+                WidgetPanelController.shared.toggle(state: st, statusButton: self.statusItem?.button, anchorToMouseScreen: true)
+                SettingsPanelController.shared.toggle(state: st, anchor: nil)
+                CreatePanelController.shared.toggle(state: st, anchor: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    guard let scr = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
+                    let vf = scr.visibleFrame
+                    let all = NSApp.windows.filter(\.isVisible).filter { $0.level == .floating }
+                    // Das Widget hängt an der Menüleiste und setzt sich selbst zurück: es bleibt stehen.
+                    let widget = NSApp.windows.first { $0.isVisible && $0.title.isEmpty && abs($0.frame.width - 360) < 2 }
+                    let order = ["Neues Meeting", "Einstellungen", "Willkommen"]
+                    func rank(_ w: NSWindow) -> Int { order.firstIndex { w.title.hasPrefix($0) } ?? 9 }
+                    let sorted = all.filter { !$0.title.isEmpty }.sorted { rank($0) < rank($1) }
+                    let gap: CGFloat = 24
+                    let leftW = sorted.reduce(0) { $0 + $1.frame.width } + gap * CGFloat(sorted.count + 1)
+                    let h = (sorted.map { $0.frame.height }.max() ?? 600) + gap * 2
+                    var rect = NSRect(x: vf.minX + 20, y: vf.maxY - h - 20, width: leftW, height: h)
+                    if let wf = widget?.frame { rect = rect.union(wf.insetBy(dx: -gap, dy: -gap)) }
+                    let stripes = NSWindow(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: false)
+                    stripes.level = .normal
+                    stripes.isOpaque = true
+                    stripes.contentView = GlassStripes(frame: NSRect(origin: .zero, size: rect.size))
+                    stripes.orderFrontRegardless()
+                    var x = rect.minX + gap
+                    for w in sorted {
+                        w.setFrameOrigin(NSPoint(x: x, y: rect.maxY - gap - w.frame.height))
+                        x += w.frame.width + gap
+                        w.orderFrontRegardless()
+                    }
+                    let primaryH = NSScreen.screens.first?.frame.height ?? scr.frame.height
+                    print(String(format: "glas rect %.0f %.0f %.0f %.0f", rect.minX, primaryH - rect.maxY, rect.width, rect.height))
+                    fflush(stdout)
+                }
+            }
+        }
         if CommandLine.arguments.contains("--demo-widget") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 guard let self else { return }
@@ -526,6 +728,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 WidgetPanelController.shared.toggle(state: .shared, statusButton: self.statusItem?.button)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     AppState.shared.stepDay(day)
+                }
+            }
+        }
+        // Runde 93: `--demo-hero=running|soon|next|late|none` zeigt das Widget mit
+        // einer ausgedachten Tagesliste (Fotos aller Hero-Zustände).
+        if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-hero=") }) {
+            let kind = String(arg.dropFirst("--demo-hero=".count))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self else { return }
+                WidgetPanelController.shared.toggle(state: .shared, statusButton: self.statusItem?.button)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    AppState.shared.agenda = HeroDemo.agenda(kind)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { WidgetPanelController.shared.refreshSize() }
                 }
             }
         }
@@ -781,5 +996,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ?? L.t("MeetingBlitz, Tagesübersicht öffnen",
                        "MeetingBlitz, open today's agenda")
         }
+    }
+}
+
+
+/// Streifenmuster hinter den Fenstern für `--demo-glass`.
+final class GlassStripes: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.black.setFill(); bounds.fill()
+        let cols: [NSColor] = [.white, .systemRed, .systemYellow, .systemBlue]
+        var x: CGFloat = 0; var i = 0
+        while x < bounds.width {
+            cols[i % cols.count].setFill()
+            NSRect(x: x, y: 0, width: 14, height: bounds.height).fill()
+            x += 28; i += 1
+        }
+        NSColor.white.setFill()
+        var y: CGFloat = 0
+        while y < bounds.height { NSRect(x: 0, y: y, width: bounds.width, height: 6).fill(); y += 40 }
     }
 }

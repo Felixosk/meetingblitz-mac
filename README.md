@@ -1,160 +1,116 @@
 # MeetingBlitz
 
-**A macOS menu bar app that warns you before every calendar event.** Shortly
-before something from your Apple Calendar starts, a submarine flies across your
-screens.
+**A Mac menu bar app that makes sure you never miss a meeting.** A few minutes
+before each event a glass banner flies across all your screens. One click on it
+and you are in the call.
 
-### ⬇ [Download MeetingBlitz 1.7.4](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
+### ⬇ [Download MeetingBlitz 2.0](https://github.com/Felixosk/meetingblitz-mac/releases/latest/download/MeetingBlitz.zip)
 
-Ready-made app · 9.8 MB · macOS 14+ · Apple Silicon **and** Intel ·
+macOS 14+ · Apple Silicon and Intel · free for personal use ·
 [one extra command on first launch](#option-a-download-the-ready-made-app) ·
 or [build it yourself](#option-b-build-it-yourself) in two minutes
 
 [**Website**](https://felixosk.github.io/meetingblitz-mac/) ·
-[Changelog](CHANGELOG.md) ·
+[What's new in 2.0](CHANGELOG.md) ·
 [Deutsche Version](README.de.md)
 
 [![Build](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml/badge.svg)](https://github.com/Felixosk/meetingblitz-mac/actions/workflows/build.yml)
 
-![Two meetings at 17:00, each with its own flying banner](docs/demo.gif)
+![The menu bar widget and the New Meeting window](docs/img/hero-dark.png)
 
-<img src="docs/widget.png" width="470" alt="The menu bar widget: timeline, birthdays, and per-event actions">
+## What it does
 
-*Click the submarine in the menu bar and this is your day: a timeline, birthdays
-with a call button, and per event copy link, join, export .ics or hide.*
+**1. A banner before every meeting.** A glass bar flies across every monitor,
+with the title, the time and a Join button. It is hard to miss. If two meetings
+start at the same time, you get two banners, one above the other. Do Not Disturb
+does not swallow it, because the app draws it itself.
 
-## Why this exists
+![The banner before a meeting](docs/img/banner.png)
 
-Two reasons, and they are the whole point of the app.
+**2. Your day in one click.** Click the icon in the menu bar and you see today:
+a timeline from 0 to 24, the next meeting, birthdays with a call button, and
+for every event: join, copy, export or hide. Step to any week or month with the
+arrows.
 
-**1. Every overlapping event gets its own warning.** Most tools show *the* next
-meeting — one line, one notification, one timeslot. So a call nested inside a
-focus block, or two meetings booked over each other, quietly collapses into a
-single reminder and you miss the other one. Here each event fires its own
-banner, and overlapping banners stack into separate lanes instead of replacing
-each other. MeetingBar's request for this has been
-[open since May 2021](https://github.com/leits/MeetingBar/issues/271).
+<img src="docs/img/widget-dark.png" width="420" alt="The widget with today's meetings">
 
-**2. A visual warning, not a notification.** Notifications are built to be
-ignorable: they slide in at the edge, wait a few seconds, and file themselves
-away in a list you look at later. That is fine for a package delivery and
-useless for something starting in five minutes. A submarine flying across every
-monitor is not something you scroll past — and because it is drawn by the app
-itself, it never lands in Do Not Disturb, never queues behind other apps'
-notifications, and shows up on all screens at once.
+**3. Type a meeting in one line.** Write `call with chris fri 4pm 45min` and the
+window picks out the day, the time and the length while you type. A day strip
+underneath shows what else is on, and you can drag the new meeting around in it.
+If the slot is taken, it tells you before you book it.
 
-Native Swift and SwiftUI, no Electron, no server, no account. Builds in about
-two minutes.
+![The New Meeting window with one input field and the day strip](docs/img/create-dark.png)
 
----
+**4. After creating, it does the rest.** Below the field you choose what happens
+next: send the invite by email to up to 5 guests (through your Gmail), copy the
+details, save a calendar file. The button says what it will do. You can edit
+the email text for this one meeting before it goes out.
+
+**5. Instant meeting.** The lightning button makes a Google Meet room right now,
+puts it in your Google calendar and opens the call. For 5 seconds you can undo
+it, and the event is gone again.
+
+### Light or dark, your choice
+
+The app follows your Mac, or you pick Light or Dark yourself
+(**Settings → General → Appearance**). The glass can be made clearer for
+busy wallpapers.
+
+![The same window in light and dark](docs/img/light-dark.png)
+
+## All features
+
+- **Banner before every event** on all monitors, lead time of your choice, overlapping events each get their own
+- **27 motifs** for the flying object: submarine, whale, jet, UFO and more, in 3 styles. Double-click one to read its real story, with a source
+- **Widget in the menu bar** with a timeline, week and month view, and any day one click away
+- **One-click join** for 53 services: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack huddles, GoTo and more
+- **New meeting in one line**, with a day strip you can drag the meeting in, and a warning when the slot is taken
+- **Email to guests** (optional, through your own Gmail): up to 5 guests, one mail to all, text editable per meeting, English or German template
+- **Instant meeting** with a Google Meet link and 5 seconds to undo
+- **Time zones** in the New Meeting window: add cities, rename them, see the time for each
+- **Copy an event** as a file and text at once: paste it into WhatsApp and it becomes an attachment, paste it into a text field and it becomes text
+- **Apple Reminders** due today show up next to your events
+- **Per calendar** you choose what shows, what fires a banner, and whether its birthdays appear
+- **Declined invitations never warn you**. They stay visible, struck through
+- **Quiet mode**, timed (1h, 5h, 1 day, 1 week) and automatically while you share your screen
+- **Two global shortcuts**, both rebindable: open the widget, join the current or next call
+- **Meeting stats** for the week, month and year
+- **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`, `settings`
+- **Claude can manage your calendar** (optional, off by default), [details below](#optional-let-claude-manage-your-calendar)
+- **English and German**, switch any time
+
+Native Swift and SwiftUI. No Electron, no server, no account, no tracking.
 
 ## How it compares
 
-The macOS menu bar has good calendar apps already. Here is where each one sits,
-and where this one is genuinely different.
-
 | | MeetingBlitz | [MeetingBar](https://github.com/leits/MeetingBar) | [Itsycal](https://github.com/sfsam/Itsycal) | [Calendr](https://github.com/pakerwreah/Calendr) |
 |---|---|---|---|---|
-| Overlapping events warn **individually** | **yes** | no ([open since 2021](https://github.com/leits/MeetingBar/issues/271)) | n/a | n/a |
-| Warning style | flying banner across **all** screens | menu bar title, notification, optional fullscreen | none | none |
-| **Conflict warning while creating** | **yes** | no | no | no |
+| Overlapping events warn **one by one** | **yes** | no ([open since 2021](https://github.com/leits/MeetingBar/issues/271)) | n/a | n/a |
+| Warning style | banner across **all** screens | menu bar title, notification, optional fullscreen | none | none |
+| Conflict warning while creating | **yes** | no | no | no |
 | Meeting link detection | 53 services | 50+ services | none | basic |
-| Natural-language input | yes (`fri 4pm to 5pm call with chris`) | no | no | yes |
-| Week / month picker in the widget | yes, one click steps through | no | yes | yes |
-| Second time zone | yes | no | no | yes |
-| Claude / MCP access (create, move events) | yes, optional | no | no | no |
-| Meeting stats (week / month / year) | yes | no | no | no |
-| URL scheme for automation | `meetingblitz://` | Shortcuts + AppleScript | no | `calendr://` |
+| New event in one line | yes | no | no | yes |
+| Email invite to guests | yes, via your Gmail | no | no | no |
+| Time zones | yes, in the New Meeting window | no | no | yes |
+| Claude / MCP access | yes, optional | no | no | no |
 | Apple Reminders in the same list | yes | no | yes | yes |
-| Calendar sources | Apple Calendar (so iCloud, Google, Exchange via macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
+| Calendar sources | Apple Calendar (iCloud, Google, Exchange through macOS) | Apple Calendar + Google directly | Apple Calendar | Apple Calendar |
 | Maturity | hobby project | 5.3k stars, years of polish | 4.0k stars | 2.3k stars |
 
-Those three are the field: below Calendr, a search for macOS menu-bar calendars
-turns up nothing above a handful of stars. The other well-known options are
-commercial and closed source — **Dato** and **Fantastical** — so they are named
-here rather than ticked off in a table, since their feature set cannot be
-verified from the outside.
-
-### The other camp: apps that interrupt you
-
-The table above compares calendars. But MeetingBlitz is not really trying to be
-a calendar — it is trying to *interrupt* you, and that is a much smaller field.
-Everything in it, as of August 2026:
-
-| | Stars | Language | How it interrupts | Also does |
-|---|---|---|---|---|
-| **MeetingBlitz** | this repo | Swift | banner per event, on every screen, overlapping ones stack | join, create, quick-add, conflict warning, stats, reminders |
-| [QuakPit](https://github.com/Ooble-Studio/QuakPit) | 110 | TypeScript | a rubber duck flies across the screen | nothing else; last push May 2026 |
-| [meeting-reminder](https://github.com/nilBora/meeting-reminder) | 7 | Swift | full-screen blocking overlay | one-click join |
-| [alwayshaveaplan](https://github.com/ChrisZou/alwayshaveaplan) | 18 | Swift | shows your schedule when you unlock the Mac | — |
-| [cyclop](https://github.com/akalikbergenov/cyclop) | 225 | Swift | notch panel, calendar is one tab of many | clipboard, snippets, file shelf, translation |
-
-QuakPit proves the idea resonates: 110 stars for a duck that does nothing but
-fly. What is missing everywhere else is the *per-event* part — and everything
-you actually do after the reminder fires.
-
-**Be honest about it:** if you want the most mature, best supported option with
-the widest service coverage, install MeetingBar. It is excellent, and this
-project started as a fan of it.
-
-In the words of that open request: *"If two events are at the same time, I can
-only see that only one is active in the status bar."* There is a related bug
-where the fullscreen notification for the first of two back-to-back meetings
-[never fires at all](https://github.com/leits/MeetingBar/issues/769).
-
-![First launch walkthrough and settings](docs/tour.png)
-
-## Features
-
-- **A banner before every meeting**, on all monitors at once, with configurable lead time
-- **27 skins in 4 styles** for that banner — swap the submarine for a whale, a jet, a UFO or 24 others; the photo style shows the real thing, and double-clicking one reveals its true, sourced story
-- **Today at a glance** in the menu bar, with a timeline, a week/month picker and any day one click away
-- **One-click join** for 53 services: Meet, Zoom, Teams, Webex, Whereby, Jitsi, Discord, Slack huddles, GoTo, Tencent and more
-- **Type an event in one line**: `fri 4pm to 5pm call with chris`, with a live preview before anything is created
-- **Conflict warning** while creating: tells you the slot is taken *before* you double-book
-- **Instant meeting**: one click mints a Meet room, files the event and opens the call
-- **Meeting stats** for the week, month and year, as bar charts
-- **Export an event as .ics**, landing straight on your clipboard as a file
-- **Invite text on your clipboard** when you create an event: title, date and the time in your zone and in Berlin time. One switch turns it off
-- **Apple Reminders** due today show up next to your events
-- **Per calendar** you choose what shows, what fires a banner, and whether its birthdays appear
-- **Declined invitations never warn you** — they stay visible, struck through
-- **Quiet mode**, timed (1h / 5h / 1 day / 1 week) and automatically while sharing your screen, with a silent notice so nothing is missed
-- **Two global shortcuts**, both rebindable: open the widget, join the current or next call
-- **Automation** via `meetingblitz://show`, `join-next`, `instant`, `create?text=…`
-- **Second time zone** in the widget, hidden while it matches your Mac
-- **The menu bar moves on**: ten minutes into a meeting it stops counting that one down and shows when the next one starts, so you can see how far you may overrun
-- **Title length in the menu bar** (short, medium, long), so a long meeting name never pushes other icons behind the notch. Or show only the time, or only the icon
-- **Claude manages your calendar** (optional, off by default): list, create and move events by talking to Claude, [details below](#optional-let-claude-manage-your-calendar)
-- **English and German**, switchable live, follows your system language on first run
-
-Optional, only with your own Google Cloud credentials: create an event with a
-ready Google Meet link straight from the app. Without that config the whole
-feature hides itself, everything else works the same.
-[Setup instructions below.](#optional-create-meetings-with-a-google-meet-link)
-
-## Not just a submarine
-
-**Settings → Alerts & reminders** lets you swap the flying object for one of
-27 motifs, in four visual styles from a plain outline to real photographs.
-Every photo-style motif is a real thing — a Cold War submarine, a whale that
-sank a whaling ship, a rubber duck that drifted the Pacific for fifteen years
-— and double-clicking a tile opens its actual story with a source, fact-checked
-against real references rather than written from memory.
-
-![The skin picker with 27 real-photo motifs, and the sourced story behind one of them](docs/skins.png)
+If you want the most mature option with the widest service coverage, install
+MeetingBar. It is excellent, and this project started as a fan of it.
 
 ## Requirements
 
-- **macOS 14 (Sonoma) or newer**
-- Apple Silicon or Intel, the app builds as a universal binary
-- **Xcode Command Line Tools** to build (one-time, see below)
+- **macOS 14 (Sonoma) or newer**. The glass look is sharpest on macOS 26
+- Apple Silicon or Intel (universal binary)
+- **Xcode Command Line Tools** if you build it yourself
 
 ## Install
 
 ### Option A: download the ready-made app
 
-Grab `MeetingBlitz.zip` from the [latest release](https://github.com/Felixosk/meetingblitz-mac/releases/latest),
+Get `MeetingBlitz.zip` from the [latest release](https://github.com/Felixosk/meetingblitz-mac/releases/latest),
 unzip it, and move **MeetingBlitz.app** into your **Applications** folder.
 
 The app is signed with a self-made certificate, not with a paid Apple developer
@@ -164,19 +120,18 @@ account, so macOS quarantines it on download. One command clears that flag:
 xattr -dr com.apple.quarantine /Applications/MeetingBlitz.app
 ```
 
-Then open it normally. **Understand what that command does:** it tells macOS you
-vouch for this app yourself, skipping the Gatekeeper check. Only run it on
-software you actually trust — here you can read every line of the source first,
-or take option B and build it yourself.
+Then open it normally. This command tells macOS that you vouch for the app
+yourself and skips the Gatekeeper check. Only run it on software you trust.
+You can read every line of the source here first, or take option B.
 
-Without the command you can still launch it the long way: double-click, click
+Without the command you can still open it the long way: double-click, click
 **Done** on the warning, then **System Settings → Privacy & Security → Open
 Anyway**, and confirm once more.
 
 ### Option B: build it yourself
 
-Two minutes, and no Gatekeeper dance at all, because software you compile
-locally is not quarantined.
+Two minutes, and no Gatekeeper warning at all, because software you compile
+yourself is not quarantined.
 
 ```bash
 git clone https://github.com/Felixosk/meetingblitz-mac.git
@@ -184,44 +139,41 @@ cd meetingblitz-mac
 ./build.sh && open dist/MeetingBlitz.app
 ```
 
-If the Command Line Tools are missing, this installs them (a few hundred MB,
-one time), then build again:
+If the Command Line Tools are missing, this installs them once (a few hundred
+MB), then build again:
 
 ```bash
 xcode-select --install
 ```
 
-On first launch a short walkthrough covers calendar access, calendar selection
+On first launch a short welcome covers calendar access, which calendars to show
 and launch at login. You can replay it any time under
-**Settings → General → Walkthrough**.
+**Settings → Advanced → Walkthrough**.
 
 ### Good to know
 
-**This app has no window and no dock icon.** It lives in the menu bar, top
-right. If nothing seems to happen after launch, that is not a bug: look for the
-submarine up there.
+**The app has no window and no Dock icon.** It lives in the menu bar, top
+right. If nothing seems to happen after launch, look up there.
 
 ### If you were handed a prebuilt app
 
-Then Gatekeeper blocks it, because it is not signed by a paid Apple developer
+Gatekeeper blocks it, because it is not signed by a paid Apple developer
 account. On current macOS:
 
-1. Drag the app into **Applications**, *before* first launch. Otherwise it runs
+1. Drag the app into **Applications** before the first launch. Otherwise it runs
    from a temporary read-only folder and "launch at login" is unreliable.
 2. Double-click. In the "Apple could not verify…" dialog click **Done**. Never
    "Move to Trash".
-3.  → **System Settings** → **Privacy & Security**, scroll to the bottom
-   **Security** section. It now says "MeetingBlitz was blocked" with an
+3.  → **System Settings** → **Privacy & Security**, scroll down to
+   **Security**. It now says "MeetingBlitz was blocked" with an
    **Open Anyway** button.
-4. Double-click again and confirm **Open** in the final dialog.
+4. Double-click again and confirm **Open**.
 
-**Step 3 has to follow soon after step 2**, otherwise the button disappears and
-you start over at step 2. After that the app is cleared for good.
+Do step 3 soon after step 2, otherwise the button disappears and you start over
+at step 2. After that the app is cleared for good. The old right-click → Open
+trick no longer works since macOS 15.
 
-The old right-click → Open trick **no longer works** since macOS 15 and lands
-you in the same blocking dialog.
-
-Only if it actually says "damaged and can't be opened":
+Only if it says "damaged and can't be opened":
 
 ```bash
 xattr -cr "/Applications/MeetingBlitz.app"
@@ -229,22 +181,22 @@ xattr -cr "/Applications/MeetingBlitz.app"
 
 ## Optional: create meetings with a Google Meet link
 
-Everything above works without this. This one feature — the **Instant meeting**
-button and the Meet link on events you create — talks to Google on your behalf,
-so it needs credentials that belong to *you*. There is no shared app key, and
-none ships in this repo.
+Everything above works without this. The **Instant meeting** button, the Meet
+link on new events and the email to guests talk to Google for you, so they need
+credentials that belong to you. There is no shared app key, and none ships in
+this repo.
 
 It is a ten-minute, one-time setup:
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create
    a project (any name).
 2. **APIs & Services → Library**: enable the **Google Calendar API**.
-3. **APIs & Services → OAuth consent screen**: pick **External**, fill in the app
-   name and your email. Under **Audience**, add your own Google address as a test
-   user. *(If you have a Workspace account, choose Internal instead — then tokens
-   don't expire every 7 days.)*
+3. **APIs & Services → OAuth consent screen**: pick **External**, fill in the
+   app name and your email. Under **Audience**, add your own Google address as a
+   test user. (With a Workspace account choose Internal instead, then tokens
+   don't expire every 7 days.)
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
-   application type **Desktop app**. Download the JSON.
+   type **Desktop app**. Download the JSON.
 5. Put that file here, creating the folder if needed:
 
 ```bash
@@ -252,16 +204,35 @@ mkdir -p ~/Library/Application\ Support/MeetingBlitz
 cp ~/Downloads/client_secret_*.json ~/Library/Application\ Support/MeetingBlitz/google-oauth.json
 ```
 
-6. Restart MeetingBlitz. **Settings → Creating meetings** now offers
-   **Connect Google**. Sign in once; the refresh token is stored in your macOS
-   Keychain, never in a file.
+6. Restart MeetingBlitz. **Settings → Meetings** now offers **Connect Google**.
+   Sign in once. The token is stored in your macOS Keychain, never in a file.
 
-Without that JSON the whole section stays hidden and no Google code ever runs.
+Without that JSON the Google parts stay hidden and no Google code runs.
 
-**Heads-up on the 7-day expiry:** while the OAuth client sits in *Testing* mode,
-Google invalidates refresh tokens after a week and you have to reconnect. The
-consent screen's **Publish** button (or an Internal Workspace audience) ends
-that for good.
+**The 7-day expiry:** while the OAuth client is in *Testing* mode, Google ends
+the sign-in after a week and you have to reconnect. The consent screen's
+**Publish** button (or an Internal Workspace audience) stops that.
+
+### Optional: email the invite to guests (Gmail)
+
+Off by default. Switch on **Settings → Meetings → Email to guests** and the New
+Meeting window gets a guest field (up to 5 addresses, one mail to all).
+MeetingBlitz sends a plain mail from your connected Google account through the
+Gmail API, with the calendar file attached if you like. It can only send, not
+read.
+
+One-time setup in your Google Cloud project:
+
+1. **APIs & Services → Library**: enable the **Gmail API**.
+2. **OAuth consent screen → Data access**: add the scope
+   `https://www.googleapis.com/auth/gmail.send`.
+3. In MeetingBlitz click **Reconnect Google** and tick "Send email" in the
+   browser. The app only asks for this when the switch is on.
+
+Guest addresses are never stored and never written to a log. The mail text has
+an English and a German template, with the placeholders
+`{title} {date} {time} {times} {duration} {link}`. In the New Meeting window you
+can change the text for one meeting without touching the template.
 
 ## Optional: let Claude manage your calendar
 
@@ -271,69 +242,66 @@ Anna on Thursday at 10 Berlin time" and Claude does it through the app.
 
 It is off by default. To use it:
 
-1. **Settings → Claude access (MCP)**: switch it on.
+1. **Settings → Advanced → Claude access (MCP)**: switch it on.
 2. Click **Copy command**, paste it into a terminal and run it once. It runs
    `claude mcp add` with the path to your copy of the app.
 3. Open a new Claude chat. The tools are there.
 
 What Claude can do:
 
-- `get_context`: your Mac's time zone and the current time. Times you name
-  without a zone count in that zone. There is no IP lookup, so a VPN cannot
-  fool it.
+- `get_context`: your Mac's time zone and the current time. Times without a zone
+  count in that zone. No IP lookup, so a VPN cannot fool it.
 - `list_calendars`, `list_events`: read your calendars and events.
-- `create_event`: new event with a time zone. A Meet link only if you ask for it.
+- `create_event`: new event with a time zone. A Meet link only if you ask.
 - `move_event`: moves one event and keeps its length. In a recurring series only
   that one day moves. If someone else invited you, you get an error, because the
   change would never reach the others.
 - `delete_event`: only events Claude created itself.
 
-The app opens a bridge on `127.0.0.1` that every request must authenticate to
-with a token. Without the token you get a 401. Nothing is reachable from
-outside your Mac.
+The app opens a bridge on `127.0.0.1` that needs a token for every request.
+Without the token you get a 401. Nothing is reachable from outside your Mac.
 
 ## Permissions and privacy
 
-The app asks for **calendar access** on first launch, optionally for
-**reminders**. Both stay local on your Mac. There is no server, no telemetry,
-no account. The source is right here.
+The app asks for **calendar access** on first launch, and optionally for
+**reminders**. Both stay on your Mac. There is no server, no telemetry and no
+account. The source is right here.
 
-The Google part is optional and only kicks in if you supply your own OAuth
-config. No credentials are included in this repository.
-
-The Claude access is off until you switch it on. When it is on, the app listens
-on `127.0.0.1` only and answers requests that carry the token from your own
-`mcp.json`.
+The Google part only runs if you add your own OAuth file. No credentials are in
+this repository. Claude access is off until you switch it on, and then it only
+listens on `127.0.0.1`.
 
 ## Troubleshooting
 
-**The menu bar icon is missing.** The most common reason is mundane and costs
-hours otherwise: space right of the notch is limited (roughly 790 points on a
-MacBook, shared by all apps). Once it is full, macOS drops icons **silently**,
-without any error. Fix: quit other menu bar apps, or just open the window with
+**The menu bar icon is missing.** Space right of the notch is limited (about
+790 points on a MacBook, shared by all apps). When it is full, macOS drops icons
+without any message. Quit other menu bar apps, or open the widget with
 **⌃⌥M**.
 
 **The app sees no events.** System Settings → Privacy & Security → Calendars →
-enable MeetingBlitz. Careful, macOS also offers "add only" there: with that the
-app may write but sees nothing. It needs full access.
+enable MeetingBlitz. macOS also offers "add only" there. With that the app may
+write but sees nothing. It needs full access.
 
-**Generate a status report.** Right-click the menu bar icon → "Save diagnostics".
-The report lands in `~/Downloads` and lists version, permissions, screens and
-window positions in plain text. It contains your calendar names, so glance over
-it before sharing.
+**Google keeps asking.** After an update macOS asks once whether MeetingBlitz
+may use its Keychain item. Click **Always Allow**, otherwise the Google sign-in
+waits.
+
+**Status report.** Right-click the menu bar icon → "Save diagnostics". The
+report lands in `~/Downloads` and lists version, permissions, screens and
+window positions in plain text. It contains your calendar names, so read it
+before you share it.
 
 ## Working on it with Claude Code
 
-There is a `CLAUDE.md` in this repository with the architecture, the build
-process and the traps this app has in store. Open Claude Code in this folder and
-tell it what you want changed.
+`CLAUDE.md` in this repository describes the architecture, the build and the
+traps. Open Claude Code in this folder and tell it what you want changed.
 
 ## Signing
 
-Without config `build.sh` signs ad-hoc, which means **macOS drops your granted
-permissions on every rebuild**, because it considers the app a new one. If you
-build often, create a self-signed certificate and copy `signing.local.example`
-to `signing.local`. Instructions are inside that file.
+Without config `build.sh` signs ad-hoc. Then **macOS drops your granted
+permissions on every rebuild**, because it sees a new app. If you build often,
+create a self-signed certificate and copy `signing.local.example` to
+`signing.local`. The steps are in that file.
 
 ## License
 

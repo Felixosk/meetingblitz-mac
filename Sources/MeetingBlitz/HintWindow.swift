@@ -136,6 +136,7 @@ final class HintWindow {
         p.backgroundColor = .clear
         p.hasShadow = true
         p.level = .popUpMenu
+        // Runde 115: Aussehen kommt von NSApp.appearance (Look.apply).
         p.ignoresMouseEvents = true          // darf niemals einen Klick schlucken
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         p.contentView = host

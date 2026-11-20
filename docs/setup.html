@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup · MeetingBlitz</title>
+<meta name="description" content="Install MeetingBlitz, connect Google Meet and Gmail, and turn on Claude access.">
+<meta property="og:title" content="MeetingBlitz 2.0">
+<meta property="og:description" content="A glass banner before every meeting, your day in one click, new meetings in one line.">
+<meta property="og:image" content="https://felixosk.github.io/meetingblitz-mac/img/hero-dark.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233d6cf0'/%3E%3Cpath d='M18 4 9 18h6l-2 10 9-14h-6z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar glass">
+      <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#3d6cf0"/><path d="M18 4 9 18h6l-2 10 9-14h-6z" fill="#fff"/></svg><span>MeetingBlitz</span></a>
+      <nav class="nav">
+        <a href="features.html">Features</a>
+        <a href="setup.html" aria-current="page">Setup</a>
+        <a href="changelog.html" class="hide-sm">What's new</a>
+        <a href="https://github.com/Felixosk/meetingblitz-mac" class="hide-sm">GitHub</a>
+        <button class="theme-btn" type="button" aria-label="Theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero" style="padding-bottom:10px">
+  <div class="wrap narrow">
+    <h1 style="font-size:clamp(36px,5.5vw,56px)">Setup</h1>
+    <p class="lead">Two minutes for the app. Ten more if you want Google Meet links and email to guests.</p>
+    <div class="toc" style="justify-content:center"><a href="#download">Download</a><a href="#build">Build it yourself</a><a href="#google">Google Meet</a><a href="#gmail">Email to guests</a><a href="#claude">Claude</a><a href="#help">Help</a></div>
+  </div>
+</section>
+<section class="doc" style="padding-top:10px">
+  <div class="wrap narrow">
+
+  <h2 id="download">Option A: download the app</h2>
+  <ol>
+    <li>Get <code>MeetingBlitz.zip</code> from the <a href="https://github.com/Felixosk/meetingblitz-mac/releases/latest">latest release</a> and unzip it.</li>
+    <li>Move <b>MeetingBlitz.app</b> into your <b>Applications</b> folder.</li>
+    <li>Run this once in Terminal, then open the app normally:</li>
+  </ol>
+  <pre><code>xattr -dr com.apple.quarantine /Applications/MeetingBlitz.app</code></pre>
+  <div class="note glass small">The app is signed with a self-made certificate, not a paid Apple developer account, so macOS quarantines it. The command tells macOS you vouch for it yourself. Only run it on software you trust. Without it: double-click, click <b>Done</b>, then <b>System Settings → Privacy &amp; Security → Open Anyway</b>.</div>
+  <p><b>Where is it?</b> The app has no window and no Dock icon. Look at the top right of your menu bar.</p>
+
+  <h2 id="build">Option B: build it yourself</h2>
+  <p>No Gatekeeper warning at all, because software you compile yourself is not quarantined.</p>
+  <pre><code>git clone https://github.com/Felixosk/meetingblitz-mac.git
+cd meetingblitz-mac
+./build.sh &amp;&amp; open dist/MeetingBlitz.app</code></pre>
+  <p>Missing Command Line Tools? Install them once with <code>xcode-select --install</code>, then build again.</p>
+  <p>On first launch a short welcome covers calendar access, which calendars to show and launch at login. Replay it under <b>Settings → Advanced → Walkthrough</b>.</p>
+
+  <h2 id="google">Google Meet links (optional)</h2>
+  <p>The Instant meeting button, Meet links on new events and email to guests talk to Google for you. That needs your own credentials. There is no shared key in the app.</p>
+  <ol>
+    <li>Open the <a href="https://console.cloud.google.com/">Google Cloud Console</a> and create a project.</li>
+    <li><b>APIs &amp; Services → Library</b>: enable the <b>Google Calendar API</b>.</li>
+    <li><b>OAuth consent screen</b>: pick External, add your own Google address as a test user. (Workspace: pick Internal.)</li>
+    <li><b>Credentials → Create credentials → OAuth client ID</b>, type <b>Desktop app</b>. Download the JSON.</li>
+    <li>Put the file in place:</li>
+  </ol>
+  <pre><code>mkdir -p ~/Library/Application\ Support/MeetingBlitz
+cp ~/Downloads/client_secret_*.json ~/Library/Application\ Support/MeetingBlitz/google-oauth.json</code></pre>
+  <p>Restart MeetingBlitz and click <b>Settings → Meetings → Connect Google</b>. The token lives in your Keychain, never in a file.</p>
+  <div class="note glass small">In Testing mode Google ends the sign-in after 7 days. The <b>Publish</b> button on the consent screen stops that.</div>
+
+  <h2 id="gmail">Email to guests (optional)</h2>
+  <ol>
+    <li>In the same Google project: enable the <b>Gmail API</b>.</li>
+    <li><b>OAuth consent screen → Data access</b>: add <code>https://www.googleapis.com/auth/gmail.send</code>.</li>
+    <li>Switch on <b>Settings → Meetings → Email to guests</b>, click <b>Reconnect Google</b> and tick "Send email".</li>
+  </ol>
+  <p>The app can only send, not read. Guest addresses are never stored. There is an English and a German template, and you can change the text for a single meeting in the New Meeting window.</p>
+
+  <h2 id="claude">Claude access (optional)</h2>
+  <p>MeetingBlitz can act as an MCP server for Claude Code and Claude Desktop. Then you say "move my 2 pm call to 4 pm" and Claude does it.</p>
+  <ol>
+    <li><b>Settings → Advanced → Claude access (MCP)</b>: switch it on.</li>
+    <li>Click <b>Copy command</b> and run it once in Terminal.</li>
+    <li>Open a new Claude chat.</li>
+  </ol>
+  <p>Claude can read calendars and events, create and move events, and delete only events it created itself. The bridge listens on <code>127.0.0.1</code> and needs a token for every request.</p>
+
+  <h2 id="help">If something is off</h2>
+  <h3>The menu bar icon is missing</h3>
+  <p>Space right of the notch is limited, and macOS hides icons without a message when it is full. Quit another menu bar app, or open the widget with <b>⌃⌥M</b>.</p>
+  <h3>The app sees no events</h3>
+  <p>System Settings → Privacy &amp; Security → Calendars → MeetingBlitz needs full access, not "add only".</p>
+  <h3>Google keeps waiting</h3>
+  <p>After an update macOS asks once about the Keychain item. Click <b>Always Allow</b>.</p>
+  <h3>Status report</h3>
+  <p>Right-click the menu bar icon → <b>Save diagnostics</b>. The report lands in Downloads. It contains your calendar names, so read it before you share it.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MeetingBlitz · PolyForm Strict 1.0.0, free for personal use</span>
+    <nav><a href="features.html">Features</a><a href="setup.html">Setup</a><a href="changelog.html">What's new</a><a href="https://github.com/Felixosk/meetingblitz-mac">GitHub</a></nav>
+  </div>
+</footer>
+</body>
+</html>

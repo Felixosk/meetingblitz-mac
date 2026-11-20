@@ -2,6 +2,49 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 2.0.0 — 2026-11-20
+
+**A new look, all the way through.** Every window is now made of Liquid Glass,
+the same material as macOS 26: widget, New Meeting window, settings, welcome and
+the banner. Each window has a round close button on its corner and a fine light
+edge like Apple's own windows. One accent colour, blue.
+
+**Light or dark.** Settings → General → Appearance: System, Light or Dark.
+Dark stays the default. Glass: Normal or Clearer, for busy wallpapers.
+
+**New Meeting window with one field.** Type `call with chris fri 4pm 45min`
+and day, time and length fill in while you type. A day strip from 0 to 24 shows
+what else is on. Drag the new meeting in it to move it. Return creates it.
+
+**"After creating" is planned before you create.** Above the button you tick
+what should happen: email to guests, copy details, save a calendar file. The
+button says what it will do. After a successful create the window and the
+widget close together.
+
+**Email to several guests.** "+ Add guest" up to 5 addresses, one mail to all,
+sent through your own Gmail. The mail preview can be edited for this one
+meeting, or saved as the new template (English and German).
+
+**Instant meeting with undo.** The lightning button opens the Meet call at once.
+For 5 seconds an Undo button removes the event again.
+
+**New banner.** A glass capsule that rises in with its motif, larger motifs
+(110 × 280 points), its own tab in Settings.
+
+**Settings with labelled tabs.** General, Alerts, Calendars, Meetings, Banner,
+Advanced. The window floats next to the one you came from and is only as high
+as its content.
+
+**Time zones.** In the New Meeting window: add cities, rename them by clicking
+the name, see each city's time for the meeting.
+
+**Copy an event as file and text.** Paste into WhatsApp and it arrives as a
+calendar file, paste into a text field and it arrives as text.
+
+**Smaller fixes.** The widget grows with the week and month view. The next
+meeting's time is never cut off. Titles may use two lines. Only real call links
+count as join links.
+
 ## 1.7.4 — 2026-10-18
 
 **Skip the result view after creating a meeting.** New switch in Settings:

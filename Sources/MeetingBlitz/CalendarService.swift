@@ -109,7 +109,8 @@ final class CalendarService {
         // Overlapping DIFFERENT meetings keep their own warning (the app's core
         // differentiator) — the key includes the title and the exact start.
         var seen = Set<String>()
-        return mapped.filter { m in
+        return (mapped + DryCreate.fakeMeetings.filter { $0.start > now && $0.start < end }).sorted { $0.start < $1.start }
+            .filter { m in
             seen.insert("\(m.title.lowercased())|\(Int(m.start.timeIntervalSince1970))").inserted
         }
     }
@@ -122,6 +123,35 @@ final class CalendarService {
         let day = Calendar.current.date(byAdding: .day, value: offset,
                                         to: Calendar.current.startOfDay(for: Date())) ?? Date()
         return dayAgenda(for: day, selected: ids)
+    }
+
+    /// Runde 113: welche Tage in [from, to) mindestens einen Termin haben (für die Punkte im Raster).
+    /// Eine Abfrage, ganztägig und mit Uhrzeit, ohne Geburtstage; mehrtägige zählen an jedem Tag.
+    func daysWithEvents(from: Date, to: Date, selected ids: Set<String>) -> Set<Date> {
+        guard isAuthorized else { return [] }
+        let cals = selectedCalendars(ids)
+        guard !cals.isEmpty else { return [] }
+        let pred = store.predicateForEvents(withStart: from, end: to, calendars: cals)
+        let spans = store.events(matching: pred)
+            .filter { $0.calendar?.type != .birthday }
+            .map { (start: $0.startDate ?? from, end: $0.endDate ?? $0.startDate ?? from) }
+        return Self.coveredDays(spans, from: from, to: to)
+    }
+
+    /// Rein rechnend (testbar): jeder Kalendertag in [from, to), den ein Zeitraum berührt. Ende exakt um 0:00 zählt nicht mehr.
+    nonisolated static func coveredDays(_ spans: [(start: Date, end: Date)], from: Date, to: Date, calendar cal: Calendar = .current) -> Set<Date> {
+        var out = Set<Date>()
+        for sp in spans {
+            var d = cal.startOfDay(for: max(sp.start, from))
+            let last = min(sp.end, to)
+            while d < last && d < to {
+                out.insert(d)
+                guard let n = cal.date(byAdding: .day, value: 1, to: d) else { break }
+                d = n
+            }
+            if sp.end <= sp.start, sp.start >= from, sp.start < to { out.insert(cal.startOfDay(for: sp.start)) }
+        }
+        return out
     }
 
     /// Same, for an arbitrary date (F2: the month grid can pick any day).
@@ -137,9 +167,9 @@ final class CalendarService {
         let nightEnd = cal.date(byAdding: .hour, value: 4, to: endOfDay) ?? endOfDay
         store.refreshSourcesIfNecessary()   // deletions/moves show up immediately
         let pred = store.predicateForEvents(withStart: startOfDay, end: nightEnd, calendars: cals)
-        let mapped = store.events(matching: pred)
+        let mapped = (store.events(matching: pred)
             .filter { $0.status != .canceled }
-            .map(Self.map)
+            .map(Self.map) + DryCreate.fakeMeetings)   // Runde 122b: nur im Testmodus, sonst leer
             // Timed: only events STARTING this day (or tonight until 04:00),
             // yesterday's overnight spill-overs are noise ("was gestern war,
             // interessiert nicht"). All-day: the day's banners incl. multi-day,
@@ -165,13 +195,25 @@ final class CalendarService {
 
     /// Zeitraum-Auswertung über die ANGEZEIGTEN Kalender.
     ///
-    /// Ganztägige und Geburtstage bleiben draußen: „Julia in Paphos" über drei
+    /// Ganztägige und Geburtstage bleiben draußen: „Julia in Lisbon" über drei
     /// Tage würde die Stundenzahl sprengen und nichts über Calls aussagen.
     /// Termine werden auf den Zeitraum GEKAPPT, sonst zählt ein Termin, der in
     /// den Sonntag hineinreicht, mit voller Länge in die Woche.
     /// `groupBy` steuert die Balken: `.day` für die Woche, `.weekOfYear` für den
     /// Monat. Die Balken decken den GANZEN Zeitraum ab, auch die Tage, die noch
     /// kommen — eine Woche mit drei leeren Balken am Ende sagt etwas aus.
+    /// Runde 111 (Fund 5): Minuten der VEREINIGTEN Intervalle (Überlappungen zählen einmal).
+    static func unionMinutes(_ iv: [(Date, Date)]) -> Int {
+        var total: TimeInterval = 0
+        var cur: (Date, Date)?
+        for x in iv.sorted(by: { $0.0 < $1.0 }) {
+            if let c = cur, x.0 <= c.1 { cur = (c.0, max(c.1, x.1)) }
+            else { if let c = cur { total += c.1.timeIntervalSince(c.0) }; cur = x }
+        }
+        if let c = cur { total += c.1.timeIntervalSince(c.0) }
+        return Int((total / 60).rounded())
+    }
+
     func stats(from: Date, to: Date, selected ids: Set<String>,
                groupBy: Calendar.Component = .day) -> MeetingStats {
         let empty = MeetingStats(count: 0, callCount: 0, minutes: 0, callMinutes: 0, busiestDay: nil)
@@ -196,22 +238,38 @@ final class CalendarService {
             default:     return cal.dateInterval(of: .weekOfYear, for: d)?.start ?? cal.startOfDay(for: d)
             }
         }
+        // Runde 111 (Fund 5): Minuten pro TAG als vereinigte Intervalle (Überlappungen zählen nicht doppelt),
+        // mehrtägige Termine werden auf ihre Tage verteilt. Ein Tag hat nie mehr als 24 h.
+        var dayAll: [Date: [(Date, Date)]] = [:]
+        var dayCall: [Date: [(Date, Date)]] = [:]
         for m in events {
             let s = max(m.start, from), e = min(m.end, to)
             guard e > s else { continue }
-            let mins = Int(e.timeIntervalSince(s) / 60)
-            count += 1; minutes += mins
-            if m.joinURL != nil { callCount += 1; callMinutes += mins }
-            perDay[cal.startOfDay(for: s), default: 0] += mins
-            var b = perBucket[bucket(s)] ?? (0, 0)
-            b.0 += mins
-            if m.joinURL != nil { b.1 += mins }
-            perBucket[bucket(s)] = b
+            count += 1
+            let isCall = m.joinURL != nil
+            if isCall { callCount += 1 }
+            var cur = s
+            while cur < e {
+                let day = cal.startOfDay(for: cur)
+                let next = cal.date(byAdding: .day, value: 1, to: day) ?? e
+                let seg = min(e, next)
+                dayAll[day, default: []].append((cur, seg))
+                if isCall { dayCall[day, default: []].append((cur, seg)) }
+                cur = seg
+            }
+        }
+        for (day, iv) in dayAll {
+            let mins = Self.unionMinutes(iv)
+            let calls = Self.unionMinutes(dayCall[day] ?? [])
+            perDay[day] = mins
+            minutes += mins; callMinutes += calls
+            var b = perBucket[bucket(day)] ?? (0, 0)
+            b.0 += mins; b.1 += calls
+            perBucket[bucket(day)] = b
         }
         var busiest: (String, Int)?
         if let top = perDay.max(by: { $0.value < $1.value }), top.value > 0 {
-            let f = DateFormatter(); f.locale = L.locale; f.dateFormat = L.t("EEEE, d. MMM", "EEEE, MMM d")
-            busiest = (f.string(from: top.key), top.value)
+            busiest = (L.date(top.key, "EEEEMMMd"), top.value)
         }
 
         // Balken über den ganzen Zeitraum aufspannen, damit die Achse stabil
@@ -220,7 +278,8 @@ final class CalendarService {
         // „Mo/Di/Mi" statt „M/D/M": ein Buchstabe ist mehrdeutig (Montag und
         // Mittwoch, Dienstag und Donnerstag). Beim Jahr passen bei 12 Balken
         // nur Einzelbuchstaben, dort trägt die Reihenfolge die Verständlichkeit.
-        f.dateFormat = groupBy == .day ? "EEEEEE" : (groupBy == .month ? "LLLLL" : "d.")
+        // Runde 111 (Fund 3): Wochen-Balken nur die Tageszahl (kein deutscher Punkt), lokalisiert.
+        f.setLocalizedDateFormatFromTemplate(groupBy == .day ? "EEEEEE" : (groupBy == .month ? "LLLLL" : "d"))
         var bars: [StatBar] = []
         var cursor = bucket(from)
         let now = Date()
@@ -350,18 +409,38 @@ final class CalendarService {
             }
     }
 
+    /// Runde 111b (B4): Rückgängig findet den Termin auch ohne Kennung (CalDAV vergibt nach dem Sync neue, Runde 83):
+    /// Titel + Start ±60 s in den Zielkalendern. Gibt die Zahl gelöschter Termine zurück.
+    @discardableResult
+    func deleteEvents(title: String, start: Date, calendarIDs: [String?]) -> Int {
+        guard isAuthorized else { return 0 }
+        let cals: [EKCalendar]? = {
+            let ids = calendarIDs.compactMap { $0 }
+            let all = ids.compactMap { store.calendar(withIdentifier: $0) }
+            return all.isEmpty ? nil : all
+        }()
+        let pred = store.predicateForEvents(withStart: start.addingTimeInterval(-60), end: start.addingTimeInterval(120), calendars: cals)
+        var n = 0
+        for e in store.events(matching: pred) where e.title == title && abs(e.startDate.timeIntervalSince(start)) <= 60 {
+            if (try? store.remove(e, span: .thisEvent)) != nil { n += 1 }
+        }
+        return n
+    }
+
     /// Loescht EINEN Termin per Kennung (Runde 78, MCP `delete_event`). Der
     /// Aufrufer prueft VORHER, ob dieser Termin ueberhaupt ueber Claude
     /// angelegt wurde (siehe `MCPCreatedStore`): diese Funktion selbst kennt
     /// diese Regel nicht, sie loescht, was man ihr gibt.
-    func deleteEvent(id: String) throws {
+    /// `wholeSeries` (Runde 88): beim Zurückrollen einer gerade angelegten
+    /// Serie die GANZE Serie entfernen, nicht nur das erste Vorkommen.
+    func deleteEvent(id: String, wholeSeries: Bool = false) throws {
         guard isAuthorized else { throw NSError(domain: "MeetingBlitz", code: 1,
             userInfo: [NSLocalizedDescriptionKey: L.t("Kein Kalender-Zugriff.", "No calendar access.")]) }
         guard let event = store.event(withIdentifier: id) else {
             throw NSError(domain: "MeetingBlitz", code: 3,
                 userInfo: [NSLocalizedDescriptionKey: L.t("Termin nicht gefunden.", "Event not found.")])
         }
-        try store.remove(event, span: .thisEvent)
+        try store.remove(event, span: wholeSeries ? .futureEvents : .thisEvent)
     }
 
     /// Verschiebt EIN Vorkommen eines Termins (Nachtrag 21.09., MCP
@@ -525,7 +604,8 @@ final class CalendarService {
             joinURL: findJoinURL(e),
             contactID: e.birthdayContactIdentifier,
             calendarItemID: e.calendarItemIdentifier,
-            myStatus: myStatus(e)
+            myStatus: myStatus(e),
+            hasGuests: !(e.attendees?.isEmpty ?? true)
         )
     }
 

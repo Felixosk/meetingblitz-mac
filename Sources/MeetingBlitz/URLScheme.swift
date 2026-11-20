@@ -12,7 +12,7 @@ import AppKit
 /// Unterstützt:
 ///   meetingblitz://show           Widget öffnen
 ///   meetingblitz://join-next      laufendes Meeting, sonst das nächste
-///   meetingblitz://instant        Sofort-Meeting erstellen und beitreten
+///   meetingblitz://instant        öffnet das Termin-Formular (legt seit Runde 88 nichts mehr selbst an)
 ///   meetingblitz://create?text=…  Erstellen-Formular mit Freitext vorbelegen
 ///   meetingblitz://settings       Einstellungen öffnen
 ///   meetingblitz://rescue         Fenster zurückholen (siehe PanelRescue)
@@ -53,7 +53,11 @@ enum URLScheme {
         case "join-next", "join":
             state.joinCurrentOrNext()
         case "instant", "instant-meeting":
-            state.startInstantMeeting()
+            // Runde 88: NICHT mehr direkt anlegen. Sonst konnte jede App und
+            // jede Webseite einen Google-Termin erzeugen, die Zwischenablage
+            // überschreiben und Meet öffnen, ohne einen Klick. Gleiche Regel
+            // wie bei „create": das Formular öffnet, der Klick bleibt beim Nutzer.
+            state.openCreatePanel()
         case "create", "new":
             // BEWUSST nur vorbelegen, nicht anlegen: eine URL kann jede App
             // feuern. Zwischen fremdem Aufruf und einem Termin im Kalender
@@ -61,9 +65,17 @@ enum URLScheme {
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first { $0.name == "text" }?.value
             state.pendingQuickAdd = text
+            // Runde 119: `guest=a,b` UND mehrfach `guest=a&guest=b`; höchstens 5.
+            let guestValues = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.filter { $0.name == "guest" }.compactMap(\.value) ?? []
+            state.pendingGuest = guestValues.isEmpty ? nil : MailInvite.splitPasted(guestValues.joined(separator: ",")).list
             state.openCreatePanel()
         case "settings", "preferences":
             state.toggleSettingsPanel()
+        case "dry-return" where DryCreate.isOn:
+            // Runde 122: nur mit MB_DRY_CREATE=1. Return im Eingabefeld, als echtes NSEvent NUR an unser Fenster
+            // (kein CGEvent, landet nie in einer anderen App). Prüft den Enter-Weg wie mit der Tastatur.
+            CreatePanelController.shared.dryPressReturn()
         case "rescue", "bring-back":
             PanelRescue.bringBack(state: state, statusButton: statusButton)
         case "restart":

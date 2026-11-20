@@ -13,17 +13,6 @@ final class AppState: ObservableObject {
     @Published var agendaMaxRows: Int { didSet { d.set(agendaMaxRows, forKey: "agendaMaxRows") } }
     @Published var soundEnabled: Bool { didSet { d.set(soundEnabled, forKey: "soundEnabled") } }
     @Published var animationSeconds: Double { didSet { d.set(animationSeconds, forKey: "animationSeconds") } }
-    /// Dramatic entrance when the banner flies in (Runde 6, toggleable; Runde 72:
-    /// renamed from "Sprung aus dem Wasser" — jetzt gilt er für BEIDE Elemente,
-    /// Wasser springt aus dem Meer, Luft bricht aus einer Wolke hervor, siehe
-    /// `currentSkinElement`). UserDefaults-Key bleibt "waterEffect", damit eine
-    /// bereits gesetzte Einstellung nicht zurückgesetzt wird.
-    @Published var dramaticEntrance: Bool { didSet { d.set(dramaticEntrance, forKey: "waterEffect") } }
-    /// Lässt das Flugobjekt über die Kapsel hinausragen, damit es körperlich
-    /// davor steht statt darin zu sitzen (Runde 71). Standard aus, weil es nur
-    /// hohen Motiven schmeichelt: ein langes flaches U-Boot wird dabei so
-    /// breit, dass die Breitengrenze greift und kaum noch etwas übersteht.
-    @Published var skinOversize: Bool { didSet { d.set(skinOversize, forKey: "skinOversize") } }
     /// Größe der Banner-KAPSEL (Balken mit Titel und Knöpfen), 24.08.2026.
     ///
     /// WARUM getrennt vom Motiv: Am 20.08. wurde auf die Rückmeldung „das Banner
@@ -140,6 +129,9 @@ final class AppState: ObservableObject {
     @Published var createTarget: CreateTarget {
         didSet {
             d.set(createTarget.rawValue, forKey: "createTarget")
+            // Runde 108c: eine Wahl in den Einstellungen gilt wieder statt der
+            // Kalender-Zeile im Formular.
+            if !pickingFormCalendar, !formCalendarID.isEmpty { formCalendarID = "" }
             // Picking a Google side without a target yet: guess it, so the
             // choice works without a second decision. Never hardcoded.
             if createTarget.usesGoogle && googleTargetCalendarID.isEmpty {
@@ -158,14 +150,39 @@ final class AppState: ObservableObject {
             }
         }
     }
+    /// Runde 108c (Fable R1): Kalender aus der Zeile „Kalender" im Termin-
+    /// Fenster. Eigener Schlüssel, damit diese Wahl NICHT das Sofort-Meeting
+    /// mitverstellt (das nutzt google-/appleTargetCalendarID). Leer = Ziel aus
+    /// den Einstellungen. Schreibt immer in genau EINEN Kalender.
+    @Published var formCalendarID: String {
+        didSet { d.set(formCalendarID, forKey: "formCalendarID") }
+    }
+    private var pickingFormCalendar = false
+
+    /// Wahl aus dem Termin-Fenster: Ziel-Seite in den Einstellungen mitziehen
+    /// (damit dort das Richtige steht), Kalender selbst nur fürs Formular.
+    func pickFormCalendar(_ c: CalendarInfo) {
+        pickingFormCalendar = true
+        createTarget = c.isAppleAccount ? .apple : .google
+        pickingFormCalendar = false
+        formCalendarID = c.id
+    }
+
     /// F11: which calendar is "the Google calendar" (picked in settings).
     @Published var googleTargetCalendarID: String {
-        didSet { d.set(googleTargetCalendarID, forKey: "googleTargetCalendarID") }
+        didSet {
+            d.set(googleTargetCalendarID, forKey: "googleTargetCalendarID")
+            // Runde 108c: Wahl in den Einstellungen gilt wieder fürs Formular.
+            if !oldValue.isEmpty, oldValue != googleTargetCalendarID, !formCalendarID.isEmpty { formCalendarID = "" }
+        }
     }
     /// F11: the counterpart for the Apple side, so a target is pickable for
     /// BOTH options. Empty = the create form's choice / the system default.
     @Published var appleTargetCalendarID: String {
-        didSet { d.set(appleTargetCalendarID, forKey: "appleTargetCalendarID") }
+        didSet {
+            d.set(appleTargetCalendarID, forKey: "appleTargetCalendarID")
+            if !oldValue.isEmpty, oldValue != appleTargetCalendarID, !formCalendarID.isEmpty { formCalendarID = "" }
+        }
     }
     /// F11: transient error line under the instant button (not persisted).
     @Published var instantError: String?
@@ -191,6 +208,9 @@ final class AppState: ObservableObject {
     /// (Runde 43). Off by default: needs a Google reconnect for the new scope and
     /// a Workspace edition that supports auto-transcripts (~Business Plus+).
     @Published var autoTranscribe: Bool { didSet { d.set(autoTranscribe, forKey: "autoTranscribe") } }
+    /// Runde 124: Gemini-Notizen ("Take notes for me") per Meet-API automatisch einschalten
+    /// (smartNotesConfig.autoSmartNotesGeneration). Standard an. Gleicher Scope wie das Transkript.
+    @Published var autoSmartNotes: Bool { didSet { d.set(autoSmartNotes, forKey: "autoSmartNotes") } }
 
     /// Show Apple Reminders (due today / overdue) in the widget (Runde 43).
     @Published var showReminders: Bool { didSet { d.set(showReminders, forKey: "showReminders") } }
@@ -238,6 +258,19 @@ final class AppState: ObservableObject {
     /// Aus geschaltet schließt das Erstellen-Fenster sofort, .ics und
     /// Zwischenablage laufen trotzdem wie eingestellt.
     @Published var showResultAfterCreate: Bool { didSet { d.set(showResultAfterCreate, forKey: "showResultAfterCreate") } }
+    /// Runde 121: Widget nach erfolgreichem „New Meeting" offen lassen. Standard AUS = Widget schließt sich mit.
+    @Published var keepWidgetOpenAfterCreate: Bool { didSet { d.set(keepWidgetOpenAfterCreate, forKey: "keepWidgetOpenAfterCreate") } }
+    /// Runde 109: Mail an den Gast. Standard AUS (der Scope gmail.send wird nur dann angefragt).
+    @Published var mailInviteEnabled: Bool { didSet { d.set(mailInviteEnabled, forKey: "mailInviteEnabled") } }
+    @Published var mailAttachICS: Bool { didSet { d.set(mailAttachICS, forKey: "mailAttachICS") } }
+    /// Leer = Standardvorlage (`MailInvite.default…`).
+    @Published var mailSubjectEN: String { didSet { d.set(mailSubjectEN, forKey: "mailSubjectEN") } }
+    @Published var mailSubjectDE: String { didSet { d.set(mailSubjectDE, forKey: "mailSubjectDE") } }
+    @Published var mailBodyEN: String { didSet { d.set(mailBodyEN, forKey: "mailBodyEN") } }
+    @Published var mailBodyDE: String { didSet { d.set(mailBodyDE, forKey: "mailBodyDE") } }
+    /// Runde 119: Vorlage des Einladungstexts (Kopieren); leer = fester Aufbau wie vorher.
+    @Published var inviteTextEN: String { didSet { d.set(inviteTextEN, forKey: "inviteTextEN") } }
+    @Published var inviteTextDE: String { didSet { d.set(inviteTextDE, forKey: "inviteTextDE") } }
     /// Claude-Zugang per MCP (Runde 78). Standard AUS: eine lokale Bruecke,
     /// die Termine ohne Klick anlegen kann, ist ein bewusster Opt-in, kein
     /// automatisches Verhalten.
@@ -438,8 +471,6 @@ final class AppState: ObservableObject {
 
         leadMinutes = d.object(forKey: "leadMinutes") as? Int ?? 5
         soundEnabled = d.object(forKey: "soundEnabled") as? Bool ?? true
-        dramaticEntrance = d.object(forKey: "waterEffect") as? Bool ?? true
-        skinOversize = d.object(forKey: "skinOversize") as? Bool ?? false
         // Standard 1.0 = schlanker Balken. Wer die fette Variante vom 20.08.
         // mochte, stellt in den Einstellungen auf Groß.
         bannerScale = d.object(forKey: "bannerScale") as? Double ?? 1.0
@@ -469,13 +500,16 @@ final class AppState: ObservableObject {
         // Bool wird einmalig übernommen, damit eine bestehende Wahl nicht kippt.
         let formTarget = d.string(forKey: "createTarget").flatMap(CreateTarget.init(rawValue:))
             ?? (d.bool(forKey: "preferGoogleCalendar") ? .google : .apple)
-        createTarget = formTarget
+        // Runde 108c (Fable R2): „Beide" gibt es nicht mehr (Rückmeldung 19.11.:
+        // keine doppelten Termine). Alte Wahl einmalig auf Google.
+        createTarget = formTarget == .both ? .google : formTarget
         // Ohne eigene Wahl folgt der Sofort-Knopf dem Formular, dann ändert
         // sich für bestehende Installationen nichts.
-        instantTarget = d.string(forKey: "instantTarget").flatMap(CreateTarget.init(rawValue:))
-            ?? formTarget
+        let inst = d.string(forKey: "instantTarget").flatMap(CreateTarget.init(rawValue:)) ?? formTarget
+        instantTarget = inst == .both ? .google : inst
         googleTargetCalendarID = d.string(forKey: "googleTargetCalendarID") ?? ""
         appleTargetCalendarID = d.string(forKey: "appleTargetCalendarID") ?? ""
+        formCalendarID = d.string(forKey: "formCalendarID") ?? ""
         meetRoutingEnabled = d.object(forKey: "meetRoutingEnabled") as? Bool ?? true
         // Default the routing account to the connected Google account, so it
         // works out of the box the first time after the update.
@@ -484,15 +518,30 @@ final class AppState: ObservableObject {
         meetChromeProfile = d.string(forKey: "meetChromeProfile") ?? "Default"
         meetRoutingOverrides = (d.object(forKey: "meetRoutingOverrides") as? [String: String]) ?? [:]
         autoTranscribe = d.object(forKey: "autoTranscribe") as? Bool ?? false
+        autoSmartNotes = d.object(forKey: "autoSmartNotes") as? Bool ?? true
         showReminders = d.object(forKey: "showReminders") as? Bool ?? true
         compactMenuBarInMeeting = d.object(forKey: "compactMenuBarInMeeting") as? Bool ?? true
         switchToNextAfterMinutes = d.object(forKey: "switchToNextAfterMinutes") as? Int ?? 10
         createICSFile = d.object(forKey: "createICSFile") as? Bool ?? true
         copyInviteOnCreate = d.object(forKey: "copyInviteOnCreate") as? Bool ?? true
         showResultAfterCreate = d.object(forKey: "showResultAfterCreate") as? Bool ?? true
+        keepWidgetOpenAfterCreate = d.object(forKey: "keepWidgetOpenAfterCreate") as? Bool ?? false
         mcpEnabled = d.object(forKey: "mcpEnabled") as? Bool ?? false
+        mailInviteEnabled = d.object(forKey: "mailInviteEnabled") as? Bool ?? false
+        mailAttachICS = d.object(forKey: "mailAttachICS") as? Bool ?? true
+        mailSubjectEN = d.string(forKey: "mailSubjectEN") ?? ""
+        mailSubjectDE = d.string(forKey: "mailSubjectDE") ?? ""
+        mailBodyEN = d.string(forKey: "mailBodyEN") ?? ""
+        mailBodyDE = d.string(forKey: "mailBodyDE") ?? ""
+        inviteTextEN = d.string(forKey: "inviteTextEN") ?? ""
+        inviteTextDE = d.string(forKey: "inviteTextDE") ?? ""
         inviteLanguage = d.string(forKey: "inviteLanguage") ?? "en"
-        secondZoneEnabled = d.object(forKey: "secondZoneEnabled") as? Bool ?? true
+        // Runde 97: Standard aus; ein bereits gespeicherter Wert wird einmalig auf aus gesetzt.
+        if !d.bool(forKey: "migr.secondZoneOff97") {
+            d.set(false, forKey: "secondZoneEnabled")
+            d.set(true, forKey: "migr.secondZoneOff97")
+        }
+        secondZoneEnabled = d.object(forKey: "secondZoneEnabled") as? Bool ?? false
         secondZoneID = d.string(forKey: "secondZoneID") ?? "Europe/Berlin"
         firstWeekday = d.object(forKey: "firstWeekday") as? Int ?? Calendar.current.firstWeekday
         calendarViewMode = d.string(forKey: "calendarViewMode")
@@ -597,45 +646,94 @@ final class AppState: ObservableObject {
     /// existing create path, so the clipboard invite and the optional
     /// auto-transcribe behave exactly like the form.
     func startInstantMeeting() {
-        guard !GoogleService.shared.busy else { return }
+        // Runde 88: nicht mehr still nichts tun. Läuft gerade ein Login oder
+        // ein anderes Erstellen, steht das jetzt unter dem Knopf.
+        guard !GoogleService.shared.busy else {
+            instantError = L.t("Google ist gerade beschäftigt (Login oder Erstellen läuft). Kurz warten und nochmal.",
+                               "Google is busy right now (login or create running). Wait a moment and try again.")
+            return
+        }
         instantError = nil
-        // Lazy guess: covers the preference arriving WITHOUT the didSet
-        // (defaults import, fresh machine). Imperative context, so mutating
-        // here is safe, unlike in the computed target below.
-        if instantTarget.usesGoogle && googleTargetCalendarID.isEmpty {
-            googleTargetCalendarID = calendar.guessGoogleCalendarID() ?? ""
+        if ProcessInfo.processInfo.environment["MB_DEMO_KEYCHAIN_ERR"] != nil {   // Testschalter: Schlüsselbund-Meldung vortäuschen
+            instantError = L.t("Der Schlüsselbund gibt den Google-Zugang gerade nicht frei (Fehler -25293). Das passiert nach einem Neubau der App: einmal beenden und neu starten, beim Nachfragen „Immer erlauben“ wählen.", "The keychain is not releasing the Google token right now (error -25293). This happens after a rebuild: quit and relaunch the app, and pick “Always Allow” when asked."); return
         }
         let now = Date()
         // Round DOWN to the minute, the calendar should say 14:23, not 14:23:47.
         let start = now.addingTimeInterval(
             -now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
         let title = L.t("Sofort-Meeting", "Instant meeting")
-        // Google gewählt, aber kein Kalender ermittelbar: lieber sichtbar
-        // abbrechen als den Termin still nur im Apple-Kalender anzulegen.
-        if instantTarget.usesGoogle && googleTargetCalendarID.isEmpty {
-            instantError = L.t("Kein Google-Kalender gefunden. In den Einstellungen unter Google einen wählen.",
-                               "No Google calendar found. Pick one in Settings → Google.")
+        // Runde 120: Sofort-Meeting IMMER nur in den Google-Kalender des
+        // verbundenen Google-Kontos (InstantTarget.account), nie Apple/iCloud.
+        // "New Meeting" bleibt bei der Kalenderwahl im Fenster.
+        guard let gid = InstantTarget.pick(from: calendar.writableCalendars()) else {
+            let acc = InstantTarget.account
+            instantError = acc.isEmpty
+                ? L.t("Google ist nicht verbunden (Einstellungen › Meetings). Es wurde nichts angelegt.",
+                      "Google is not connected (Settings › Meetings). Nothing was created.")
+                : L.t("Der Google-Kalender \(acc) wurde nicht gefunden. Es wurde nichts angelegt.",
+                      "The Google calendar \(acc) was not found. Nothing was created.")
             return
         }
+        let calIDs: [String?] = [gid]
+        // Runde 111b (B4): Zwischenablage vorher sichern, Rückgängig stellt sie wieder her.
+        let snapshot = PasteboardSnapshot.capture()
+        // Testschalter: kein echter Termin, feste ID, schreibt nichts.
+        let demo = ProcessInfo.processInfo.environment["MB_DEMO_INSTANT_UNDO"] != nil
         Task {
-            let ok = await GoogleService.shared.createAppleMeeting(
-                title: title, start: start, minutes: 30,
-                calendarIDs: calendarIDs(for: instantTarget),
-                autoTranscribe: autoTranscribe, makeICS: false, copyInvite: copyInviteOnCreate,
-                calendarService: calendar)
+            var ok = false
+            var ids: [String] = []
+            if demo {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("Instant meeting (demo)", forType: .string)
+                ok = true; ids = ["demo-instant"]
+            } else {
+                ok = await GoogleService.shared.createAppleMeeting(
+                    title: title, start: start, minutes: 30,
+                    calendarIDs: calIDs,
+                    autoTranscribe: autoTranscribe, autoSmartNotes: autoSmartNotes, makeICS: false, copyInvite: copyInviteOnCreate,
+                    calendarService: calendar)
+                ids = GoogleService.shared.lastCreatedEventIDs
+            }
             if ok {
                 monitor.tickNow()   // agenda/timeline pick it up immediately
                 // Through the launcher, NOT NSWorkspace: the Chrome profile +
                 // authuser routing (Runde 43) must apply, or the room opens as
-                // the wrong signed-in account.
-                if let link = GoogleService.shared.lastMeetLink,
+                // the wrong signed-in account. (Entscheidung: sofort öffnen.)
+                if !demo, let link = GoogleService.shared.lastMeetLink,
                    let url = URL(string: link) {
                     MeetingLauncher.open(url, title: title)
+                }
+                UndoToast.show(message: L.t("Meeting erstellt", "Meeting created"),
+                               actionTitle: L.t("Rückgängig", "Undo")) { [weak self] in
+                    self?.undoInstant(ids: ids, title: title, start: start, calendarIDs: calIDs, snapshot: snapshot, demo: demo)
                 }
             } else {
                 instantError = GoogleService.shared.lastError
             }
         }
+    }
+
+    /// Runde 111b (B4): löscht nur den Termin (der Meet-Tab bleibt Sache des Nutzers), stellt die Zwischenablage wieder her.
+    func undoInstant(ids: [String], title: String, start: Date, calendarIDs: [String?], snapshot: PasteboardSnapshot, demo: Bool) {
+        var failed = false
+        if !demo {
+            var deleted = 0
+            for id in ids where !id.isEmpty { if (try? calendar.deleteEvent(id: id)) != nil { deleted += 1 } }
+            // CalDAV vergibt nach dem Sync neue IDs (Runde 83): dann über Titel + Zeit suchen.
+            if deleted == 0 { deleted = calendar.deleteEvents(title: title, start: start, calendarIDs: calendarIDs) }
+            failed = deleted == 0
+        }
+        if failed {
+            UndoToast.show(message: L.t("Konnte nicht löschen", "Couldn’t delete"),
+                           actionTitle: L.t("Im Kalender öffnen", "Open in Calendar"), seconds: 6) {
+                if let u = URL(string: "ical://") { NSWorkspace.shared.open(u) }
+            }
+            return
+        }
+        snapshot.restore()
+        monitor.tickNow()
+        UndoToast.show(message: L.t("Meeting gelöscht. Den Meet-Tab kannst du schließen.", "Meeting deleted. You can close the Meet tab."),
+                       actionTitle: nil, seconds: 2, onAction: nil)
     }
 
     /// Target calendars for one creation route (F11). One entry per calendar
@@ -655,7 +753,14 @@ final class AppState: ObservableObject {
     }
 
     /// Ziele des Formulars („Neues Meeting").
-    var effectiveCreateCalendarIDs: [String?] { calendarIDs(for: createTarget) }
+    /// Runde 108c: die Wahl aus dem Formular gewinnt, solange es den Kalender gibt.
+    var effectiveCreateCalendarIDs: [String?] {
+        if !formCalendarID.isEmpty,
+           calendar.writableCalendars().contains(where: { $0.id == formCalendarID }) {
+            return [formCalendarID]
+        }
+        return calendarIDs(for: createTarget)
+    }
 
     // MARK: - Launch at login (Runde 4 fix)
 
@@ -679,7 +784,7 @@ final class AppState: ObservableObject {
             // `availableCalendars`. Die Liste ist beim App-Start leer, damit galt
             // bei JEDEM Start jeder Kalender als neu und wurde per formUnion
             // wieder eingeschaltet. Abgewählte Kalender (Meldung 14.09.: die
-            // Alex-Kalender) kamen so nach jedem Neustart zurück. Fehlt der
+            // Kollegen-Kalender) kamen so nach jedem Neustart zurück. Fehlt der
             // Eintrag noch (erster Start nach dem Update), gilt die aktuelle
             // Liste als bekannt, sonst würde genau dieser Start es noch einmal tun.
             availableCalendars = calendar.allCalendars()
@@ -758,19 +863,17 @@ final class AppState: ObservableObject {
         monitor.tickNow()
     }
 
-    func announce(_ meeting: Meeting, pinnedDocked: Bool = false) {
+    func announce(_ meeting: Meeting, pinnedDocked: Bool = false, subtitle: String? = nil) {
         // Vor dem Aufbau, nicht danach: `currentSkinElement` unten entscheidet
         // über Sprung und Startpanel und muss zum neuen Motiv passen. Beim
         // angedockten Wiederzeigen NICHT wechseln, das ist derselbe Termin.
         if !pinnedDocked { advanceSkinIfRotating() }
-        // Runde 72: "Dramatischer Auftritt" wirkt jetzt für BEIDE Elemente —
-        // diese eine Stelle steuert sowohl die Sprung-Phase als auch welches
-        // Panel BannerPresenter an der Startstelle aufsetzt (SeaSplash für
-        // Wasser, CloudBurst für Luft, siehe FlightVM.entranceElement).
+        // Runde 117: Wasser-Motive tauchen von unten auf, Luft-Motive sinken von oben
+        // (siehe FlightVM.entranceElement).
         presenter.present(meeting, leadMinutes: leadMinutes, seconds: animationSeconds,
                           playSound: soundEnabled && !pinnedDocked,
-                          dramaticEntrance: dramaticEntrance, element: currentSkinElement,
-                          pinnedDocked: pinnedDocked)
+                          element: currentSkinElement,
+                          pinnedDocked: pinnedDocked, subtitleOverride: subtitle)
     }
 
     /// Runde 5: whether an automatic lead-time banner should be held back.
@@ -802,7 +905,7 @@ final class AppState: ObservableObject {
     func showDemoBanner(docked: Bool) {
         let m = Self.demoMeeting()
         presenter.present(m, leadMinutes: 2, seconds: animationSeconds, playSound: false,
-                          dramaticEntrance: dramaticEntrance, element: currentSkinElement,
+                          element: currentSkinElement,
                           pinnedDocked: docked)
     }
 
@@ -833,7 +936,8 @@ final class AppState: ObservableObject {
         let link = m.joinURL?.absoluteString
         do {
             let url = try ICSExport.write(title: m.title, start: m.start, end: m.end, link: link)
-            ICSExport.copyToPasteboard(url)
+            let text = GoogleService.shareText(title: m.title, start: m.start, end: m.end, link: link)
+            ICSExport.copyToPasteboard(url, text: text)
             return url
         } catch {
             NSLog("ICS-Export fehlgeschlagen: \(error)")
@@ -926,12 +1030,19 @@ final class AppState: ObservableObject {
     /// Open/close the floating settings side panel (Runde 3: settings live
     /// beside the widget, not inside it), docked to the widget's frame.
     func toggleSettingsPanel() {
-        SettingsPanelController.shared.toggle(state: self, anchor: WidgetPanelController.shared.frame)
+        // Runde 109c (R1): ist das Termin-Fenster offen, bleibt es offen (sonst ist
+        // der angefangene Termin weg) und die Einstellungen docken DANEBEN an.
+        // Sonst wie bisher am Widget (Runde 101: nie deckungsgleich übereinander).
+        let besideCreate = CreatePanelController.shared.isOpen
+        SettingsPanelController.shared.toggle(state: self,
+            anchor: besideCreate ? (CreatePanelController.shared.glassFrame ?? WidgetPanelController.shared.glassFrame)
+                                 : WidgetPanelController.shared.glassFrame)
     }
 
     /// Open/close the "Neues Meeting" panel (Runde 27c), docked like settings.
     func toggleCreatePanel() {
-        CreatePanelController.shared.toggle(state: self, anchor: WidgetPanelController.shared.frame)
+        if !CreatePanelController.shared.isOpen { SettingsPanelController.shared.close() }
+        CreatePanelController.shared.toggle(state: self, anchor: WidgetPanelController.shared.glassFrame)
     }
 
     /// F9: Öffnet das Erstellen-Formular, ohne es bei erneutem Aufruf wieder
@@ -942,6 +1053,9 @@ final class AppState: ObservableObject {
 
     /// F9: Freitext, mit dem das Formular beim Öffnen vorbelegt wird.
     @Published var pendingQuickAdd: String?
+    /// Runde 109f: `meetingblitz://create?guest=a@b.co` belegt das Gast-Feld vor
+    /// (nur vorbelegen, gesendet wird erst mit dem Klick des Nutzers).
+    @Published var pendingGuest: [String]?
 
     func copyLink(_ url: URL) {
         NSPasteboard.general.clearContents()

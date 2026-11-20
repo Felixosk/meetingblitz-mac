@@ -85,10 +85,16 @@ enum ICSExport {
 
     /// Legt die Datei als DATEI in die Zwischenablage, eingefügt in WhatsApp,
     /// Mail oder Telegram wird daraus ein Anhang, kein Pfad-Text.
-    static func copyToPasteboard(_ url: URL) {
+    /// Runde 110: EIN Eintrag mit zwei Typen. `public.file-url` für Finder, Mail, WhatsApp, Slack (Datei),
+    /// `public.utf8-plain-text` für Textfelder, Chrome, Notizen (die Einladung). Kein zweiter Eintrag (manche
+    /// Apps fügen beide ein) und kein `NSURL`-Objekt (das bringt einen eigenen Text-Typ mit Pfad mit).
+    static func copyToPasteboard(_ url: URL, text: String?) {
+        let item = NSPasteboardItem()
+        item.setString(url.absoluteString, forType: .fileURL)
+        if let text, !text.isEmpty { item.setString(text, forType: .string) }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.writeObjects([url as NSURL])
+        pb.writeObjects([item])
     }
 
     static func revealInFinder(_ url: URL) {

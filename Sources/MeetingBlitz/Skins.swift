@@ -118,7 +118,7 @@ struct Skin: Identifiable, Hashable {
     }
 
     /// All 27 motifs, in the fixed numbering from the design export
-    /// (`~/.claude/design/meetingblitz-skins/{verspielt,fotoreal}/NN-slug.svg`).
+    /// (`Resources/Skins/{verspielt,fotoreal}/NN-slug`).
     /// Wasser/Luft-Einteilung folgt der festgelegten Liste vom 20.08.2026.
     static let all: [Skin] = [
         Skin("01-narco-sub", "Narco-U-Boot", "Narco Sub", .water),

@@ -1,3 +1,4 @@
+import EventKit
 import Foundation
 import AppKit
 import Network
@@ -52,7 +53,24 @@ final class GoogleService: ObservableObject {
     // us switch on auto-transcription for the Meet space of a meeting we create
     // (spaces.get → spaces.patch). Added here means the grant is requested on the
     // next connect, an already-connected session must reconnect once to get it.
-    private let scopes = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/meetings.space.settings openid email"
+    /// Runde 109: der Mail-Scope (`gmail.send`, nur senden, nicht lesen) wird nur
+    /// angefragt, wenn "Mail an Gast anbieten" an ist. Ein Fremdnutzer des
+    /// öffentlichen Repos sieht "darf Mails senden" nie, wenn er es nicht nutzt.
+    static let gmailSendScope = "https://www.googleapis.com/auth/gmail.send"
+    private var scopes: String {
+        var s = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/meetings.space.settings openid email"
+        if AppState.shared.mailInviteEnabled { s += " " + Self.gmailSendScope }
+        return s
+    }
+    /// Gewährte Scopes aus der letzten Token-Antwort (Feld `scope`).
+    var grantedScopes: String { UserDefaults.standard.string(forKey: "googleGrantedScopes") ?? "" }
+    /// Nur Testschalter `MB_DEMO_GMAIL`: Demo tut so, als sei das Senden erlaubt (kein echter Versand ohne Anmeldung).
+    private static let demoGmail = ProcessInfo.processInfo.environment["MB_DEMO_GMAIL"] != nil
+    var canSendMail: Bool { Self.demoGmail || grantedScopes.contains("gmail.send") }
+    /// Ergebnis des letzten Mail-Versands für die Ergebnisansicht.
+    enum MailStatus: Equatable { case sent([String]); case failed(MailInvite.Failure) }
+    @Published var lastMailStatus: MailStatus?
+    @Published private(set) var mailBusy = false
     private let tokenURL = URL(string: "https://oauth2.googleapis.com/token")!
 
     private struct ClientConfig { let clientID: String; let clientSecret: String }
@@ -135,11 +153,16 @@ final class GoogleService: ObservableObject {
                 .init(name: "code_challenge", value: challenge),
                 .init(name: "code_challenge_method", value: "S256"),
                 .init(name: "access_type", value: "offline"),
+                .init(name: "include_granted_scopes", value: "true"),
                 .init(name: "prompt", value: "consent"),   // force a refresh token every time
                 .init(name: "state", value: state),
             ]
             NSWorkspace.shared.open(comps.url!)
 
+            // Runde 88: Wer den Browser-Tab schließt, bekam nie eine Antwort,
+            // `busy` blieb für immer an und JEDE Google-Funktion (auch Sofort-
+            // Meeting) tat still nichts bis zum Neustart. Nach 3 Minuten aufgeben.
+            catcher.timeout(after: Self.loginTimeoutSeconds)
             let (code, returnedState) = try await catcher.awaitCode()
             guard returnedState == state else { throw GError.msg(L.t("Sicherheitscheck fehlgeschlagen (state).", "Security check failed (state).")) }
 
@@ -156,11 +179,18 @@ final class GoogleService: ObservableObject {
         }
     }
 
+    nonisolated static let loginTimeoutSeconds: TimeInterval = 180
+    nonisolated static var loginTimeoutMessage: String {
+        L.t("Google-Login abgebrochen: keine Antwort aus dem Browser nach 3 Minuten. Einfach nochmal verbinden.",
+            "Google login cancelled: no answer from the browser after 3 minutes. Just connect again.")
+    }
+
     func disconnect() {
         keychain.refreshToken = nil
         accessToken = nil; accessExpiry = nil
         accountEmail = nil
         UserDefaults.standard.removeObject(forKey: "googleAccountEmail")
+        UserDefaults.standard.removeObject(forKey: "googleGrantedScopes")
         isConnected = false
         lastMeetLink = nil
         lastError = nil
@@ -171,7 +201,7 @@ final class GoogleService: ObservableObject {
     /// Reset the create-form feedback (called when the form opens).
     func resetCreateFeedback() {
         lastMeetLink = nil; lastShareText = nil; lastArtifactNote = nil; lastError = nil
-        lastICSURL = nil; lastCreatedEventIDs = []
+        lastICSURL = nil; lastCreatedEventIDs = []; lastMailStatus = nil
     }
 
     /// Der Ablauf (Runde 27): the REAL event lives in the Apple calendar, not
@@ -189,12 +219,33 @@ final class GoogleService: ObservableObject {
     @discardableResult
     func createAppleMeeting(title: String, start: Date, minutes: Int, calendarIDs: [String?],
                             recurrence: RepeatRule = .none, custom: CustomRecurrence? = nil,
-                            autoTranscribe: Bool = false, makeICS: Bool = false, copyInvite: Bool = true,
+                            autoTranscribe: Bool = false, autoSmartNotes: Bool = false, makeICS: Bool = false, copyInvite: Bool = true,
                             calendarService: CalendarService) async -> Bool {
         guard !busy else { return false }
         busy = true; lastError = nil; lastMeetLink = nil; lastArtifactNote = nil; lastICSURL = nil
         lastCreatedEventIDs = []
         defer { busy = false }
+        // Runde 122: Testschalter MB_DRY_CREATE=1 (nur Umgebungsvariable): simulierter Erfolg mit Fake-Link,
+        // KEIN Google-Aufruf, KEIN EventKit, keine Zwischenablage, keine .ics. Für Videos der Schließ-Animation.
+        if DryCreate.isOn {
+            // Wie echt: Google braucht ~1,5 s, danach meldet EventKit eine Änderung (hier nur die Meldung, kein Schreiben).
+            try? await Task.sleep(nanoseconds: UInt64((Double(ProcessInfo.processInfo.environment["MB_DRY_DELAY"] ?? "1.5") ?? 1.5) * 1e9))
+            let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let s0 = DryCreate.startOverrideMinutes.map { Date().addingTimeInterval($0 * 60) } ?? start
+            let e0 = s0.addingTimeInterval(Double(minutes) * 60)
+            lastCreatedSlot = (t.isEmpty ? "Meeting" : t, s0, e0)
+            let fakeID = "dry-\(Int(Date().timeIntervalSince1970))"
+            DryCreate.fakeMeetings.append(Meeting(id: fakeID, title: t.isEmpty ? "Meeting" : t, start: s0, end: e0,
+                isAllDay: false, isBirthday: false, calendarTitle: "Dry", calendarID: calendarIDs.first ?? nil,
+                color: .blue, joinURL: URL(string: DryCreate.fakeLink), contactID: nil, calendarItemID: nil))
+            lastCreatedEventIDs = [fakeID]
+            lastMeetLink = DryCreate.fakeLink
+            // Wie EventKit nach einem echten Schreiben: Änderungs-Meldung sofort und noch einmal kurz danach.
+            NotificationCenter.default.post(name: .EKEventStoreChanged, object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { NotificationCenter.default.post(name: .EKEventStoreChanged, object: nil) }
+            print("dry-create ok \(Date().timeIntervalSince1970)"); fflush(stdout)
+            return true
+        }
         do {
             let link = try await mintMeetLink()
             let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,19 +254,25 @@ final class GoogleService: ObservableObject {
             // One Meet link, one event per chosen calendar ("beide" writes two).
             // The first failure aborts: a half-written state is worse than a
             // clear error, and the link is already minted either way.
-            var createdIDs: [String] = []
-            for cid in (calendarIDs.isEmpty ? [nil] : calendarIDs) {
-                let newID = try calendarService.createEvent(title: finalTitle, start: start, end: end,
-                                                             url: URL(string: link),
-                                                             calendarID: cid,
-                                                             recurrence: recurrence, custom: custom)
-                if !newID.isEmpty { createdIDs.append(newID) }
-            }
+            // Runde 88: scheitert die zweite Hälfte („beide"), wird die erste
+            // wieder gelöscht, so wie es der MCP-Weg seit Runde 80 tut.
+            // Vorher blieb ein halber Termin mit gültigem Meet-Link stehen.
+            let wholeSeries = recurrence != .none
+            let createdIDs = try Self.writeAll(
+                calendarIDs.isEmpty ? [nil] : calendarIDs,
+                create: { cid in
+                    try calendarService.createEvent(title: finalTitle, start: start, end: end,
+                                                    url: URL(string: link), calendarID: cid,
+                                                    recurrence: recurrence, custom: custom)
+                },
+                rollback: { id in try? calendarService.deleteEvent(id: id, wholeSeries: wholeSeries) })
             lastCreatedEventIDs = createdIDs
             lastCreatedSlot = (finalTitle, start, end)
             // Best effort, never blocks creation: switch the Meet space to
             // auto-transcribe (Runde 43). Fails softly (licence/scope) into a note.
-            if autoTranscribe { await enableAutoTranscription(meetLink: link) }
+            if autoTranscribe || autoSmartNotes {
+                await enableMeetArtifacts(meetLink: link, transcribe: autoTranscribe, smartNotes: autoSmartNotes)
+            }
             lastMeetLink = link
             // Clipboard gets the full invite blurb, not just the bare link,
             // paste it into a chat and the receiver has everything.
@@ -252,16 +309,34 @@ final class GoogleService: ObservableObject {
         }
     }
 
+    /// Schreibt in alle Ziele; scheitert eines, werden die schon angelegten
+    /// über `rollback` wieder entfernt und der Fehler weitergereicht (Runde 88).
+    /// Rein, damit `--selftest` den Fehlerfall ohne Kalender prüfen kann.
+    nonisolated static func writeAll(_ targets: [String?], create: (String?) throws -> String,
+                                     rollback: (String) -> Void) throws -> [String] {
+        var done: [String] = []
+        do {
+            for t in targets {
+                let id = try create(t)
+                if !id.isEmpty { done.append(id) }
+            }
+        } catch {
+            for id in done.reversed() { rollback(id) }
+            throw error
+        }
+        return done
+    }
+
     /// Einladungsblock: Titel, Datum, Uhrzeit, Link.
     ///
     /// **Zeitzone folgt dem Rechner** (Runde 52, Rückmeldung: „dass das immer in der
-    /// Zeitzone ist, wo gerade mein Rechner ist"). Vorher standen Europe/Nicosia
-    /// und Europe/Berlin FEST im Code, solange man in dieser Zone sitzt stimmt
-    /// das, unterwegs (Bratislava, Deutschland) verschickt er damit falsche
+    /// Zeitzone ist, wo gerade mein Rechner ist"). Vorher standen zwei Zonen
+    /// FEST im Code, solange man in diesen Zonen sitzt stimmt
+    /// das, unterwegs verschickt man damit falsche
     /// Zeiten. Jetzt ist die erste Zeitangabe immer `TimeZone.current`.
     ///
     /// Die zweite Zeitangabe (Deutschland) bleibt aus Runde 40 erhalten, dort
-    /// hatte ein Empfänger die reine Zypernzeit missverstanden, wird aber nur
+    /// hatte ein Empfänger die reine Ortszeit missverstanden, wird aber nur
     /// noch angehängt, wenn sie sich zum Termin-Zeitpunkt vom Rechner
     /// UNTERSCHEIDET. Sitzt man in Deutschland oder in einer Zone mit
     /// derselben Uhrzeit, steht die Zeit nur einmal da.
@@ -272,7 +347,41 @@ final class GoogleService: ObservableObject {
     /// `link` optional seit Runde 78 (MCP): ein per Claude ohne Meet-Link
     /// angelegter Termin bekommt denselben Einladungsblock, nur ohne die
     /// letzte Zeile.
-    static func shareText(title: String, start: Date, end: Date, link: String?) -> String {
+    ///
+    /// Runde 86: Statt Berlin fest im Code stehen jetzt die eigene Zone plus
+    /// jede Zone mit Haken aus der Zeitzonen-Leiste des Termin-Fensters
+    /// (`ZoneBook`). Liegt eine Zone an einem anderen Kalendertag, steht ihr
+    /// Wochentag dabei („01:00–01:30 Manila (Mi)").
+    /// Runde 119: nur während „Erstellen“ gesetzt, wenn die Text-Vorschau von Hand geändert wurde.
+    nonisolated(unsafe) static var textTemplateOverride: String?
+
+    /// Gespeicherte Text-Vorlage der Einladungssprache; leer = nil (alter Aufbau, Byte für Byte).
+    static func storedInviteTextTemplate() -> String? {
+        let v = UserDefaults.standard.string(forKey: L.inviteIsDE ? "inviteTextDE" : "inviteTextEN") ?? ""
+        return v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : v
+    }
+
+    /// Vorlage → fertiger Einladungstext (gleiche Marken wie die Mail). Ohne Link entfällt die leere Schlusszeile.
+    static func renderInviteText(_ template: String, title: String, start: Date, end: Date, link: String?,
+                                 zoneIDs: [String]?) -> String {
+        let list = ZoneBook.load()
+        var f = MailInvite.Fields(title: title, start: start, end: end, link: link ?? "",
+                                  zoneIDs: zoneIDs ?? ZoneBook.invitedIDs(from: list),
+                                  labels: ZoneBook.labels(from: list), de: L.inviteIsDE)
+        f.timesSeparator = nil
+        var out = MailInvite.render(template, f)
+        if (link ?? "").isEmpty { while out.hasSuffix("\n") { out.removeLast() } }
+        return out
+    }
+
+    static func shareText(title: String, start: Date, end: Date, link: String?,
+                          zoneIDs: [String]? = nil) -> String {
+        // Runde 119: eigene Vorlage (Einstellungen „Invite text“ oder Änderung nur für dieses Meeting).
+        if let tpl = Self.textTemplateOverride ?? Self.storedInviteTextTemplate() {
+            let list0 = ZoneBook.load()
+            return renderInviteText(tpl, title: title, start: start, end: end, link: link,
+                                    zoneIDs: zoneIDs ?? ZoneBook.invitedIDs(from: list0))
+        }
         let de = L.inviteIsDE
         let local = TimeZone.current
         let day = DateFormatter()
@@ -280,32 +389,49 @@ final class GoogleService: ObservableObject {
         day.dateFormat = de ? "EE, dd.MM." : "EE, MMM d"
         day.timeZone = local
 
-        var times = "\(timeRange(start, end, tz: local, de: de)) \(zoneLabel(local))"
-        if let second = TimeZone(identifier: "Europe/Berlin"),
-           second.secondsFromGMT(for: start) != local.secondsFromGMT(for: start) {
-            times += " · \(timeRange(start, end, tz: second, de: de)) \(zoneLabel(second))"
-        }
+        let list = ZoneBook.load()
+        let times = inviteTimes(start: start, end: end, zoneIDs: zoneIDs ?? ZoneBook.invitedIDs(from: list),
+                                labels: ZoneBook.labels(from: list))
         var block = "\(title)\n\(day.string(from: start))\n\(times)"
         if let link, !link.isEmpty { block += "\n\(link)" }
         return block
     }
 
+    /// Zeitzeile(n) des Einladungstexts: eigene Zone zuerst, dann die
+    /// übergebenen. Bis zu zwei Zonen in einer Zeile mit „ · " (wie bisher),
+    /// ab drei eine Zeile pro Zone, sonst wird die Zeile unlesbar lang.
+    static func inviteTimes(start: Date, end: Date, zoneIDs: [String], labels: [String: String] = [:],
+                            separator: String? = nil) -> String {
+        let de = L.inviteIsDE
+        let local = TimeZone.current
+        let own = ZoneNames.canonical(local.identifier)
+        var zones = [local]
+        for id in zoneIDs where ZoneNames.canonical(id) != own {
+            if let tz = TimeZone(identifier: id), !zones.contains(where: { $0.identifier == tz.identifier }) {
+                zones.append(tz)
+            }
+        }
+        var ownCal = Calendar(identifier: .gregorian); ownCal.timeZone = local
+        let ownDay = ownCal.dateComponents([.year, .month, .day], from: start)
+        let parts = zones.map { tz -> String in
+            var s = "\(timeRange(start, end, tz: tz, de: de)) \(ZoneBook.displayName(tz.identifier, labels: labels))"
+            var c = Calendar(identifier: .gregorian); c.timeZone = tz
+            if c.dateComponents([.year, .month, .day], from: start) != ownDay {
+                let f = DateFormatter(); f.locale = L.inviteLocale; f.timeZone = tz; f.dateFormat = "EE"
+                s += " (\(f.string(from: start)))"
+            }
+            return s
+        }
+        return parts.joined(separator: separator ?? (parts.count <= 2 ? " · " : "\n"))
+    }
+
     /// „18:30–19:00" (DE, 24h) oder „6:30–7:00 PM" (EN, 12h) in der Zone.
-    private static func timeRange(_ start: Date, _ end: Date, tz: TimeZone, de: Bool) -> String {
+    static func timeRange(_ start: Date, _ end: Date, tz: TimeZone, de: Bool) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: de ? "de_DE" : "en_US")
         f.timeZone = tz
         f.dateFormat = de ? "HH:mm" : "h:mm a"
         return "\(f.string(from: start))–\(f.string(from: end))"
-    }
-
-    /// Ortsname aus der Zeitzonen-Kennung: „Europe/Bratislava" → „Bratislava".
-    /// Bewusst der Ort und nicht das Land, die Kennung nennt nur den Ort, und
-    /// aufs Land zu schließen wäre geraten (Europe/Nicosia liegt auf Zypern,
-    /// Europe/Zurich in der Schweiz, das steht nirgends in der Kennung).
-    private static func zoneLabel(_ tz: TimeZone) -> String {
-        let city = tz.identifier.split(separator: "/").last.map(String.init) ?? tz.identifier
-        return city.replacingOccurrences(of: "_", with: " ")
     }
 
     /// Create a short throwaway Google event with a Meet conference, return its
@@ -387,53 +513,107 @@ final class GoogleService: ObservableObject {
     /// space via spaces.get, then spaces.patch config.artifactConfig. Requires the
     /// `meetings.space.settings` scope (added Runde 43), an old session that
     /// predates it gets a 401/403 and the note asks the user to reconnect once. Only
-    /// actually produces a transcript if his Workspace edition/licence allows it
+    /// actually produces a transcript if the Workspace edition/licence allows it
     /// (~Business Plus+); the API accepts ON regardless, so this never throws
     /// there, it just won't generate the file.
-    private func enableAutoTranscription(meetLink: String) async {
+    private func enableMeetArtifacts(meetLink: String, transcribe: Bool, smartNotes: Bool) async {
+        let kinds = MeetArtifacts.kinds(transcribe: transcribe, smartNotes: smartNotes)
+        guard !kinds.isEmpty else { return }
+        var results: [MeetArtifacts.Kind: (ok: Bool, note: String)] = [:]
+        switch await resolveMeetSpace(meetLink: meetLink) {
+        case .failure(let note):
+            for k in kinds { results[k] = (false, Self.kindLabel(k) + ": " + note) }
+        case .success(let spaceID, let token):
+            // Getrennt (Runde 124): lehnt Google die Gemini-Notizen ab, bleibt das Transkript an.
+            for k in kinds { results[k] = await patchArtifact(spaceID: spaceID, token: token, kind: k) }
+        }
+        // Runde 123/124: Ergebnis merken (Einstellungen › Meetings) und bei Misserfolg EIN stiller Hinweis.
+        let d = UserDefaults.standard
+        if let r = results[.transcript] {
+            d.set(r.note, forKey: "lastTranscriptNote"); d.set(Date(), forKey: "lastTranscriptDate"); d.set(r.ok, forKey: "lastTranscriptOK")
+        }
+        if let r = results[.smartNotes] {
+            d.set(r.note, forKey: "lastSmartNotesNote"); d.set(Date(), forKey: "lastSmartNotesDate"); d.set(r.ok, forKey: "lastSmartNotesOK")
+        }
+        lastArtifactNote = kinds.compactMap { results[$0]?.note }.joined(separator: " · ")
+        let failed = kinds.filter { results[$0]?.ok != true }
+        guard !failed.isEmpty else { return }
+        let apiOff = failed.contains { (results[$0]?.note ?? "").contains("Meet-API") || (results[$0]?.note ?? "").contains("Meet API") }
+        let title: String
+        if failed.count == 2 {
+            title = L.t("Transkript und Gemini-Notizen nicht aktiv", "Transcript and Gemini notes are not on")
+        } else if failed.first == .transcript {
+            title = L.t("Auto-Transkription nicht aktiv", "Auto-transcription is not on")
+        } else {
+            title = L.t("Gemini-Notizen nicht automatisch an", "Gemini notes did not switch on")
+        }
+        QuietNotice.showText(title: title,
+                             subtitle: apiOff
+                                ? L.t("Meet-API in Google einschalten (Link: Einstellungen › Meetings)", "Turn on the Meet API in Google (link: Settings › Meetings)")
+                                : L.t("Bitte im Meeting von Hand starten. Details: Einstellungen › Meetings",
+                                           "Start it by hand in the meeting. Details: Settings › Meetings"))
+    }
+
+    private enum SpaceLookup { case success(String, String), failure(String) }
+
+    /// spaces.get nimmt den Meeting-Code als {name} und liefert die feste spaces/{id}.
+    private func resolveMeetSpace(meetLink: String) async -> SpaceLookup {
         do {
             let token = try await validAccessToken()
             guard let code = Self.meetingCode(from: meetLink) else {
-                lastArtifactNote = L.t("Transkript: Meeting-Code nicht erkannt.",
-                                       "Transcript: could not read meeting code.")
-                return
+                return .failure(L.t("Meeting-Code nicht erkannt.", "could not read meeting code."))
             }
-
-            // spaces.get accepts the meeting code as the {name}, resolve the
-            // stable spaces/{id} to patch.
             var getReq = URLRequest(url: URL(string: "https://meet.googleapis.com/v2/spaces/\(code)")!)
+            getReq.timeoutInterval = 20
             getReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             let (gData, gResp) = try await URLSession.shared.data(for: getReq)
             let gJson = (try? JSONSerialization.jsonObject(with: gData)) as? [String: Any] ?? [:]
             if let http = gResp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                lastArtifactNote = Self.artifactNote(http.statusCode, gJson); return
+                return .failure(Self.artifactNote(http.statusCode, gJson))
             }
             guard let name = gJson["name"] as? String else {
-                lastArtifactNote = L.t("Transkript: Space nicht gefunden.", "Transcript: space not found."); return
+                return .failure(L.t("Space nicht gefunden.", "space not found."))
             }
-            let spaceID = name.hasPrefix("spaces/") ? String(name.dropFirst("spaces/".count)) : name
+            return .success(name.hasPrefix("spaces/") ? String(name.dropFirst("spaces/".count)) : name, token)
+        } catch {
+            return .failure(Self.human(error))
+        }
+    }
 
-            // spaces.patch just the transcription leaf.
-            let mask = "config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration"
-            var comps = URLComponents(string: "https://meet.googleapis.com/v2/spaces/\(spaceID)")!
-            comps.queryItems = [.init(name: "updateMask", value: mask)]
-            var patchReq = URLRequest(url: comps.url!)
-            patchReq.httpMethod = "PATCH"
-            patchReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            patchReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let body: [String: Any] = ["config": ["artifactConfig":
-                ["transcriptionConfig": ["autoTranscriptionGeneration": "ON"]]]]
-            patchReq.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (pData, pResp) = try await URLSession.shared.data(for: patchReq)
+    private func patchArtifact(spaceID: String, token: String, kind: MeetArtifacts.Kind) async -> (ok: Bool, note: String) {
+        let label = Self.kindLabel(kind)
+        guard let req = MeetArtifacts.request(spaceID: spaceID, kind: kind, token: token) else {
+            return (false, label + ": " + L.t("Anfrage nicht gebaut.", "could not build request."))
+        }
+        do {
+            let (pData, pResp) = try await URLSession.shared.data(for: req)
             let pJson = (try? JSONSerialization.jsonObject(with: pData)) as? [String: Any] ?? [:]
             if let http = pResp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                lastArtifactNote = Self.artifactNote(http.statusCode, pJson); return
+                return (false, label + ": " + Self.artifactNote(http.statusCode, pJson))
             }
-            lastArtifactNote = L.t("Auto-Transkript aktiviert (feuert nur mit passender Workspace-Lizenz).",
-                                   "Auto-transcript on (only fires with a supporting Workspace licence).")
+            // Runde 123: Googles Antwort prüfen statt blind „aktiviert" zu melden.
+            let got = MeetArtifacts.answer(pJson, kind)
+            if got == "ON" {
+                switch kind {
+                case .transcript:
+                    return (true, L.t("Auto-Transkript bei Google eingeschaltet. Die Sprache wählt Google selbst.",
+                                      "Auto-transcript switched on at Google. Google picks the language itself."))
+                case .smartNotes:
+                    return (true, L.t("Gemini-Notizen bei Google eingeschaltet. Sie starten, sobald du dem Meeting beitrittst.",
+                                      "Gemini notes switched on at Google. They start when you join the meeting."))
+                }
+            }
+            return (false, label + ": " + L.t("Google hat es nicht übernommen (Antwort: \(got ?? "leer")). Dein Google-Konto erlaubt es wohl nicht.",
+                                              "Google did not accept it (answer: \(got ?? "empty")). Your Google account probably does not allow it."))
         } catch {
-            lastArtifactNote = L.t("Transkript nicht aktiviert: \(Self.human(error))",
-                                   "Transcript not enabled: \(Self.human(error))")
+            return (false, label + ": " + Self.human(error))
+        }
+    }
+
+    private static func kindLabel(_ k: MeetArtifacts.Kind) -> String {
+        switch k {
+        case .transcript: return L.t("Transkript nicht aktiviert", "Transcript not enabled")
+        case .smartNotes: return L.t("Gemini-Notizen nicht aktiviert", "Gemini notes not enabled")
         }
     }
 
@@ -464,17 +644,73 @@ final class GoogleService: ObservableObject {
             let project = Self.loadConfig()?.clientID.split(separator: "-").first.map(String.init) ?? ""
             let link = "https://console.cloud.google.com/apis/library/meet.googleapis.com"
                 + (project.isEmpty ? "" : "?project=\(project)")
-            return L.t("Transkript nicht aktiviert: Die Google-Meet-API ist im Projekt nicht eingeschaltet. Einmal hier aktivieren: \(link)",
-                       "Transcript not enabled: the Google Meet API is off in your project. Enable it once: \(link)")
+            return L.t("Die Google-Meet-API ist im Projekt nicht eingeschaltet. Einmal hier aktivieren: \(link)",
+                       "the Google Meet API is off in your project. Enable it once: \(link)")
         }
         // (2) Wirklich eine fehlende Berechtigung.
         if lower.contains("scope") || status == 401 {
-            return L.t("Transkript nicht aktiviert, bitte Google einmal neu verbinden (neue Berechtigung nötig).",
-                       "Transcript not enabled, please reconnect Google once (new permission needed).")
+            return L.t("bitte Google einmal neu verbinden (neue Berechtigung nötig).",
+                       "please reconnect Google once (new permission needed).")
         }
         // (3) Alles andere, typischerweise die Workspace-Lizenz: Googles eigenen
         //     Wortlaut zeigen statt zu raten.
-        return L.t("Transkript nicht aktiviert: \(msg)", "Transcript not enabled: \(msg)")
+        return msg
+    }
+
+    // MARK: - Mail an den Gast (Runde 109)
+
+    /// Schickt die Einladung per Gmail-API (`messages.send`, Absender = verbundenes Konto).
+    /// Fehler machen den Termin nie kaputt: das Ergebnis steht in `lastMailStatus`.
+    /// Die Adresse bleibt nirgends gespeichert und kommt in kein Log.
+    @discardableResult
+    func sendInviteMail(to: [String], subject: String, body: String, ics: String?) async -> Bool {
+        guard !to.isEmpty else { return false }
+        mailBusy = true; defer { mailBusy = false }
+        guard canSendMail else { lastMailStatus = .failed(.needsScope); return false }
+        guard let from = accountEmail ?? UserDefaults.standard.string(forKey: "googleAccountEmail") else {
+            lastMailStatus = .failed(.expired); return false
+        }
+        do {
+            let token = try await validAccessToken()
+            let raw = MailInvite.rawBase64URL(MailInvite.mime(from: from, to: to, subject: subject, body: body, ics: ics))
+            var req = URLRequest(url: URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/send")!)
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["raw": raw])
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(status) { lastMailStatus = .sent(to); return true }
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            lastMailStatus = .failed(MailInvite.classify(status: status, json: json))
+            return false
+        } catch let e as GError {
+            if case .expiredSession = e { lastMailStatus = .failed(.expired) }
+            else { lastMailStatus = .failed(.other(Self.human(e))) }
+            return false
+        } catch {
+            lastMailStatus = .failed(.other(error.localizedDescription))
+            return false
+        }
+    }
+
+    /// Text für die Ergebnisansicht. `nil` bei Erfolg.
+    static func mailFailureText(_ f: MailInvite.Failure) -> String {
+        switch f {
+        case .needsScope:
+            return L.t("Mail nicht gesendet: MeetingBlitz darf noch keine Mails senden. Google neu verbinden.",
+                       "Mail not sent: MeetingBlitz is not allowed to send mail yet. Reconnect Google.")
+        case .apiDisabled:
+            let project = Self.loadConfig()?.clientID.split(separator: "-").first.map(String.init) ?? ""
+            let link = "https://console.cloud.google.com/apis/library/gmail.googleapis.com" + (project.isEmpty ? "" : "?project=\(project)")
+            return L.t("Mail nicht gesendet: Gmail API im Google-Projekt einschalten. \(link)",
+                       "Mail not sent: turn on the Gmail API in your Google project. \(link)")
+        case .expired:
+            return L.t("Mail nicht gesendet: Google-Verbindung abgelaufen. Neu verbinden.",
+                       "Mail not sent: Google session expired. Reconnect.")
+        case .other(let m):
+            return L.t("Mail nicht gesendet (\(m))", "Mail not sent (\(m))")
+        }
     }
 
     // MARK: - Tokens
@@ -492,6 +728,7 @@ final class GoogleService: ObservableObject {
         accessToken = access
         accessExpiry = Date().addingTimeInterval(((tok["expires_in"] as? Double) ?? 3600) - 60)
         if let refresh = tok["refresh_token"] as? String { keychain.refreshToken = refresh }
+        if let sc = tok["scope"] as? String { UserDefaults.standard.set(sc, forKey: "googleGrantedScopes") }
         if let idToken = tok["id_token"] as? String, let email = Self.email(fromIDToken: idToken) {
             accountEmail = email
             UserDefaults.standard.set(email, forKey: "googleAccountEmail")
@@ -536,6 +773,7 @@ final class GoogleService: ObservableObject {
         }
         accessToken = access
         accessExpiry = Date().addingTimeInterval(((tok["expires_in"] as? Double) ?? 3600) - 60)
+        if let sc = tok["scope"] as? String { UserDefaults.standard.set(sc, forKey: "googleGrantedScopes") }
         return access
     }
 
@@ -688,6 +926,14 @@ private final class LoopbackCatcher: @unchecked Sendable {
             }
             listener.newConnectionHandler = { [weak self] conn in self?.handle(conn) }
             listener.start(queue: queue)
+        }
+    }
+
+    /// Gibt nach `seconds` mit einem Fehler auf, falls bis dahin kein Code kam
+    /// (Runde 88). `finish` ist idempotent, ein späterer Code wird ignoriert.
+    func timeout(after seconds: TimeInterval) {
+        queue.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            self?.finish(with: .failure(GError.msg(GoogleService.loginTimeoutMessage)))
         }
     }
 
@@ -849,5 +1095,31 @@ private struct Keychain {
             add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             SecItemAdd(add as CFDictionary, nil)
         }
+    }
+}
+
+/// Selbsttest (Runde 88): der echte Loopback-Empfänger gibt nach der Frist auf,
+/// statt ewig zu warten. Läuft mit 0,3 s statt 3 Minuten.
+enum GoogleLoginTests {
+    static func failures() -> [String] {
+        let sem = DispatchSemaphore(value: 0)
+        final class Box: @unchecked Sendable { var v: [String] = [] }   // nur nach sem.wait gelesen
+        let box = Box()
+        Task.detached {
+            do {
+                let c = try LoopbackCatcher()
+                _ = try await c.start()
+                c.timeout(after: 0.3)
+                _ = try await c.awaitCode()
+                box.v.append("Google-Login: awaitCode kam ohne Code zurück")
+            } catch {
+                if error.localizedDescription != GoogleService.loginTimeoutMessage {
+                    box.v.append("Google-Login: falscher Fehler nach Frist: \(error.localizedDescription)")
+                }
+            }
+            sem.signal()
+        }
+        if sem.wait(timeout: .now() + 5) == .timedOut { return ["Google-Login: Frist greift nicht (wartet > 5 s)"] }
+        return box.v
     }
 }

@@ -28,6 +28,6 @@ struct MeetingStats {
     var callHoursLabel: String { Self.hm(callMinutes) }
 
     static func hm(_ m: Int) -> String {
-        m < 60 ? "\(m) min" : String(format: "%.1f", Double(m) / 60.0) + " h"
+        m < 60 ? "\(m) min" : L.number(Double(m) / 60.0, fraction: 1) + " h"
     }
 }

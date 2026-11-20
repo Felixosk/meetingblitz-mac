@@ -15,7 +15,7 @@ struct CalendarInfo: Identifiable, Hashable {
     let title: String
     let color: Color
     /// Account the calendar comes from ("iCloud", a Google address, …). Shown
-    /// when picking a target so "Agency" in Google and "Agency" in iCloud are
+    /// when picking a target so "Work" in Google and "Work" in iCloud are
     /// distinguishable (F11).
     var sourceTitle: String = ""
     /// True for calendars that live on this Mac / in iCloud, false for synced
@@ -121,8 +121,7 @@ struct ReminderItem: Identifiable, Equatable {
     /// clock so you see how late it is.
     var timeLabel: String {
         guard let due, hasTime else { return L.t("Heute", "Today") }
-        let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
-        return f.string(from: due)
+        return L.time(due)
     }
 }
 
@@ -249,19 +248,34 @@ struct Meeting: Identifiable, Equatable {
     let contactID: String?      // birthday contact, used from M2 on
     let calendarItemID: String? // to reveal the event in Apple Calendar
     var myStatus: MyStatus = .none   // F3
+    var hasGuests = false            // Runde 93: Termin mit Gästen (zählt als Meeting)
 
     static func == (l: Meeting, r: Meeting) -> Bool { l.id == r.id && l.start == r.start }
 
+    /// Runde 111 (Fund 16): Geburtstage lesbar ("Birthday · Robin (Alice Mom), 52" statt "Robin ( Alice Mom )'s 52nd Birthday").
+    var displayTitle: String {
+        guard isBirthday else { return title }
+        let t = title.replacingOccurrences(of: "( ", with: "(").replacingOccurrences(of: " )", with: ")")
+            .trimmingCharacters(in: .whitespaces)
+        let patterns = [#"^(.+?)['’]s (\d+)(?:st|nd|rd|th) [Bb]irthday$"#, #"^(.+?)s? (\d+)\. Geburtstag$"#]
+        for p in patterns {
+            if let re = try? NSRegularExpression(pattern: p),
+               let m = re.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)), m.numberOfRanges == 3,
+               let r1 = Range(m.range(at: 1), in: t), let r2 = Range(m.range(at: 2), in: t) {
+                return "\(L.t("Geburtstag", "Birthday")) · \(t[r1]), \(t[r2])"
+            }
+        }
+        return t
+    }
+
     var timeLabel: String {
         if isAllDay { return L.t("Ganztägig", "All-day") }
-        let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
-        return f.string(from: start)
+        return L.time(start)
     }
 
     var rangeLabel: String {
         if isAllDay { return L.t("Ganztägig", "All-day") }
-        let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
-        return "\(f.string(from: start)) – \(f.string(from: end))"
+        return "\(L.time(start)) – \(L.time(end))"
     }
 
     /// "in 4 min" / "in 2 Std 51 Min" / "läuft", or the English versions.
@@ -292,7 +306,7 @@ struct Meeting: Identifiable, Equatable {
         return t.isEmpty ? title : t
     }
 
-    /// Compact form for the menu-bar label: "Samuel Neumeier Call · 5m".
+    /// Compact form for the menu-bar label: "Weekly sync · 5m".
     /// The full title is kept; the menu bar itself elides if space is tight.
     var menuBarLabel: String {
         let s = start.timeIntervalSinceNow
