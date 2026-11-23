@@ -2,6 +2,18 @@
 
 All notable changes to MeetingBlitz. Newest first.
 
+## 2.0.1 - 2026-11-23
+
+**Saved time zones stay in the list.** After you created a meeting, the zones
+you had saved disappeared from the list. Now they stay. The tick only means
+"put this zone in the invite", and it is cleared after each meeting.
+
+**Remove a zone with the bin.** Move the pointer over a zone and a small bin
+appears next to the pencil.
+
+**Window edge.** In dark mode the edge around the widget and the New Meeting
+window looked doubled. It is now one fine line with a soft shadow.
+
 ## 2.0.0 — 2026-11-20
 
 **A new look, all the way through.** Every window is now made of Liquid Glass,

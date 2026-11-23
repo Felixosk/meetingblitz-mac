@@ -47,6 +47,9 @@ struct ZonePlanner: View {
     @FocusState private var renameFocused: Bool
 
     static let rowHeight: CGFloat = 80
+    /// Runde 128: Stift/Papierkorb in der Zeile 22 statt 28 pt. Der Platz bleibt 28 hoch (nichts verschiebt sich),
+    /// der Kreis sitzt mittig mit 3 pt Luft: vorher lag seine Oberkante genau auf der Trennlinie darüber.
+    static let rowIconSize: CGFloat = 22
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -86,6 +89,7 @@ struct ZonePlanner: View {
         case "rename" where parts.count >= 2:
             renaming = parts[1]; renameText = parts.dropFirst(2).joined(separator: " ")
         case "renamedone": commitRename()
+        case "hover" where parts.count == 2: hovered = parts[1]   // Runde 125: Papierkorb fürs Foto zeigen
         default: break
         }
     }
@@ -132,9 +136,9 @@ struct ZonePlanner: View {
         }
         .themeRowList()
 
-        // Runde 90: nur die eigene Zone und die angehakten sind sichtbar. Die
-        // anderen stehen in der „+ Zone"-Liste, Haken setzen holt sie zurück.
-        let rows = book.rows.filter { $0.on || book.isOwn($0.id) }
+        // Runde 125: alle gespeicherten Zonen bleiben sichtbar. Der Haken sagt nur
+        // noch „in der Einladung"; nach „Create" geht er weg, die Zeile bleibt.
+        let rows = book.rows
         let ideal = min(CGFloat(rows.count), adding ? 3 : 4) * Self.rowHeight
         // Runde 92: greift der Deckel, nur GANZE Zeilen zeigen (keine halbe
         // Zeile ohne Schieber); die halbe Zeile als Scroll-Hinweis gibt es nur
@@ -233,16 +237,27 @@ struct ZonePlanner: View {
                 }
                 if renaming != z.id {
                     // Fester Platz, nur beim Überfahren sichtbar (Geometrie ändert sich nie).
-                    ThemeIconButton(systemName: "pencil") { renaming = z.id; renameText = name }
+                    ThemeIconButton(systemName: "pencil", size: Self.rowIconSize) { renaming = z.id; renameText = name }
+                        .frame(height: Theme.iconButtonSize)
                         .opacity(hovered == z.id ? 1 : 0)
                         .animation(nil, value: hovered)
                         .help(L.t("Eigenen Namen geben", "Rename"))
+                }
+                // Runde 125: Papierkorb neben dem Stift, gleiche Regel (fester Platz, nur beim Überfahren
+                // sichtbar). Die eigene Zone hat keinen, bekommt aber denselben Platz, damit nichts springt.
+                if renaming != z.id {
+                    ThemeIconButton(systemName: "trash", label: L.t("Zone entfernen", "Remove zone"),
+                                    tint: Theme.muted, size: Self.rowIconSize) { book.remove(z.id) }
+                        .frame(height: Theme.iconButtonSize)
+                        .opacity(hovered == z.id && !own ? 1 : 0)
+                        .allowsHitTesting(!own)
+                        .animation(nil, value: hovered)
                 }
                 Spacer(minLength: Theme.s4)
                 Text(Self.uiHM(start, tz)).font(.theme(.normal, .semibold).monospacedDigit())
                     .lineLimit(1)
             }
-            // Infozeile. Runde 101: kein ✕ mehr, Entfernen nur im Rechtsklick-Menü.
+            // Infozeile. Runde 125: Entfernen per Papierkorb oben oder Rechtsklick-Menü.
             HStack(spacing: Theme.s8) {
                 Text(info)
                     .font(.theme(.small)).foregroundStyle(Theme.muted).lineLimit(1)
@@ -321,16 +336,11 @@ struct ZonePlanner: View {
         }
     }
 
-    /// Treffer der „+ Zone"-Liste: erst die gespeicherten, aber nicht angehakten
-    /// Städte (die Auswahl), dann die Suche über alle Zonen.
+    /// Treffer der „+ Zone"-Liste: Suche über alle Zonen. Runde 125: die
+    /// gespeicherten stehen schon sichtbar in der Liste und fehlen hier.
     private var hits: [String] {
-        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-        let hidden = book.saved.filter { !$0.on && !book.isOwn($0.id) }.map(\.id).filter { id in
-            q.isEmpty || book.name(id).lowercased().contains(q) || id.lowercased().contains(q)
-        }
-        let shown = Set(book.rows.filter { $0.on || book.isOwn($0.id) }.map { ZoneNames.canonical($0.id) })
-        let more = ZoneNames.search(query, excluding: shown.union(hidden.map(ZoneNames.canonical)), limit: 12)
-        return hidden + more
+        let shown = Set(book.rows.map { ZoneNames.canonical($0.id) })
+        return ZoneNames.search(query, excluding: shown, limit: 12)
     }
 
     // MARK: Formatierung
@@ -456,6 +466,10 @@ extension AppState {
             ("create:month off", nil), ("create:more off", nil), ("create:invite off", nil), ("close", "02_standard"),
             ("create:more on", nil), ("create:invite on", "03_mehr_offen"),
         ]
+        let steps125: [(String?, String?)] = [
+            ("tick Europe/Berlin on", nil), ("create:month off", nil), ("create:more off", nil), ("create:invite off", nil),
+            ("open", nil), ("hover Europe/Berlin", "01_papierkorb"),
+        ]
         let steps99: [(String?, String?)] = [
             ("tick Asia/Manila on", nil), ("tick Europe/Berlin on", nil),
             ("create:month off", nil), ("create:more off", nil), ("create:invite off", nil), ("close", "04_zonen_zu"),
@@ -574,7 +588,7 @@ extension AppState {
             ("create:invite on", "text_plain"), ("create:textedit", "text_edit"), ("create:invite off", nil), ("create:reset", nil),
             ("create:guest ", nil)]
         let demoSet = ProcessInfo.processInfo.environment["MB_DEMO_SET"]
-        let steps: [(String?, String?)] = demoSet == "r119" ? steps119 : demoSet == "r113b" ? steps113b : demoSet == "r113" ? steps113 : demoSet == "r112" ? steps112 : demoSet == "r111b" ? steps111b : demoSet == "r109h" ? steps109h : demoSet == "r109g" ? steps109g : demoSet == "r109m" ? steps109m : demoSet == "r109d" ? steps109d : demoSet == "r109f" ? steps109f : demoSet == "r109" ? steps109 : demoSet == "r108" ? steps108 : demoSet == "r100" ? steps100 : demoSet == "r99" ? steps99 : demoSet == "r97" ? steps97 : demoSet == "r96" ? steps96 : [
+        let steps: [(String?, String?)] = demoSet == "r125" ? steps125 : demoSet == "r119" ? steps119 : demoSet == "r113b" ? steps113b : demoSet == "r113" ? steps113 : demoSet == "r112" ? steps112 : demoSet == "r111b" ? steps111b : demoSet == "r109h" ? steps109h : demoSet == "r109g" ? steps109g : demoSet == "r109m" ? steps109m : demoSet == "r109d" ? steps109d : demoSet == "r109f" ? steps109f : demoSet == "r109" ? steps109 : demoSet == "r108" ? steps108 : demoSet == "r100" ? steps100 : demoSet == "r99" ? steps99 : demoSet == "r97" ? steps97 : demoSet == "r96" ? steps96 : [
             ("close", "01_zu"),
             ("open", "02_offen"),
             ("tick Asia/Manila on", nil),

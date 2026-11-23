@@ -289,6 +289,8 @@ struct ThemeIconButton: View {
     var tint: Color? = nil
     /// Runde 111 (Fund 8): false, wenn schon ein eigener Hinweis (rowHint) dranhängt, damit nur EIN Tooltip erscheint.
     var showHelp = true
+    /// Runde 128: Kreisgröße (Standard 28). In engen Zeilen (Zeitzonen) kleiner, damit nichts über die Trennlinie ragt.
+    var size: CGFloat = Theme.iconButtonSize
     let action: () -> Void
     @State private var hover = false
 
@@ -298,7 +300,7 @@ struct ThemeIconButton: View {
                 .font(.theme(.small, .semibold))
                 .foregroundStyle(active ? Theme.onBlue : (tint ?? Theme.label))
                 
-                .frame(width: Theme.iconButtonSize, height: Theme.iconButtonSize)
+                .frame(width: size, height: size)
                 .background(Circle().fill(active ? Theme.blue : (hover ? Theme.fillHover : Theme.fill)))
                 .contentShape(Circle())
         }
@@ -537,8 +539,8 @@ struct ThemeEdge: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         if scheme == .dark {
-            shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.16), Color.white.opacity(0.08)],
-                                              startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(Theme.edgeTop), Color.white.opacity(Theme.edgeBottom)],
+                                              startPoint: .top, endPoint: .bottom), lineWidth: Theme.edgeWidth)
                 .allowsHitTesting(false)
         } else {
             ZStack {
@@ -567,6 +569,16 @@ struct ThemeGlass: View {
             // gehört in die Fenstermaske und ließe den Systemschatten eine dunkle Kontur 9 pt außerhalb ziehen.
             // Hart auf die Glasform beschneiden; den Schatten zeichnet das System.
             .clipShape(shape)
+            // Runde 129: weicher eigener Schatten NUR außerhalb der Glasform (innen ausgestanzt, sonst scheint er
+            // durchs Glas), liegt in der durchsichtigen Bühne. Kein Systemschatten, kein doppelter Rand.
+            .background {
+                shape.fill(Color.black)
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.42 : 0.22), radius: 9, y: 4)
+                    .mask {
+                        Rectangle().padding(-Theme.stageInset).overlay { shape.blendMode(.destinationOut) }.compositingGroup()
+                    }
+                    .allowsHitTesting(false)
+            }
     }
     /// Runde 115: Glas "Klarer" halbiert die Schicht; Hell = weiße statt schwarzer Schicht.
     private var wash: Double {
@@ -584,6 +596,8 @@ struct ThemeGlass: View {
                 .opacity(wash)
                 .clipShape(shape)
                 .glassEffect(.regular, in: shape)
+                // Runde 129: feine Haarlinie (dünn, gleichmäßig) wie bei macOS-Fenstern, dazu der weiche Schatten
+                // oben. r128 hatte alles weg (zu schwach), r118 Kante + Systemschatten (doppelt, zu hell).
                 .overlay(ThemeEdge())
         } else {
             VisualEffectBackground(material: .menu)
@@ -651,8 +665,12 @@ extension Theme {
         Double(ProcessInfo.processInfo.environment["MB_WASH2"] ?? "") ?? 0.355
     }
 
-    /// Runde 118: weicher Systemschatten (folgt der Glasform, wie bei Apple-Fenstern).
-    static let systemShadow = ProcessInfo.processInfo.environment["MB_NO_SYSSHADOW"] == nil
+        /// Runde 128: wieder AUS wie vor Runde 118 (der Schatten zieht eine dunkle + helle Kante ums Glas,
+    /// gemeldet als "komischer Rand"). Zum Vergleich mit `MB_SYSSHADOW=1` einschalten.
+    static let edgeTop = Double(ProcessInfo.processInfo.environment["MB_EDGE_TOP"] ?? "") ?? 0.11
+    static let edgeBottom = Double(ProcessInfo.processInfo.environment["MB_EDGE_BOTTOM"] ?? "") ?? 0.07
+    static let edgeWidth = CGFloat(Double(ProcessInfo.processInfo.environment["MB_EDGE_W"] ?? "") ?? 0.75)
+    static let systemShadow = ProcessInfo.processInfo.environment["MB_SYSSHADOW"] != nil
     /// Runde 110: Fenster = durchsichtige Bühne. Kein Glas im AppKit-Baum.
     /// Das Fenster bleibt `.titled` (Fallstrick 7), Ampel/Titel aus.
     @MainActor static func installStage(in panel: NSPanel, movableByBackground: Bool = true) {
